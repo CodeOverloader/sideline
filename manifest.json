@@ -1,0 +1,19 @@
+{
+  "name": "Sideline — Referee Evaluation Notes",
+  "short_name": "Sideline",
+  "description": "Field-side note taking for LSSA referee mentor evaluations",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#38bdf8",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

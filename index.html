@@ -1,0 +1,2477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Sideline — Referee Evaluation Notes</title>
+
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<meta name="theme-color" content="#38bdf8" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Sideline" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   A "token" is just a named value you use everywhere instead of
+   repeating a literal. Change --primary once and every button,
+   ring, and active marker follows. Whistle is amber; Sideline is
+   sky blue on purpose so the two home-screen icons and the two
+   apps never get confused at a glance.
+   ============================================================ */
+:root{
+  --bg:#0b0d10;
+  --panel:#14181d;
+  --panel2:#1b2127;
+  --line:#242c34;
+  --ink:#e9eef3;
+  --mute:#8b98a5;
+  --primary:#38bdf8;   /* structure, active selection */
+  --plus:#34d399;      /* a strength */
+  --minus:#fb923c;     /* something to work on (orange, not red: not an error) */
+  --grass:#0f1d17;     /* pitch fill */
+  --chalk:rgba(233,238,243,.22);
+  --r:12px;
+  --pad:14px;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:Inter,system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.45;
+  max-width:600px;margin:0 auto;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- app chrome ---------- */
+header{
+  position:sticky;top:0;z-index:40;background:rgba(11,13,16,.94);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  padding:calc(8px + env(safe-area-inset-top)) var(--pad) 0;
+}
+.brandrow{display:flex;align-items:center;gap:10px}
+.brand{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.06em;line-height:1}
+.brand span{color:var(--primary)}
+.brandrow .spacer{flex:1}
+.iconbtn{
+  width:38px;height:38px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);display:grid;place-items:center;font-size:17px;
+}
+
+/* the "now watching" bar: the single most important element in the app.
+   Two fields of simultaneous refs is exactly how notes end up on the
+   wrong person, so attribution is always on screen. */
+.watching{
+  display:flex;align-items:center;gap:10px;margin:10px 0;
+  padding:9px 11px;border-radius:var(--r);
+  background:linear-gradient(90deg,rgba(56,189,248,.16),rgba(56,189,248,.04));
+  border:1px solid rgba(56,189,248,.38);
+}
+.watching .who{font-weight:650;font-size:15px;line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.watching .sub{font-size:11.5px;color:var(--mute);line-height:1.2}
+.watching .rolechip{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+  background:var(--primary);color:#06212e;padding:3px 7px;border-radius:6px;
+}
+.watching .clk{
+  margin-left:auto;font-family:'JetBrains Mono',monospace;
+  font-size:14px;font-weight:700;color:var(--primary);white-space:nowrap;
+}
+.watching.empty{background:var(--panel);border-color:var(--line)}
+.watching.empty .who{color:var(--mute);font-weight:500}
+
+/* ---------- tabs / nav ---------- */
+nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:50;
+  display:flex;max-width:600px;margin:0 auto;
+  background:rgba(11,13,16,.96);backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{
+  flex:1;padding:9px 2px 11px;display:flex;flex-direction:column;
+  align-items:center;gap:3px;color:var(--mute);font-size:10.5px;font-weight:600;
+}
+nav button .ico{font-size:19px;line-height:1}
+nav button[aria-selected="true"]{color:var(--primary)}
+nav button .badge{
+  position:absolute;transform:translate(16px,-4px);
+  background:var(--minus);color:#251100;font-size:9px;font-weight:800;
+  min-width:15px;padding:1px 3px;border-radius:8px;
+}
+main{padding:0 var(--pad)}
+.tab[hidden]{display:none}
+
+/* ---------- generic bits ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);margin:12px 0}
+h2.sec{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.04em;
+  margin:18px 0 4px;font-weight:400}
+.hint{color:var(--mute);font-size:12.5px;margin:2px 0 10px}
+label.f{display:block;margin:10px 0 0}
+label.f>span{display:block;font-size:12.5px;color:var(--mute);margin-bottom:4px}
+input[type=text],input[type=date],input[type=time],select,textarea{
+  width:100%;background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;padding:10px 11px;
+}
+textarea{resize:vertical;line-height:1.5}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.btn{
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;font-weight:600;text-align:center;display:block;width:100%;
+}
+.btn.primary{background:var(--primary);color:#06212e;border-color:var(--primary)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--minus);border-color:rgba(251,146,60,.4)}
+.btn.sm{padding:8px 10px;font-size:13px;font-weight:600}
+.pill{
+  display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;
+  padding:2px 6px;border-radius:5px;background:var(--panel2);color:var(--mute);
+}
+.divider{height:1px;background:var(--line);margin:14px -14px}
+.empty{color:var(--mute);font-size:13.5px;text-align:center;padding:22px 10px}
+.toast{
+  position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:90;
+  background:var(--ink);color:#0b0d10;font-weight:650;font-size:13.5px;
+  padding:9px 15px;border-radius:20px;box-shadow:0 6px 22px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+/* ---------- pitch map ---------- */
+.fieldblock{margin:12px 0 18px}
+.fieldhead{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.fieldhead .fname{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:.03em}
+.fieldhead .fmeta{font-size:12px;color:var(--mute)}
+.fieldhead .spacer{flex:1}
+svg.pitch{width:100%;height:auto;display:block;border-radius:var(--r);
+  background:var(--grass);border:1px solid var(--line);touch-action:manipulation}
+svg.pitch .mk{cursor:pointer}
+svg.pitch .mkbg{fill:var(--panel2);stroke:var(--mute);stroke-width:1.6}
+svg.pitch .mk.on .mkbg{fill:var(--primary);stroke:#e9eef3;stroke-width:2.4}
+svg.pitch .mk.unnamed .mkbg{stroke-dasharray:3 3}
+svg.pitch .mklabel{font-family:'JetBrains Mono',monospace;font-size:11px;
+  font-weight:700;fill:var(--ink);text-anchor:middle;pointer-events:none}
+svg.pitch .mk.on .mklabel{fill:#06212e}
+svg.pitch .mkname{font-family:Inter,sans-serif;font-size:8px;fill:var(--ink);
+  text-anchor:middle;pointer-events:none;font-weight:600}
+svg.pitch .cnt{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;
+  fill:#06212e;text-anchor:middle;pointer-events:none}
+svg.pitch .cntbg{fill:var(--plus)}
+
+/* crew rows under each pitch */
+.crew{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.crewrow{
+  display:flex;align-items:center;gap:8px;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:7px 9px;
+}
+.crewrow.on{border-color:var(--primary);background:rgba(56,189,248,.09)}
+.crewrow .slot{font-family:'JetBrains Mono',monospace;font-size:11.5px;
+  font-weight:700;color:var(--primary);width:30px;flex:none}
+.crewrow input{background:transparent;border:none;padding:4px 0;font-weight:600}
+.crewrow input::placeholder{color:var(--mute);font-weight:400}
+.crewrow .prog{font-size:11px;color:var(--mute);font-family:'JetBrains Mono',monospace;
+  flex:none;text-align:right;line-height:1.25}
+.crewrow .go{flex:none;border:1px solid var(--line);border-radius:8px;
+  padding:5px 8px;font-size:12px;font-weight:700;background:var(--panel2)}
+
+/* ---------- observe ---------- */
+.minimap{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
+.minimap::-webkit-scrollbar{display:none}
+.mini{
+  flex:none;border:1px solid var(--line);background:var(--panel);border-radius:9px;
+  padding:6px 9px;font-size:12px;font-weight:600;white-space:nowrap;color:var(--mute);
+}
+.mini.on{border-color:var(--primary);background:rgba(56,189,248,.13);color:var(--ink)}
+.mini .m1{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--primary)}
+.mini.on .m1{color:var(--primary)}
+
+.cats{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.cat{
+  flex:none;border:1px solid var(--line);background:var(--panel);border-radius:20px;
+  padding:7px 12px;font-size:13px;font-weight:600;white-space:nowrap;color:var(--mute);
+}
+.cat.on{background:var(--ink);color:#0b0d10;border-color:var(--ink)}
+.chipgrid{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  border:1px solid var(--line);background:var(--panel);border-radius:9px;
+  padding:8px 10px;font-size:13px;text-align:left;line-height:1.25;
+  display:flex;align-items:flex-start;gap:6px;
+}
+.chip .m{font-family:'JetBrains Mono',monospace;font-weight:700;flex:none}
+.chip.p{border-left:3px solid var(--plus)} .chip.p .m{color:var(--plus)}
+.chip.m-{border-left:3px solid var(--minus)} .chip.m- .m{color:var(--minus)}
+.chip:active{background:var(--panel2)}
+
+.noteadd{display:flex;gap:6px;margin-top:10px;align-items:stretch}
+.noteadd input{flex:1}
+.polset{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.polset button{width:34px;font-family:'JetBrains Mono',monospace;font-weight:700;
+  background:var(--panel2);color:var(--mute)}
+.polset button[aria-pressed="true"]{color:#06212e}
+.polset button[data-pol="1"][aria-pressed="true"]{background:var(--plus)}
+.polset button[data-pol="-1"][aria-pressed="true"]{background:var(--minus)}
+
+.timeline{margin-top:12px;border-left:2px solid var(--line);padding-left:11px}
+.nrow{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line)}
+.nrow:last-child{border-bottom:none}
+.nrow .t{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute);
+  flex:none;width:48px;padding-top:2px}
+.nrow .bd{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.nrow .bd .cn{font-size:11px;color:var(--mute);display:block}
+.nrow.p .bd{border-left:0}
+.nrow .mk2{font-family:'JetBrains Mono',monospace;font-weight:700;flex:none}
+.nrow.p .mk2{color:var(--plus)} .nrow.n .mk2{color:var(--minus)}
+.nrow.b .mk2{color:var(--primary)} .nrow.o .mk2{color:var(--mute)}
+.polset button[data-pol="2"][aria-pressed="true"]{background:var(--primary)}
+.nrow .del{flex:none;color:var(--mute);padding:2px 4px;font-size:15px}
+
+/* ---------- score ---------- */
+.ratewrap{margin:14px 0}
+.ratewrap .rlabel{font-size:14px;font-weight:600}
+.ratewrap .rhint{font-size:11.5px;color:var(--mute);margin:2px 0 7px}
+.scale{display:flex;gap:6px;align-items:center}
+.scale .end{font-size:10.5px;color:var(--mute);flex:none;width:26px}
+.scale .end.r{text-align:right}
+.scale .nums{display:flex;gap:6px;flex:1}
+.scale .nums button{
+  flex:1;padding:11px 0;border:1px solid var(--line);background:var(--panel2);
+  border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
+}
+.scale .nums button[aria-pressed="true"]{background:var(--primary);color:#06212e;border-color:var(--primary)}
+.switchrow{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:13.5px}
+.switchrow input{width:auto;flex:none;width:20px;height:20px;accent-color:var(--primary)}
+.yesno{display:flex;gap:8px}
+.yesno button{flex:1;padding:12px;border:1px solid var(--line);background:var(--panel2);
+  border-radius:10px;font-weight:700}
+.yesno button[aria-pressed="true"][data-v="Yes"]{background:var(--plus);color:#04241a;border-color:var(--plus)}
+.yesno button[aria-pressed="true"][data-v="No"]{background:var(--minus);color:#251100;border-color:var(--minus)}
+.charcount{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute);text-align:right;margin-top:4px}
+
+/* ---------- confirm dialog ---------- */
+.dlg{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:22px;
+  background:rgba(0,0,0,.66)}
+.dlg[hidden]{display:none}
+.dlgbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:18px;max-width:340px;width:100%}
+.dlgbox p{margin:0 0 16px;font-size:14.5px;line-height:1.45}
+
+/* ---------- game picker ---------- */
+.nowgame{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;margin:10px 0}
+.nowgame .g1{font-weight:650;font-size:14px;line-height:1.2}
+.nowgame .g2{font-size:11.5px;color:var(--mute);line-height:1.3}
+.nowgame .chev{margin-left:auto;color:var(--mute);font-size:18px;flex:none}
+.slot{margin:14px 0 6px;font-family:'Bebas Neue',sans-serif;font-size:19px;
+  letter-spacing:.04em;color:var(--primary)}
+.grow{display:flex;align-items:center;gap:10px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r);padding:10px 11px;margin:6px 0}
+.grow.on{border-color:var(--primary);background:rgba(56,189,248,.1)}
+.grow.done{opacity:.55}
+.grow .body{flex:1;min-width:0}
+.grow .t1{font-weight:650;font-size:14px;line-height:1.25}
+.grow .t2{font-size:11.5px;color:var(--mute);line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grow .meter{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--mute);
+  text-align:right;flex:none;line-height:1.3}
+.grow .meter b{color:var(--plus)}
+.iconsm{flex:none;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);display:grid;place-items:center;font-size:14px;color:var(--mute)}
+
+/* ---------- sheet (settings) ---------- */
+.scrim{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)}
+.scrim[hidden]{display:none}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:600px;margin:0 auto;
+  background:var(--bg);border-top:1px solid var(--line);
+  border-radius:18px 18px 0 0;max-height:88vh;overflow-y:auto;
+  padding:6px var(--pad) calc(24px + env(safe-area-inset-bottom));
+}
+.sheet[hidden]{display:none}
+.grab{width:40px;height:4px;background:var(--line);border-radius:2px;margin:8px auto 4px}
+.sheethead{display:flex;align-items:center;gap:8px;margin:4px 0 6px}
+.sheethead h3{font-family:'Bebas Neue',sans-serif;font-size:21px;margin:0;font-weight:400;letter-spacing:.03em}
+.sheethead .spacer{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;padding:9px 0;font-weight:600;background:var(--panel2);color:var(--mute);font-size:13.5px}
+.seg button[aria-pressed="true"]{background:var(--primary);color:#06212e}
+.saved{border:1px solid var(--line);border-radius:var(--r);padding:11px;margin:8px 0;background:var(--panel)}
+.saved .sh{display:flex;gap:8px;align-items:baseline}
+.saved .sh b{font-size:14px}
+.saved .sh .spacer{flex:1}
+.saved pre{white-space:pre-wrap;word-break:break-word;font-family:Inter,sans-serif;
+  font-size:12.5px;color:var(--mute);margin:8px 0 0}
+
+/* ---------- many fields ---------- */
+.fieldstrip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.fieldstrip::-webkit-scrollbar{display:none}
+.fchip{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:9px;
+  padding:7px 10px;font-size:12.5px;font-weight:600;white-space:nowrap;color:var(--mute)}
+.fchip.on{border-color:var(--primary);background:rgba(56,189,248,.13);color:var(--ink)}
+.fchip .n{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--plus)}
+.fchip .n.todo{color:var(--minus)}
+.cov{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mute)}
+.cov b{color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:15px}
+
+/* ---------- import ---------- */
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace}
+.tbl th,.tbl td{border:1px solid var(--line);padding:4px 6px;text-align:left;
+  white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.tbl th{color:var(--primary);background:var(--panel2);font-weight:700}
+.map2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.map2 label.f{margin:0}
+.gamerow{display:flex;align-items:center;gap:9px;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0}
+.gamerow.off{opacity:.45}
+.gamerow input[type=checkbox]{width:21px;height:21px;accent-color:var(--primary);flex:none}
+.gamerow .g1{font-weight:650;font-size:13.5px;line-height:1.2}
+.gamerow .g2{font-size:11.5px;color:var(--mute);line-height:1.3}
+.warn{background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35);
+  border-radius:10px;padding:9px 11px;font-size:12.5px;margin:8px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brandrow">
+    <div class="brand">SIDE<span>LINE</span></div>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="openPicker" title="Choose a game">&#9776;</button>
+    <button class="iconbtn" id="openForm" title="Open the Google Form">&#9873;</button>
+    <button class="iconbtn" id="openSettings" title="Settings">&#9881;</button>
+  </div>
+  <div class="watching empty" id="watching">
+    <div style="min-width:0">
+      <div class="who">No referee selected</div>
+      <div class="sub">Pick a position on a field to start</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ FIELDS TAB: the pitch map ============ -->
+  <section class="tab" id="tab-fields">
+    <div id="fieldsWrap"></div>
+    <div class="hint" style="margin-top:10px">
+      Tap a position on the pitch to switch who you are watching. Every note you
+      take goes to whoever is named in the blue bar at the top.
+    </div>
+  </section>
+
+  <!-- ============ OBSERVE TAB ============ -->
+  <section class="tab" id="tab-observe" hidden>
+    <div id="minimap"></div>
+    <div id="observeBody"></div>
+  </section>
+
+  <!-- ============ SCORE TAB ============ -->
+  <section class="tab" id="tab-score" hidden>
+    <div id="scoreBody"></div>
+  </section>
+
+  <!-- ============ SAVED TAB ============ -->
+  <section class="tab" id="tab-saved" hidden>
+    <h2 class="sec">Saved evaluations</h2>
+    <p class="hint">Kept on this device only. Export before you clear anything.</p>
+    <div id="savedBody"></div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="fields"  aria-selected="true"><span class="ico">&#9917;</span>Fields</button>
+  <button data-tab="observe" aria-selected="false"><span class="ico">&#9998;</span>Observe</button>
+  <button data-tab="score"   aria-selected="false"><span class="ico">&#9878;</span>Score</button>
+  <button data-tab="saved"   aria-selected="false"><span class="ico">&#128193;</span>Saved</button>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden>
+  <div class="grab"></div>
+  <div class="sheethead">
+    <h3 id="sheetTitle">Settings</h3>
+    <div class="spacer"></div>
+    <button class="btn sm ghost" style="width:auto" id="closeSheet">Done</button>
+  </div>
+  <div id="sheetBody"></div>
+</div>
+
+<div class="dlg" id="dlg" hidden>
+  <div class="dlgbox">
+    <p id="dlgMsg"></p>
+    <div class="row">
+      <button class="btn sm ghost" id="dlgNo">Cancel</button>
+      <button class="btn sm danger" id="dlgYes">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   SIDELINE — field-side notes for LSSA referee evaluations
+   ------------------------------------------------------------
+   Mirrors the "Referee Evaluation" Google Form, but built around
+   the actual job: one mentor watching several referees across two
+   fields at the same time. Each referee is a separate form
+   submission, so each referee owns their own notes, ratings,
+   move-up answer and comments.
+   ============================================================ */
+
+const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSd-Hc5iO0ygjxnme1FirULuMauqI1JFCG_vYob_pYAfAZZPOg/viewform';
+
+/* Field and division lists copied verbatim from the form's dropdowns,
+   in the form's order. Matching exactly means the value you pick here
+   is the value you pick there — no translating in your head at 9pm. */
+const FIELDS = ['Tigers - Field 1','Titans - Field 1','Broncos - Field 1','Field 2A','Field 2B',
+  'Field 2C','Field 3A','Field 3B','Field 3C','Field 4','Field 5','Field 6','Field 7','Field 8',
+  'Field 9','Field 10','Field 11A','Field 11B','Field 12A','Field 12B'];
+
+/* Field 1 is not one pitch - it is Tigers, Titans and Broncos. Same for the
+   lettered complexes. When you are monitoring you cover every field with a
+   game on it, so these groups exist to add a whole complex in one tap
+   instead of picking sub-pitches one at a time. */
+const FIELD_GROUPS = [
+  {label:'Field 1',  members:['Tigers - Field 1','Titans - Field 1','Broncos - Field 1']},
+  {label:'Field 2',  members:['Field 2A','Field 2B','Field 2C']},
+  {label:'Field 3',  members:['Field 3A','Field 3B','Field 3C']},
+  {label:'Field 11', members:['Field 11A','Field 11B']},
+  {label:'Field 12', members:['Field 12A','Field 12B']},
+];
+
+/* Chips and pitch headers need a short name: "Tigers - Field 1" reads as
+   "Tigers", "Field 2A" as "2A". */
+/* Tigers, Titans and Broncos are each TWO pitches sharing one entry on the
+   form's dropdown, with a single referee on each. So "Tigers - Field 1" at
+   8:00 is two games and two centers, and the form has no way to say which
+   pitch - both submissions carry the identical Field value.
+
+   That is handled with a `sub` on each field entry: an internal A/B label
+   used everywhere in the app and deliberately absent from the block you
+   paste into the form. Default crew is 1, since each pitch has one official. */
+const DIVISION_RULES = [
+  // Matched in order against the sheet's division name.
+  // pitches:2 means two simultaneous games sharing one field, one official each.
+  {re:/^pre-?k/i,          form:'PK',            pitches:2, crew:1},
+  {re:/^kinder/i,          form:'Kindergarten',  pitches:2, crew:1},
+  {re:/^1st/i,             form:'1st',           pitches:1, crew:2},
+  {re:/^2nd/i,             form:'2nd',           pitches:1, crew:2},
+  {re:/^3rd/i,             form:'3rd',           pitches:1, crew:3},
+  {re:/^4th/i,             form:'4th',           pitches:1, crew:3},
+  {re:/^5th/i,             form:'5th',           pitches:1, crew:3},
+  {re:/^6th/i,             form:'6th',           pitches:1, crew:3},
+  {re:/^middle\s*school/i, form:'Middle School', pitches:1, crew:3},
+  {re:/^high\s*school/i,   form:'High School',   pitches:1, crew:3},
+  {re:/^adult/i,           form:'Adult',         pitches:1, crew:3},
+];
+/* The schedule fills CR 1 + CR 2 with no ARs for Pre-K, Kindergarten, 1st AND
+   2nd grade - the rows are indistinguishable. Only the division says whether
+   that means two pitches with one referee each (Pre-K, Kindergarten) or one
+   game with a dual-referee crew (1st, 2nd). So splitting keys off division,
+   never off "there are no ARs". */
+function divisionRule(v){
+  const t = String(v || '');
+  return DIVISION_RULES.find(r => r.re.test(t)) || null;
+}
+
+const SUBS = ['A','B','C','D'];
+
+/* Compact kickoff for chips: "8a", "9:15a", "6p". Monitoring one pitch
+   all morning puts the same field on the strip three or four times, so
+   the chip has to carry the time or every chip reads "2A". */
+function shortTime(hm){
+  if(!hm) return '';
+  let [h,m] = hm.split(':').map(Number);
+  const ap = h >= 12 ? 'a' : 'a';
+  const suffix = h >= 12 ? 'p' : 'a';
+  h = h % 12 || 12;
+  return m ? `${h}:${String(m).padStart(2,'0')}${suffix}` : `${h}${suffix}`;
+}
+
+/* Only appends the time when that field actually appears more than once
+   on the board - no point cluttering a chip that is already unique. */
+function fieldLabel(f){
+  const base = shortField(f.name);
+  // Count distinct kickoffs for this name, not entries: the two Tigers pitches
+  // at 8:00 are one group and must not make the chip read "Tigers 8a" twice.
+  const kickoffs = new Set(S.fields.filter(x => x.name === f.name).map(groupKey)).size;
+  return kickoffs > 1 && f.time ? `${base} ${shortTime(f.time)}` : base;
+}
+/* "Tigers A" for display, never for the form. */
+function pitchLabel(f){
+  return f.sub ? `${shortField(f.name)} ${f.sub}` : shortField(f.name);
+}
+
+function shortField(name){
+  if(!name) return 'Field';
+  const t = name.match(/^(Tigers|Titans|Broncos)/i);
+  return t ? t[1] : name.replace(/^Field\s*/i,'');
+}
+
+const DIVISIONS = ['PK','Kindergarten','1st','2nd','3rd','4th','5th','6th','Middle School','High School','Adult'];
+
+/* The six rated questions, in form order, plus a seventh bucket that
+   feeds COMMENTS only. `rated:false` is what keeps "general" out of
+   the 1-4 scoring UI while still letting it carry notes. */
+const CATS = [
+  {id:'appearance',label:'Professional appearance',      short:'Appearance', rated:true},
+  {id:'workrate',  label:'Workrate - position/movement', short:'Workrate',   rated:true},
+  {id:'commands',  label:'Verbal and non-verbal commands',short:'Commands',  rated:true},
+  {id:'teamwork',  label:'Teamwork',                     short:'Teamwork',   rated:true},
+  {id:'fouls',     label:'Recognition of fouls',         short:'Fouls',      rated:true},
+  {id:'offsides',  label:'Recognition of offsides',      short:'Offsides',   rated:true},
+  {id:'general',   label:'Game management and other',    short:'General',    rated:false},
+];
+const RATED = CATS.filter(c => c.rated);
+
+/* Quick-tap observations. pol = polarity: +1 strength, -1 work on.
+   `pos` restricts a chip to one role so an AR never has to scroll past
+   eight center-referee chips to reach the flag ones. */
+const CHIPS = [
+  // appearance
+  ['appearance', 1,'Uniform clean and tucked'],
+  ['appearance', 1,'Socks up, badge visible'],
+  ['appearance', 1,'Looks confident, good posture'],
+  ['appearance',-1,'Shirt untucked'],
+  ['appearance',-1,'Wrong sock or short color'],
+  ['appearance',-1,'Jewelry or watch visible'],
+  ['appearance',-1,'No spare whistle or cards'],
+  ['appearance',-1,'Hands in pockets between play'],
+  // workrate - CR
+  ['workrate', 1,'Good wide diagonal','CR'],
+  ['workrate', 1,'Close enough to see contact','CR'],
+  ['workrate', 1,'Adjusted for the counterattack','CR'],
+  ['workrate', 1,'Good position on the corner kick','CR'],
+  ['workrate',-1,'Ball-watching from the center circle','CR'],
+  ['workrate',-1,'Too far from play','CR'],
+  ['workrate',-1,'Caught flat-footed on the turnover','CR'],
+  ['workrate',-1,'Jogging when a sprint was needed','CR'],
+  // workrate - AR
+  ['workrate', 1,'Even with the second-to-last defender','AR'],
+  ['workrate', 1,'Sprinted to the goal line on the shot','AR'],
+  ['workrate', 1,'Stayed off the touchline','AR'],
+  ['workrate',-1,'Trailing the second-to-last defender','AR'],
+  ['workrate',-1,'Drifted ahead of the line','AR'],
+  ['workrate',-1,'Stopped at the 18 on the breakaway','AR'],
+  ['workrate',-1,'Not square to the field','AR'],
+  // commands
+  ['commands', 1,'Whistle strong and decisive'],
+  ['commands', 1,'Held the signal long enough'],
+  ['commands', 1,'Talked players through restarts'],
+  ['commands', 1,'Good preventive talk'],
+  ['commands',-1,'Whistle too soft to hear'],
+  ['commands',-1,'Signal rushed or unclear'],
+  ['commands',-1,'Did not show direction'],
+  ['commands',-1,'Body language looked unsure'],
+  ['commands', 1,'Flag up straight and still','AR'],
+  ['commands', 1,'Mirrored the center correctly','AR'],
+  ['commands',-1,'Flag waved or bent','AR'],
+  // teamwork
+  ['teamwork', 1,'Ran a real pregame with the crew'],
+  ['teamwork', 1,'Eye contact before restarts'],
+  ['teamwork', 1,'Backed the partner up'],
+  ['teamwork', 1,'Checked with the AR on a close call','CR'],
+  ['teamwork',-1,'No pregame with the crew'],
+  ['teamwork',-1,'Ignored the flag','CR'],
+  ['teamwork',-1,'Waved the partner off in front of players'],
+  ['teamwork',-1,'No help on substitutions'],
+  // fouls
+  ['fouls', 1,'Same standard for both teams'],
+  ['fouls', 1,'Good play-on / advantage'],
+  ['fouls', 1,'Correct restart spot'],
+  ['fouls', 1,'Handled persistent fouling'],
+  ['fouls', 1,'Card fit the offense'],
+  ['fouls',-1,'Missed an obvious foul'],
+  ['fouls',-1,'Whistled it too tight'],
+  ['fouls',-1,'Let hard fouls go too long'],
+  ['fouls',-1,'Handball misapplied'],
+  ['fouls',-1,'Missed a card-worthy foul'],
+  ['fouls',-1,'Wrong restart, direct vs indirect'],
+  // offsides
+  ['offsides', 1,'Level with the second-to-last defender'],
+  ['offsides', 1,'Waited to judge involvement'],
+  ['offsides', 1,'Correct on the ball played backwards'],
+  ['offsides', 1,'Held the flag on the goal kick'],
+  ['offsides',-1,'Flagged late'],
+  ['offsides',-1,'Flagged early, player was level'],
+  ['offsides',-1,'Missed a clear offside'],
+  ['offsides',-1,'Flagged on a throw-in'],
+  ['offsides', 1,'Supported the AR on a close flag','CR'],
+  ['offsides',-1,'Overruled a correct flag','CR'],
+  // general
+  ['general', 1,'Handled coach dissent calmly'],
+  ['general', 1,'Good pregame with the coaches'],
+  ['general', 1,'Managed the injury correctly'],
+  ['general', 1,'Kept accurate time'],
+  ['general', 1,'Recovered well after a mistake'],
+  ['general',-1,'Rattled by sideline pressure'],
+  ['general',-1,'Substitution procedure shaky'],
+  ['general',-1,'Clock or timing confusion'],
+  ['general',-1,'Needs to slow the decision down'],
+  ['general',-1,'Over-explaining to coaches'],
+].map(([cat,pol,text,pos]) => ({cat,pol,text,pos:pos||null}));
+
+/* ============================================================
+   STORAGE
+   ------------------------------------------------------------
+   localStorage is the browser's simple key/value box on disk,
+   scoped to one origin (codeoverloader.github.io) and one browser.
+   It survives closing the app, which is what we need: you should be
+   able to lock your phone between games without losing a session.
+
+   Why the try/catch and the in-memory fallback: localStorage throws
+   rather than returns null in a few real situations - Safari private
+   browsing, storage quota exceeded, and inside some embedded preview
+   frames. An unhandled throw at startup would blank the whole app.
+   The fallback keeps everything working for the current session and
+   only loses data on reload, which is a survivable failure. This
+   shape - one interface, swap the thing behind it - is what people
+   mean by "adapter": callers never learn which one they got.
+   ============================================================ */
+const mem = new Map();
+let persistent = true;
+const store = {
+  get(k){
+    try { const v = localStorage.getItem(k); return v === null ? undefined : JSON.parse(v); }
+    catch(e){ persistent = false; return mem.get(k); }
+  },
+  set(k,v){
+    try { localStorage.setItem(k, JSON.stringify(v)); }
+    catch(e){ persistent = false; mem.set(k,v); }
+  }
+};
+
+const uid = () => Math.random().toString(36).slice(2,9);
+const $  = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function nowHM(){
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function prettyDate(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${Number(m)}/${Number(d)}/${y}`;        // form uses MM/DD/YYYY
+}
+function pretty12(hm){
+  if(!hm) return '';
+  let [h,m] = hm.split(':').map(Number);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${String(m).padStart(2,'0')} ${ap}`;
+}
+
+/* ============================================================
+   STATE
+   ------------------------------------------------------------
+   One session = one date, one mentor, up to three fields. A field
+   holds its own crew. A crew member ("ref") holds
+   everything that becomes one Google Form submission.
+   ============================================================ */
+function newRef(slot, role){
+  return {
+    id:uid(), slot, role,            // slot = CR/AR1/AR2 label, role = CR or AR for the form
+    name:'', notes:[],
+    ratings:Object.fromEntries(RATED.map(c => [c.id, null])),
+    noOffsides:false, moveUp:null,
+    comments:'', commentsEdited:false, submitted:false
+  };
+}
+function newField(name){
+  return {
+    // Kickoff starts EMPTY, not nowHM(). A made-up time is indistinguishable
+    // from a real one, which broke import matching (a hand-added field looked
+    // like it kicked off whenever you opened the app, so importing that same
+    // game could not match it and created a duplicate instead).
+    id:uid(), name:name||'', sub:'', division:'', time:'', crewSize:3, done:false,
+    refs:[newRef('CR','CR'), newRef('AR1','AR'), newRef('AR2','AR')]
+  };
+}
+function blankSession(){
+  return {
+    mentor: store.get('sideline:mentor') || '',
+    date: todayISO(),
+    fields: [newField('')],
+    activeRefId: null,
+    ui: {tab:'fields', cat:'workrate', pol:1, draftText:'', fieldId:null, showDone:false}
+  };
+}
+
+let S = store.get('sideline:session') || blankSession();
+let HIST = store.get('sideline:history') || [];
+
+/* Migration guard: if a stored session predates a field added later,
+   fill the gap rather than crash on undefined. Cheap insurance for an
+   app whose data lives on your phone across versions. */
+(function normalize(){
+  if(!S.ui) S.ui = {tab:'fields', cat:'workrate', pol:1, draftText:'', fieldId:null, showDone:false};
+  if(!Array.isArray(S.fields) || !S.fields.length) S.fields = [newField('')];
+  S.fields.forEach(f => {
+    if(!Array.isArray(f.refs)) f.refs = [];
+    f.refs.forEach(r => {
+      if(!r.ratings) r.ratings = Object.fromEntries(RATED.map(c => [c.id, null]));
+      if(!Array.isArray(r.notes)) r.notes = [];
+    });
+    relabelSlots(f);
+  });
+})();
+
+let saveTimer = null;
+function save(){
+  // Debounce: typing a name fires an input event per keystroke, and
+  // JSON.stringify + a disk write on every one is wasteful. Collapse
+  // bursts into a single write 250ms after you stop.
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    store.set('sideline:session', S);
+    store.set('sideline:history', HIST);
+    if(S.mentor) store.set('sideline:mentor', S.mentor);
+  }, 250);
+}
+
+/* Adds one pitch, reusing a blank placeholder if there is one. */
+function addFieldEntry(name, sub, crewSize){
+  if(S.fields.some(f => f.name === name && (f.sub || '') === (sub || ''))) return null;
+  const empty = S.fields.find(f => !f.name && !f.refs.some(r => r.name || r.notes.length));
+  const f = empty || newField('');
+  f.name = name; f.sub = sub || '';
+  const want = Math.min(Math.max(crewSize || 3, 1), 3);
+  const labels = want === 1 ? ['CR'] : want === 2 ? ['CR','AR1'] : ['CR','AR1','AR2'];
+  f.refs = labels.map(l => newRef(l, l.startsWith('AR') ? 'AR' : 'CR'));
+  f.crewSize = want;
+  relabelSlots(f);
+  if(!empty) S.fields.push(f);
+  return f;
+}
+
+/* Deleting a game is now always available, guarded by a dialog rather than
+   by hiding the button. Hiding it was the old "hardcoded limiter" - you
+   could not clear a finished game without emptying it by hand first. */
+function deleteGame(fid, after){
+  const f = S.fields.find(x => x.id === fid); if(!f) return;
+  const notes = f.refs.reduce((a,r) => a + r.notes.length, 0);
+  const named = f.refs.filter(r => r.name.trim()).length;
+  const what = `${pitchLabel(f) || 'This game'}${f.time ? ' at ' + pretty12(f.time) : ''}`;
+  const detail = notes ? ` It has ${notes} note${notes === 1 ? '' : 's'} on ${named} referee${named === 1 ? '' : 's'}.`
+                       : '';
+  askConfirm(`Delete ${what}?${detail} Evaluations you already saved are kept.`, 'Delete', () => {
+    S.fields = S.fields.filter(x => x.id !== fid);
+    if(!S.fields.length) S.fields.push(newField(''));
+    if(!activePair()) S.activeRefId = null;
+    if(!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+    save();
+    if(after) after(); else renderAll();
+    flash('Game deleted');
+  });
+}
+function toggleDone(fid){
+  const f = S.fields.find(x => x.id === fid); if(!f) return;
+  f.done = !f.done;
+  save(); renderAll();
+  flash(f.done ? 'Marked done' : 'Back on the list');
+}
+function gameSummary(f){
+  const refs = f.refs;
+  const notes = refs.reduce((a,r) => a + r.notes.length, 0);
+  const rated = refs.filter(r => RATED.every(c => r.ratings[c.id] != null)).length;
+  const names = refs.map(r => r.name.trim()).filter(Boolean);
+  return {notes, rated, names, total:refs.length,
+          complete: refs.length > 0 && refs.every(r => r.submitted)};
+}
+
+/* ---------- lookups ---------- */
+function allRefs(){ return S.fields.flatMap(f => f.refs.map(r => ({field:f, ref:r}))); }
+function activePair(){ return allRefs().find(x => x.ref.id === S.activeRefId) || null; }
+function refDisplay(r){ return r.name.trim() || `Unnamed ${r.slot}`; }
+
+/* ---------- crew size ----------
+   Rebuilding the crew must never silently delete notes you already
+   took, so shrinking keeps the extra slots' data until you confirm.
+   Slot roles default to the common setup and stay editable: 2-man is
+   sometimes CR + AR and sometimes dual CR, and the form only offers
+   CR or AR, so the role is what gets submitted. */
+/* Slot labels are derived, never stored as truth: the label has to
+   follow the role or the pitch map lies to you. A dual-referee 2-man
+   crew reads CR1 / CR2, a standard crew reads CR / AR1 / AR2, and a
+   lone AR is just AR. Called after anything that changes roles. */
+function relabelSlots(f){
+  let cr = 0, ar = 0;
+  const crTotal = f.refs.filter(r => r.role === 'CR').length;
+  const arTotal = f.refs.filter(r => r.role === 'AR').length;
+  f.refs.forEach(r => {
+    if(r.role === 'CR'){ cr++; r.slot = crTotal > 1 ? 'CR' + cr : 'CR'; }
+    else { ar++; r.slot = arTotal > 1 ? 'AR' + ar : 'AR'; }
+  });
+}
+
+function setCrewSize(fid, n){
+  const f = S.fields.find(x => x.id === fid); if(!f) return;
+  const labels = n === 1 ? ['CR'] : n === 2 ? ['CR','AR1'] : ['CR','AR1','AR2'];
+  const doomed = f.refs.slice(n).filter(r => r.notes.length || r.name.trim());
+  if(doomed.length){
+    askConfirm(`Dropping to ${n} official${n === 1 ? '' : 's'} removes ${doomed.length} referee(s) with data on them.`,
+      'Remove', () => { applyCrewSize(f, n); renderSheet(); });
+    return;
+  }
+  applyCrewSize(f, n);
+}
+function applyCrewSize(f, n){
+  const labels = n === 1 ? ['CR'] : n === 2 ? ['CR','AR1'] : ['CR','AR1','AR2'];
+  const kept = f.refs.slice(0, n);
+  while(kept.length < n) kept.push(newRef(labels[kept.length], labels[kept.length].startsWith('AR') ? 'AR' : 'CR'));
+  kept.forEach((r,i) => { r.role = labels[i].startsWith('AR') ? 'AR' : 'CR'; });
+  f.refs = kept; f.crewSize = n;
+  relabelSlots(f);
+  if(!activePair()) S.activeRefId = null;
+  save(); renderAll();
+}
+
+/* ============================================================
+   PITCH MAP
+   ------------------------------------------------------------
+   Drawn as inline SVG rather than an image so the markers can be
+   real, tappable, labelled elements that recolor with state.
+   viewBox is a coordinate system, not pixels: everything below is
+   drawn in a fixed 320x210 space and the browser scales it to
+   whatever width the phone has. That is why this works on any
+   screen without a single media query.
+
+   Marker geometry follows ROLE, not slot number, because that is
+   what is physically true: an AR stands on the touchline in one
+   half, a center works the middle. A dual-referee 2-man crew gets
+   two diagonal interior markers automatically.
+   ============================================================ */
+const AR_SPOTS = [[100,26],[220,182],[226,26],[94,182]];   // touchlines, alternating halves
+const CR_SPOTS_1 = [[160,104]];
+const CR_SPOTS_2 = [[106,146],[214,62]];                   // opposite diagonals, clear of the center circle
+
+function layoutCrew(field){
+  const crs = [], ars = [];
+  field.refs.forEach((r,i) => (r.role === 'AR' ? ars : crs).push({r,i}));
+  const crSpots = crs.length >= 2 ? CR_SPOTS_2 : CR_SPOTS_1;
+  const out = [];
+  crs.forEach((x,k) => out.push({...x, xy: crSpots[k % crSpots.length]}));
+  ars.forEach((x,k) => out.push({...x, xy: AR_SPOTS[k % AR_SPOTS.length]}));
+  return out;
+}
+
+function marker(ref, x, y){
+  const on = ref.id === S.activeRefId;
+  const n = ref.notes.length;
+  const first = (ref.name.trim().split(/\s+/)[0] || '').slice(0,10);
+  const cls = `mk${on ? ' on' : ''}${ref.name.trim() ? '' : ' unnamed'}`;
+  const nameY = y > 150 ? y - 24 : y + 30;
+  return `<g class="${cls}" data-pick="${ref.id}" role="button" tabindex="0"
+             aria-label="Take notes on ${esc(refDisplay(ref))}">
+    <circle cx="${x}" cy="${y}" r="27" fill="transparent"></circle>
+    <circle class="mkbg" cx="${x}" cy="${y}" r="17"></circle>
+    <text class="mklabel" x="${x}" y="${y+4}">${esc(ref.slot)}</text>
+    ${first ? `<text class="mkname" x="${x}" y="${nameY}">${esc(first)}</text>` : ''}
+    ${n ? `<circle class="cntbg" cx="${x+14}" cy="${y-14}" r="8"></circle>
+           <text class="cnt" x="${x+14}" y="${y-11}">${n}</text>` : ''}
+  </g>`;
+}
+
+function pitchSVG(field){
+  const marks = layoutCrew(field).map(({r,xy}) => marker(r, xy[0], xy[1])).join('');
+  return `<svg class="pitch" viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg" aria-label="Pitch map">
+    <g stroke="var(--chalk)" stroke-width="1.4" fill="none">
+      <rect x="16" y="26" width="288" height="156" rx="2"></rect>
+      <line x1="160" y1="26" x2="160" y2="182"></line>
+      <circle cx="160" cy="104" r="26"></circle>
+      <rect x="16" y="60" width="40" height="88"></rect>
+      <rect x="264" y="60" width="40" height="88"></rect>
+      <rect x="16" y="82" width="15" height="44"></rect>
+      <rect x="289" y="82" width="15" height="44"></rect>
+    </g>
+    <circle cx="160" cy="104" r="2" fill="var(--chalk)"></circle>
+    <rect x="10" y="90" width="6" height="28" fill="var(--chalk)"></rect>
+    <rect x="304" y="90" width="6" height="28" fill="var(--chalk)"></rect>
+    ${marks}
+  </svg>`;
+}
+
+function refProgress(r){
+  const done = RATED.filter(c => r.ratings[c.id] != null).length;
+  return {notes:r.notes.length, done, total:RATED.length, ready:done === RATED.length && r.moveUp && r.comments.trim()};
+}
+
+/* A group is every pitch that shares a field name and kickoff - i.e. the two
+   Tigers games at 8:00. The strip shows one chip per group and the view shows
+   all of its pitches, instead of eight near-identical chips for one morning. */
+function groupKey(f){ return (f.name || '') + '|' + (f.time || ''); }
+function fieldGroups(){
+  const m = new Map();
+  S.fields.forEach(f => {
+    const k = groupKey(f);
+    if(!m.has(k)) m.set(k, []);
+    m.get(k).push(f);
+  });
+  return [...m.values()].map(list =>
+    list.slice().sort((a,b) => (a.sub || '').localeCompare(b.sub || '')));
+}
+function groupOf(field){
+  return fieldGroups().find(g => g.some(x => x.id === field.id)) || [field];
+}
+
+function selectedField(){
+  if(!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] ? S.fields[0].id : null;
+  return S.fields.find(f => f.id === S.ui.fieldId) || null;
+}
+
+/* With one or two fields you can stack every pitch. Monitoring a full
+   slate is eight or ten, and stacking those means scrolling past six
+   pitches to reach the one in front of you. So: a strip of every field
+   across the top, one pitch shown at a time, and a coverage line that
+   answers the question you actually have at 10am - who have I not
+   watched yet. */
+/* The horizontal strip failed in use: thirteen chips with near-identical
+   names and times, most off-screen, and rebuilding it with innerHTML reset
+   its scroll to the far left on every tap - which is why selecting a 1pm
+   game threw you back to 8am. Replaced by a full-screen picker grouped by
+   kickoff, where each row carries the division and the referee names, i.e.
+   the things that actually tell two games apart. Nothing scrolls sideways. */
+function visibleGames(){
+  return S.fields.filter(f => S.ui.showDone || !f.done);
+}
+function gameRow(f, opts){
+  const g = gameSummary(f);
+  const on = f.id === S.ui.fieldId;
+  const who = g.names.length ? g.names.join(', ') : 'no referees named';
+  return `<div class="grow${on ? ' on' : ''}${f.done ? ' done' : ''}">
+    <button style="flex:1;min-width:0;text-align:left;background:none" data-game="${f.id}">
+      <div class="t1">${esc(pitchLabel(f) || 'Field not set')}${f.done ? ' &check;' : ''}</div>
+      <div class="t2">${esc(f.division || 'no division')} &mdash; ${esc(who)}</div>
+    </button>
+    <div class="meter">${g.notes ? `<b>${g.notes}</b> note${g.notes === 1 ? '' : 's'}` : 'no notes'}<br>${g.rated}/${g.total} rated</div>
+    ${opts && opts.actions ? `
+      <button class="iconsm" data-done="${f.id}" title="${f.done ? 'Put back on the list' : 'Mark done'}">${f.done ? '&#8634;' : '&check;'}</button>
+      <button class="iconsm" data-delgame="${f.id}" title="Delete this game">&times;</button>` : ''}
+  </div>`;
+}
+
+function renderPicker(){
+  const games = visibleGames();
+  const doneCount = S.fields.filter(f => f.done).length;
+  const slots = new Map();
+  games.forEach(f => {
+    const k = f.time || '';
+    if(!slots.has(k)) slots.set(k, []);
+    slots.get(k).push(f);
+  });
+  const fieldIdx = (n) => { const i = FIELDS.indexOf(n); return i < 0 ? 999 : i; };
+  const body = [...slots.entries()].sort((a,b) => (a[0] || '99:99').localeCompare(b[0] || '99:99'))
+    .map(([time, list]) => {
+      list.sort((a,b) => fieldIdx(a.name) - fieldIdx(b.name) || (a.sub || '').localeCompare(b.sub || ''));
+      return `<div class="slot">${time ? esc(pretty12(time)) : 'No kickoff set'}</div>
+        ${list.map(f => gameRow(f, {actions:true})).join('')}`;
+    }).join('');
+
+  $('#sheetBody').innerHTML = `
+    ${games.length ? body : '<div class="empty">Nothing to show. Import the day\'s schedule to get started.</div>'}
+    ${doneCount ? `<button class="btn sm ghost" id="toggleDone" style="margin-top:14px">
+      ${S.ui.showDone ? 'Hide' : 'Show'} ${doneCount} finished game${doneCount === 1 ? '' : 's'}</button>` : ''}
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm primary" id="openImport">Import schedule</button>
+      <button class="btn sm ghost" id="openSettings2">Settings</button>
+    </div>`;
+}
+
+/* The bar that opens the picker, shown on both working tabs. */
+function nowGameBar(){
+  const f = selectedField();
+  if(!f) return '';
+  const g = gameSummary(f);
+  return `<button class="nowgame" id="openPicker">
+    <div style="min-width:0">
+      <div class="g1">${esc(pitchLabel(f) || 'Pick a game')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
+      <div class="g2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
+    </div>
+    <span class="chev">&#9662;</span>
+  </button>`;
+}
+
+function renderFields(){
+  if(!S.fields.length){
+    $('#fieldsWrap').innerHTML = `<div class="empty">No fields on the board yet.<br>
+      Import the day's schedule, or add fields by hand.</div>`;
+    return;
+  }
+  const f = selectedField();
+  const group = groupOf(f);
+  const refs = allRefs();
+  const named = refs.filter(x => x.ref.name.trim());
+  const withNotes = refs.filter(x => x.ref.notes.length);
+  const fullyRated = refs.filter(x => RATED.every(c => x.ref.ratings[c.id] != null));
+  const unwatched = named.filter(x => !x.ref.notes.length)
+    .map(x => `${fieldLabel(x.field)}${x.field.sub ? ' ' + x.field.sub : ''} ${x.ref.slot}`);
+
+  // Every pitch at this field and kickoff, each with its own crew.
+  // Two Tigers pitches means two small pitch maps, one above the other, so
+  // you can see the whole area you are standing in front of.
+  const blocks = group.map(pf => {
+    const crew = pf.refs.map(r => {
+      const done = RATED.filter(c => r.ratings[c.id] != null).length;
+      return `<div class="crewrow${r.id === S.activeRefId ? ' on' : ''}">
+        <span class="slot">${esc(r.slot)}</span>
+        <input type="text" placeholder="Referee name" value="${esc(r.name)}" data-name="${r.id}" />
+        <span class="prog">${r.notes.length} note${r.notes.length === 1 ? '' : 's'}<br>${done}/${RATED.length} rated</span>
+        <button class="go" data-open="${r.id}">Notes</button>
+      </div>`;
+    }).join('');
+    return `<div class="fieldblock">
+      <div class="fieldhead">
+        <div class="fname">${esc(pf.sub ? shortField(pf.name) + ' ' + pf.sub : pf.name || 'Field not set')}</div>
+        <div class="spacer"></div>
+      </div>
+      ${pitchSVG(pf)}
+      <div class="crew">${crew}</div>
+    </div>`;
+  }).join('');
+
+  const meta = [f.name, f.division, pretty12(f.time)].filter(Boolean).join(', ');
+
+  $('#fieldsWrap').innerHTML = `
+    ${nowGameBar()}
+    <div class="card" style="margin-top:2px">
+      <div class="cov">
+        <span><b>${named.length}</b> referees</span>
+        <span><b>${withNotes.length}</b> with notes</span>
+        <span><b>${fullyRated.length}</b> fully rated</span>
+      </div>
+      ${unwatched.length ? `<div class="hint" style="margin:8px 0 0">Not watched yet:
+        ${esc(unwatched.slice(0,12).join(', '))}${unwatched.length > 12 ? ` +${unwatched.length - 12} more` : ''}</div>` : ''}
+    </div>
+    <div class="hint" style="margin:10px 0 0">${esc(meta || 'Field not set')}${group.length > 1
+      ? ` &mdash; ${group.length} pitches, one referee each` : ''}</div>
+    ${blocks}
+    <div class="row" style="margin-top:4px">
+      <button class="btn sm" data-done="${f.id}">${f.done ? 'Put back on the list' : 'Mark this game done'}</button>
+      <button class="btn sm danger" data-delgame="${f.id}">Delete this game</button>
+    </div>`;
+}
+
+/* ============================================================
+   HEADER + OBSERVE
+   ============================================================ */
+function renderWatching(){
+  const p = activePair();
+  const box = $('#watching');
+  if(!p){
+    box.className = 'watching empty';
+    box.innerHTML = `<div style="min-width:0"><div class="who">No referee selected</div>
+      <div class="sub">Tap a position on a field to start</div></div>`;
+    return;
+  }
+  box.className = 'watching';
+  box.innerHTML = `<span class="rolechip">${esc(p.ref.role)}</span>
+    <div style="min-width:0">
+      <div class="who">${esc(refDisplay(p.ref))}</div>
+      <div class="sub">${esc(p.field.name || 'field not set')}${p.field.sub ? ' ' + esc(p.field.sub) : ''} &nbsp;&middot;&nbsp; ${esc(p.ref.slot)}</div>
+    </div>
+`;
+}
+
+/* Two rows: every field, then just the selected field's crew. A single
+   flat list of every official across ten fields is a horizontal scroll
+   nobody can hit accurately while watching a game. */
+function renderMinimap(){
+  const p = activePair();
+  const fid = p ? p.field.id : S.ui.fieldId;
+  const f = S.fields.find(x => x.id === fid);
+  const group = f ? groupOf(f) : [];
+  const crew = group.flatMap(pf => pf.refs.map(r => {
+    const on = r.id === S.activeRefId;
+    return `<button class="mini${on ? ' on' : ''}" data-pick="${r.id}">
+      <span class="m1">${esc(r.slot)}${pf.sub ? '&middot;' + esc(pf.sub) : ''}</span> ${esc(refDisplay(r).split(/\s+/)[0])}
+      ${r.notes.length ? `<span style="color:var(--plus);font-weight:700"> ${r.notes.length}</span>` : ''}
+    </button>`;
+  })).join('');
+  $('#minimap').innerHTML = `${nowGameBar()}<div class="minimap" style="padding-top:0">${crew}</div>`;
+}
+
+function renderObserve(){
+  const p = activePair();
+  if(!p){
+    $('#observeBody').innerHTML = `<div class="empty">Pick a referee above, or tap a position on the
+      Fields tab. Notes always attach to the referee in the blue bar.</div>`;
+    return;
+  }
+  const {field, ref} = p;
+  const catRow = CATS.map(c => {
+    const n = ref.notes.filter(x => x.cat === c.id).length;
+    return `<button class="cat${S.ui.cat === c.id ? ' on' : ''}" data-cat="${c.id}">
+      ${esc(c.short)}${n ? ` ${n}` : ''}</button>`;
+  }).join('');
+
+  // Role filter: a chip with pos:'AR' is hidden from a center referee
+  // and vice versa. Fewer wrong taps when you are watching live.
+  const chips = CHIPS.filter(c => c.cat === S.ui.cat && (!c.pos || c.pos === ref.role))
+    .map((c,i) => `<button class="chip ${c.pol > 0 ? 'p' : 'm-'}" data-chip="${S.ui.cat}|${i}">
+        <span class="m">${c.pol > 0 ? '+' : '\u2212'}</span><span>${esc(c.text)}</span></button>`).join('');
+
+  const notes = ref.notes.slice().reverse().map(n => {
+    const cat = CATS.find(c => c.id === n.cat);
+    const cls = n.pol === 1 ? 'p' : n.pol === -1 ? 'n' : n.pol === 2 ? 'b' : 'o';
+    return `<div class="nrow ${cls}">
+      <span class="mk2">${POL[n.pol] ? POL[n.pol].mark : '\u00b7'}</span>
+      <span class="bd">${esc(n.text)}<span class="cn">${esc(cat ? cat.short : '')}</span></span>
+      ${n.pol === -1 ? `<button class="del" data-better="${n.id}"
+        title="They fixed this after halftime" aria-label="Mark improved">&uarr;</button>` : ''}
+      <button class="del" data-del="${n.id}" aria-label="Delete note">&times;</button>
+    </div>`;
+  }).join('');
+
+  $('#observeBody').innerHTML = `
+    <div class="cats">${catRow}</div>
+    <div class="chipgrid">${chips || '<div class="hint">No quick notes for this role. Type one below.</div>'}</div>
+    <div class="noteadd">
+      <div class="polset">
+        <button data-pol="1"  aria-pressed="${S.ui.pol === 1}">+</button>
+        <button data-pol="-1" aria-pressed="${S.ui.pol === -1}">&minus;</button>
+        <button data-pol="2"  aria-pressed="${S.ui.pol === 2}">&uarr;</button>
+      </div>
+      <input type="text" id="noteText" placeholder="Type anything else" value="${esc(S.ui.draftText)}"
+             enterkeyhint="done" autocapitalize="sentences" />
+      <button class="btn primary" style="width:auto;padding:11px 15px" id="addNote">Add</button>
+    </div>
+    <div class="timeline">${notes || '<div class="empty">No notes on this referee yet.</div>'}</div>
+    ${ref.notes.length ? `<button class="btn ghost sm" id="toScore">Rate ${esc(refDisplay(ref))} &rarr;</button>` : ''}
+  `;
+}
+
+function addNote(cat, pol, text){
+  const p = activePair(); if(!p || !text.trim()) return;
+  // Clear the draft BEFORE rendering. renderObserve rebuilds the input
+  // from S.ui.draftText, so clearing it afterwards would reprint the
+  // text you just submitted.
+  S.ui.draftText = '';
+  p.ref.notes.push({id:uid(), cat, pol, text:text.trim(), at:Date.now()});
+  // Blanking an unedited draft marks it stale; the Score tab rebuilds it
+  // on arrival. If you have already typed your own comments, they stand.
+  if(!p.ref.commentsEdited) p.ref.comments = '';
+  save(); renderAll(); flash('Added to ' + refDisplay(p.ref));
+}
+
+/* ============================================================
+   SCORE TAB
+   ------------------------------------------------------------
+   The ratings are yours to set - the app never scores for you. It
+   only shows what your own notes said about each category, because
+   after two hours and six referees the notes are more reliable than
+   memory.
+   ============================================================ */
+function catTally(ref, catId){
+  const ns = ref.notes.filter(n => n.cat === catId);
+  return {n:ns.length, plus:ns.filter(n => n.pol === 1).length,
+          minus:ns.filter(n => n.pol === -1).length, better:ns.filter(n => n.pol === 2).length};
+}
+
+/* Build the COMMENTS paragraph from the notes.
+   Duplicates collapse with a count, so three late flags read as
+   "flagged late (x3)" instead of padding the paragraph. */
+const POL = {1:{mark:'+', word:'Strengths'}, '-1':{mark:'\u2212', word:'To work on'},
+             2:{mark:'\u2191', word:'Improved after halftime'}};
+
+function buildComments(ref, field){
+  const group = (pol) => {
+    const out = [];
+    CATS.forEach(c => {
+      const counts = new Map();
+      ref.notes.filter(n => n.cat === c.id && n.pol === pol).forEach(n => {
+        const key = n.text;
+        const cur = counts.get(key) || {text:n.text, n:0};
+        cur.n++; counts.set(key, cur);
+      });
+      counts.forEach(v => {
+        let s = v.text.charAt(0).toLowerCase() + v.text.slice(1);
+        if(v.n > 1) s += ` (x${v.n})`;
+        out.push(s);
+      });
+    });
+    return out;
+  };
+  const good = group(1), work = group(-1), better = group(2);
+  const parts = [];
+  if(good.length) parts.push('Strengths: ' + good.join('; ') + '.');
+  if(work.length) parts.push('To work on: ' + work.join('; ') + '.');
+  // The halftime story: what you corrected at the break and they fixed after.
+  if(better.length) parts.push('Improved after halftime: ' + better.join('; ') + '.');
+  if(ref.noOffsides) parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
+  if(!parts.length) parts.push(`Watched ${refDisplay(ref)} at ${field.name || 'the field'}. `);
+  return parts.join(' ');
+}
+
+function renderScore(){
+  const p = activePair();
+  if(!p){ $('#scoreBody').innerHTML = '<div class="empty">Pick a referee first.</div>'; return; }
+  const {field, ref} = p;
+  if(!ref.comments && !ref.commentsEdited) ref.comments = buildComments(ref, field);
+
+  const scales = RATED.map(c => {
+    const t = catTally(ref, c.id);
+    const locked = c.id === 'offsides' && ref.noOffsides;
+    const bits = [];
+    if(t.plus) bits.push(`${t.plus} strength${t.plus === 1 ? '' : 's'}`);
+    if(t.minus) bits.push(`${t.minus} to work on`);
+    if(t.better) bits.push(`${t.better} improved`);
+    const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
+    const nums = [1,2,3,4].map(v => `<button data-rate="${c.id}|${v}"
+      aria-pressed="${ref.ratings[c.id] === v}" ${locked ? 'disabled style="opacity:.45"' : ''}>${v}</button>`).join('');
+    return `<div class="ratewrap">
+      <div class="rlabel">${esc(c.label)}</div>
+      <div class="rhint">${esc(hint)}${c.id === 'offsides' ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
+      <div class="scale"><span class="end">bad</span><div class="nums">${nums}</div><span class="end r">good</span></div>
+      ${c.id === 'offsides' ? `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
+        No offside situations this game</label>` : ''}
+    </div>`;
+  }).join('');
+
+  $('#scoreBody').innerHTML = `
+    <h2 class="sec">${esc(refDisplay(ref))} &mdash; ${esc(ref.role)}</h2>
+    <p class="hint">${esc(field.name || 'field not set')}${field.division ? ', ' + esc(field.division) : ''}${field.time ? ', ' + esc(pretty12(field.time)) : ''}</p>
+    <div class="card">${scales}</div>
+    <div class="card">
+      <div class="rlabel" style="font-size:14px;font-weight:600;margin-bottom:8px">Should they move up</div>
+      <div class="yesno">
+        <button data-move="Yes" aria-pressed="${ref.moveUp === 'Yes'}">Yes</button>
+        <button data-move="No"  aria-pressed="${ref.moveUp === 'No'}">No</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div class="rlabel" style="font-size:14px;font-weight:600">Comments</div>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn sm ghost" style="width:auto" id="rebuild">Rebuild</button>
+      </div>
+      <textarea id="comments" rows="7" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
+      <div class="charcount">${ref.comments.length} characters</div>
+      <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
+    </div>
+    <button class="btn primary" id="copyAll">Copy everything in form order</button>
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="openForm2">Open the form</button>
+      <button class="btn sm" id="saveEval">Save this referee</button>
+    </div>
+    <div class="hint" style="margin-top:10px">Copy, open the form, then paste into COMMENTS. Everything above
+      the comments is short enough to tap straight in while the copied block is on screen.</div>
+  `;
+}
+
+/* ---------- text assembly for the clipboard ---------- */
+function formBlock(field, ref){
+  const L = [];
+  L.push(`Mentor/Monitor name: ${S.mentor}`);
+  L.push(`Date: ${prettyDate(S.date)}`);
+  L.push(`Field: ${field.name}`);
+  L.push(`Time: ${pretty12(field.time)}`);
+  L.push(`Division: ${field.division}`);
+  L.push(`Referee being mentored: ${ref.name}`);
+  L.push(`Position: ${ref.role}`);
+  L.push('');
+  RATED.forEach(c => L.push(`${c.label}: ${ref.ratings[c.id] == null ? '-' : ref.ratings[c.id]}`));
+  L.push(`Should they move up: ${ref.moveUp || '-'}`);
+  L.push('');
+  L.push('COMMENTS:');
+  L.push(ref.comments);
+  return L.join('\n');
+}
+
+async function copyText(t, label){
+  // navigator.clipboard needs a "secure context": https or localhost.
+  // GitHub Pages is https so this is the happy path. Opening the file
+  // straight off disk (file://) is not secure, so the old execCommand
+  // route is kept as a fallback rather than failing silently.
+  try{
+    await navigator.clipboard.writeText(t);
+    flash(label + ' copied');
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    flash(ok ? label + ' copied' : 'Copy blocked - select the text manually');
+  }
+}
+
+/* ============================================================
+   SAVED + EXPORT
+   ============================================================ */
+function saveEval(){
+  const p = activePair(); if(!p) return;
+  const {field, ref} = p;
+  if(!ref.name.trim()){ flash('Add the referee name first'); return; }
+  const rec = {
+    id:uid(), savedAt:Date.now(),
+    mentor:S.mentor, date:S.date, field:field.name, sub:field.sub || '', time:field.time, division:field.division,
+    referee:ref.name, position:ref.role,
+    ratings:{...ref.ratings}, moveUp:ref.moveUp, comments:ref.comments,
+    notes:ref.notes.map(n => ({...n}))
+  };
+  HIST.unshift(rec); ref.submitted = true;
+  // Once every official on this pitch is filed, the game is finished - retire
+  // it from the picker automatically instead of making you tidy up later.
+  if(field.refs.every(r => r.submitted)) field.done = true;
+  save(); renderAll();
+  flash(field.done ? 'Saved. Game marked done.' : 'Saved to this device');
+}
+
+function csvCell(v){
+  const s = String(v == null ? '' : v);
+  // RFC 4180: wrap in quotes if the value contains a comma, quote or
+  // newline, and double any internal quotes. Comments will contain
+  // semicolons and sometimes commas, so this is not optional.
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function exportCSV(){
+  if(!HIST.length){ flash('Nothing saved yet'); return; }
+  // Pitch is in the CSV because it is your own record and two Tigers rows would
+  // otherwise look identical. It is deliberately absent from the form block:
+  // the form has no pitch question and the Field value must match its dropdown.
+  const head = ['Mentor','Date','Field','Pitch','Time','Division','Referee','Position',
+    ...RATED.map(c => c.label),'Move up','Comments'];
+  const rows = HIST.map(r => [r.mentor, prettyDate(r.date), r.field, r.sub || '', pretty12(r.time), r.division,
+    r.referee, r.position, ...RATED.map(c => r.ratings[c.id] ?? ''), r.moveUp || '', r.comments]);
+  const csv = [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  download(`referee-evaluations-${S.date}.csv`, csv, 'text/csv');
+}
+function download(name, text, mime){
+  // A Blob is just an in-memory file. createObjectURL hands back a
+  // temporary URL pointing at it, which a normal link can "download".
+  // Revoking afterwards releases the memory.
+  const url = URL.createObjectURL(new Blob([text], {type:mime + ';charset=utf-8'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  flash('Downloaded');
+}
+
+function renderSaved(){
+  if(!HIST.length){
+    $('#savedBody').innerHTML = '<div class="empty">No evaluations saved yet.</div>';
+    return;
+  }
+  const items = HIST.map(r => {
+    const scores = RATED.map(c => r.ratings[c.id] ?? '-').join(' ');
+    return `<div class="saved">
+      <div class="sh">
+        <b>${esc(r.referee)}</b><span class="pill">${esc(r.position)}</span>
+        <div class="spacer"></div>
+        <span class="pill">${esc(r.moveUp || '-')}</span>
+      </div>
+      <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}, ${esc(r.division)}</div>
+      <div class="pill" style="margin-top:6px">${esc(scores)}</div>
+      <pre>${esc(r.comments)}</pre>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" data-copysaved="${r.id}">Copy</button>
+        <button class="btn sm danger" data-dropsaved="${r.id}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  $('#savedBody').innerHTML = items +
+    `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`;
+}
+
+/* ============================================================
+   SETTINGS SHEET
+   ============================================================ */
+let sheetMode = 'settings';
+
+function renderSheet(){
+  $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
+    : sheetMode === 'games' ? 'Choose a game' : 'Settings';
+  if(sheetMode === 'import') return renderImport();
+  if(sheetMode === 'games') return renderPicker();
+
+  /* Settings used to print a full editor card for every game, so a nine-game
+     Saturday was a wall of near-identical forms you had to scroll through.
+     Now each game is one line and only the one you tap opens. */
+  const editing = S.ui.editField;
+  const fieldIdx = (n) => { const i = FIELDS.indexOf(n); return i < 0 ? 999 : i; };
+  const ordered = S.fields.slice().sort((a,b) =>
+    (a.time || '99:99').localeCompare(b.time || '99:99') ||
+    fieldIdx(a.name) - fieldIdx(b.name) || (a.sub || '').localeCompare(b.sub || ''));
+
+  const gameCards = ordered.map(f => {
+    const g = gameSummary(f);
+    const head = `<div class="grow${f.done ? ' done' : ''}" style="margin:6px 0 0">
+      <button style="flex:1;min-width:0;text-align:left;background:none" data-edit="${f.id}">
+        <div class="t1">${esc(pitchLabel(f) || 'Field not set')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
+        <div class="t2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
+      </button>
+      <button class="iconsm" data-edit="${f.id}">${editing === f.id ? '&#9652;' : '&#9662;'}</button>
+      <button class="iconsm" data-delgame="${f.id}" title="Delete this game">&times;</button>
+    </div>`;
+    if(editing !== f.id) return head;
+
+    const opts = ['<option value="">Choose a field</option>']
+      .concat(FIELDS.map(n => `<option${n === f.name ? ' selected' : ''}>${esc(n)}</option>`)).join('');
+    const divs = ['<option value="">Choose a division</option>']
+      .concat(DIVISIONS.map(n => `<option${n === f.division ? ' selected' : ''}>${esc(n)}</option>`)).join('');
+    const roles = f.refs.map(r => `<div class="crewrow">
+        <span class="slot">${esc(r.slot)}</span>
+        <input type="text" placeholder="Referee name" value="${esc(r.name)}" data-name="${r.id}" />
+        <div class="seg" style="max-width:118px;flex:none">
+          <button data-role="${r.id}|CR" aria-pressed="${r.role === 'CR'}">CR</button>
+          <button data-role="${r.id}|AR" aria-pressed="${r.role === 'AR'}">AR</button>
+        </div>
+      </div>`).join('');
+
+    return head + `<div class="card" style="margin:0 0 10px;border-top-left-radius:0;border-top-right-radius:0">
+      <label class="f"><span>Field</span><select data-fname="${f.id}">${opts}</select></label>
+      <div class="row">
+        <label class="f"><span>Division</span><select data-fdiv="${f.id}">${divs}</select></label>
+        <label class="f"><span>Kickoff</span><input type="time" value="${esc(f.time)}" data-ftime="${f.id}" /></label>
+      </div>
+      <label class="f"><span>Pitches here</span></label>
+      <div class="seg">${[1,2].map(n => `<button data-pitches="${f.id}|${n}" aria-pressed="${groupOf(f).length === n}">${n} pitch${n === 1 ? '' : 'es'}</button>`).join('')}</div>
+      <label class="f"><span>Officials on this pitch</span></label>
+      <div class="seg">${[1,2,3].map(n => `<button data-crew="${f.id}|${n}" aria-pressed="${f.crewSize === n}">${n}</button>`).join('')}</div>
+      <div class="crew" style="margin-top:10px">${roles}</div>
+      <button class="btn sm" data-done="${f.id}" style="margin-top:10px">${f.done ? 'Put back on the list' : 'Mark done'}</button>
+    </div>`;
+  }).join('');
+
+  const groupBtns = FIELD_GROUPS.map(g => {
+    const have = g.members.filter(m => S.fields.some(f => f.name === m)).length;
+    return `<button class="btn sm${have === g.members.length ? ' ghost' : ''}" style="width:auto;flex:none"
+      data-addgroup="${esc(g.label)}">${esc(g.label)}</button>`;
+  }).join('');
+  const singles = FIELDS.filter(n => !FIELD_GROUPS.some(g => g.members.includes(n)));
+
+  $('#sheetBody').innerHTML = `
+    <div class="card">
+      <label class="f"><span>Mentor/Monitor name</span>
+        <input type="text" id="mentorName" value="${esc(S.mentor)}" placeholder="Your name" /></label>
+      <label class="f"><span>Date</span><input type="date" id="sessDate" value="${esc(S.date)}" /></label>
+      <button class="btn sm primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
+    </div>
+
+    <h2 class="sec">Games (${S.fields.length})</h2>
+    <p class="hint">Tap a game to edit it, or &times; to delete it.</p>
+    ${gameCards}
+
+    <h2 class="sec">Add by hand</h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${groupBtns}</div>
+    <label class="f" style="margin-top:10px"><span>Single field</span>
+      <select id="addSingle">
+        <option value="">Choose a field to add</option>
+        ${singles.map(n => `<option${S.fields.some(f => f.name === n) ? ' disabled' : ''}>${esc(n)}</option>`).join('')}
+      </select></label>
+    <button class="btn ghost sm" id="addField" style="margin-top:8px">Add an empty game</button>
+
+    <div class="divider"></div>
+    <button class="btn sm danger" id="newSession" style="margin-top:8px">Clear the whole session</button>
+    <div class="hint" style="margin-top:8px">
+      Clears every game and all in-progress notes. Saved evaluations stay.${persistent ? '' :
+      ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>`;
+}
+
+function renderImport(){
+  const src = IMP ? IMP.source : 'sheet';
+  const seg = `<div class="seg">
+    ${[['sheet','Google Sheet'],['paste','Paste'],['cache','This browser']]
+      .map(([k,l]) => `<button data-impsrc="${k}" aria-pressed="${src === k}">${l}</button>`).join('')}
+  </div>`;
+
+  let sourceUI = '';
+  if(src === 'sheet'){
+    const last = store.get('sideline:sheet') || {id:'', gid:''};
+    sourceUI = `
+      <label class="f"><span>Spreadsheet link or ID</span>
+        <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
+      <label class="f"><span>Tab gid (optional - blank uses the first tab)</span>
+        <input type="text" id="shGid" value="${esc(last.gid)}" placeholder="1490026671" /></label>
+      <button class="btn sm primary" id="doFetch" style="margin-top:10px">Fetch the tab</button>
+      <div class="hint" style="margin-top:8px">The tab has to be viewable by anyone with the link.
+        A sheet only you can open will return a login page, not data. Nothing is sent anywhere -
+        your phone fetches it directly and the ID stays in this browser.</div>`;
+  } else if(src === 'paste'){
+    sourceUI = `
+      <label class="f"><span>Paste rows from the schedule</span>
+        <textarea id="pasteBox" rows="5" placeholder="Select the cells in the sheet, copy, paste here">${esc(IMP && IMP.text || '')}</textarea></label>
+      <button class="btn sm primary" id="doParse" style="margin-top:8px">Read these rows</button>
+      <div class="hint" style="margin-top:8px">Include the header row. Tabs or commas both work.</div>`;
+  } else {
+    const found = scanBrowserCache();
+    sourceUI = found.length
+      ? found.map((c,i) => `<div class="gamerow">
+          <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
+          <div class="g2">${c.rows.length} rows</div></div>
+          <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
+      : `<div class="hint">Nothing found. This reads data other apps on the same site have
+         cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
+         because they sit on the same domain. It comes up empty inside the Android app,
+         where the origin is different.</div>`;
+  }
+
+  let mapUI = '';
+  if(IMP && IMP.rows && IMP.rows.length){
+    const opts = (sel) => ['<option value="">not in this sheet</option>']
+      .concat(IMP.header.map((h,i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(h || 'column ' + (i+1))}</option>`)).join('');
+    const preview = IMP.rows.slice(IMP.headerRow, IMP.headerRow + 4);
+    const filtered = rowsToGames();
+    if(IMP.picked === null) IMP.picked = filtered.map(g => g.key);
+    const present = fieldsInImport();
+    const sel = IMP.fieldFilter;
+    const fieldChips = present.map(f => {
+      const on = !sel || sel.includes(f.name);
+      return `<button class="fchip${on ? ' on' : ''}" data-impfield="${esc(f.name)}">
+        ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`;
+    }).join('');
+
+    mapUI = `
+      <div class="divider"></div>
+      <h2 class="sec">Check the columns</h2>
+      <label class="f"><span>Header row</span>
+        <select id="hdrRow">${IMP.rows.slice(0,8).map((r,i) =>
+          `<option value="${i}"${i === IMP.headerRow ? ' selected' : ''}>Row ${i+1}: ${esc(r.slice(0,4).filter(Boolean).join(' | ').slice(0,40))}</option>`).join('')}</select></label>
+      <div class="scrollx" style="margin:8px 0"><table class="tbl"><tbody>
+        ${preview.map((r,ri) => `<tr>${r.slice(0,8).map(c =>
+          ri === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>
+      <div class="map2">
+        <label class="f"><span>Field</span><select data-map="field">${opts(IMP.map.field)}</select></label>
+        <label class="f"><span>Time</span><select data-map="time">${opts(IMP.map.time)}</select></label>
+        <label class="f"><span>Date</span><select data-map="date">${opts(IMP.map.date)}</select></label>
+        <label class="f"><span>Division</span><select data-map="division">${opts(IMP.map.division)}</select></label>
+      </div>
+      <div class="map2">
+        <label class="f"><span>CR 1</span><select data-map="cr">${opts(IMP.map.cr)}</select></label>
+        <label class="f"><span>CR 2</span><select data-map="cr2">${opts(IMP.map.cr2)}</select></label>
+        <label class="f"><span>AR 1</span><select data-map="ar1">${opts(IMP.map.ar1)}</select></label>
+        <label class="f"><span>AR 2</span><select data-map="ar2">${opts(IMP.map.ar2)}</select></label>
+        <div></div>
+        <label class="f"><span>Cancelled flag</span><select data-map="cancel">${opts(IMP.map.cancel)}</select></label>
+      </div>
+      <label class="f"><span>Whole crew in one column</span><select data-map="crew">${opts(IMP.map.crew)}</select></label>
+      <div class="hint">Crew size comes from the division, not from how many names are
+        filled in. Pre-K and Kindergarten split into two pitches with one referee each;
+        1st and 2nd grade are one game with two officials.</div>
+
+      <div class="divider"></div>
+      <h2 class="sec">Which fields are you monitoring</h2>
+      <p class="hint">Every kickoff on the fields you pick comes in, so one pitch all
+        morning arrives as three or four games. ${sel ? `Filtering to ${sel.length}
+        field${sel.length === 1 ? '' : 's'}.` : 'No filter - every field in the sheet.'}</p>
+      <div class="fieldstrip" style="flex-wrap:wrap;overflow:visible">${fieldChips}</div>
+      <div class="row" style="margin:2px 0 10px">
+        <button class="btn sm ghost" id="fieldsAll">Every field</button>
+        <button class="btn sm ghost" id="fieldsBoard">Fields on my board</button>
+      </div>
+
+      <h2 class="sec">Games found (${filtered.length})</h2>
+      <div class="seg" style="margin-bottom:8px">
+        <button data-datef="session" aria-pressed="${IMP.dateFilter === 'session'}">${esc(prettyDate(S.date))} only</button>
+        <button data-datef="all" aria-pressed="${IMP.dateFilter === 'all'}">Every date</button>
+      </div>
+      ${filtered.length ? `<div class="row" style="margin-bottom:6px">
+        <button class="btn sm ghost" id="pickAll">Select all ${filtered.length}</button>
+        <button class="btn sm ghost" id="pickNone">Select none</button></div>` : ''}
+      ${filtered.length ? filtered.map(g => {
+        const on = IMP.picked.includes(g.key);
+        return `<div class="gamerow${on ? '' : ' off'}">
+          <input type="checkbox" data-pickgame="${g.key}" ${on ? 'checked' : ''} />
+          <div style="flex:1;min-width:0">
+            <div class="g1">${g.time ? esc(pretty12(g.time)) + ' &nbsp; ' : ''}${esc(g.field || g.raw.field || 'field not matched')}</div>
+            <div class="g2">${esc(g.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no officials listed'}</div>
+          </div></div>`;
+      }).join('') : '<div class="empty">No games matched. Check the column mapping above, or switch to every date.</div>'}
+      ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
+        list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
+      ${present.length && sel && sel.length < present.length ? `<div class="hint">${present.length - sel.length}
+        other field${present.length - sel.length === 1 ? '' : 's'} in this sheet are filtered out.</div>` : ''}
+      <button class="btn primary" id="doApply" style="margin-top:10px">Add ${IMP.picked.length} game${IMP.picked.length === 1 ? '' : 's'} to the board</button>`;
+  }
+
+  $('#sheetBody').innerHTML = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>${mapUI}
+    <button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>`;
+}
+
+function openSheet(mode){ sheetMode = mode || 'settings'; $('#scrim').hidden = false; $('#sheet').hidden = false; renderSheet(); }
+function closeSheet(){
+  $('#scrim').hidden = true; $('#sheet').hidden = true; sheetMode = 'settings';
+  // Empty the sheet rather than just hiding it. A hidden element is still in
+  // the document: its inputs still match selectors, and after an import that
+  // means a hidden textarea holding the entire pasted schedule sits in the
+  // DOM competing with the live UI. Cleared on close, rebuilt on open.
+  // IMP itself is kept in memory, so reopening restores the parsed rows.
+  $('#sheetBody').innerHTML = '';
+  renderAll();
+}
+
+/* ============================================================
+   RENDER + TABS
+   ============================================================ */
+function setTab(t){
+  S.ui.tab = t; save();
+  ['fields','observe','score','saved'].forEach(name => {
+    $('#tab-' + name).hidden = name !== t;
+    const b = document.querySelector(`nav button[data-tab="${name}"]`);
+    if(b) b.setAttribute('aria-selected', String(name === t));
+  });
+  renderAll();
+  window.scrollTo({top:0});
+}
+function renderAll(){
+  renderWatching();
+  if(S.ui.tab === 'fields')  renderFields();
+  if(S.ui.tab === 'observe'){ renderMinimap(); renderObserve(); }
+  if(S.ui.tab === 'score')   renderScore();
+  if(S.ui.tab === 'saved')   renderSaved();
+}
+/* window.confirm() is why "Start a new session" and the remove buttons did
+   nothing in the Android build: a WebView suppresses JS dialogs entirely
+   unless the host app installs a WebChromeClient, so confirm() returned
+   false instantly and every guarded action was skipped. It worked in the
+   browser and silently failed in the APK. This replaces it with real DOM,
+   which behaves the same everywhere and can be styled and tested. */
+let dlgAction = null;
+function askConfirm(message, label, onYes){
+  $('#dlgMsg').textContent = message;
+  $('#dlgYes').textContent = label;
+  dlgAction = onYes;
+  $('#dlg').hidden = false;
+}
+function closeDlg(run){
+  $('#dlg').hidden = true;
+  const fn = dlgAction; dlgAction = null;
+  if(run && fn) fn();
+}
+
+let toastTimer = null;
+function flash(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+/* ============================================================
+   SCHEDULE IMPORT
+   ------------------------------------------------------------
+   Typing twelve referee names into a phone at the field is the
+   worst part of this job, and the names already exist in the
+   schedule. So: pull rows in from anywhere, map the columns once,
+   and let the app build the fields and crews.
+
+   Deliberately NOT hardcoded: the master spreadsheet ID. This file
+   is going in a public repo, and a sheet ID is enough for a
+   stranger to try the same fetch. You paste it once and it stays
+   in this browser's storage instead.
+
+   Three sources, one pipeline. Everything below converts its input
+   to {header, rows} and then the same mapper handles it, so adding
+   a fourth source later means writing one function.
+   ============================================================ */
+let IMP = null;   // transient: parsed rows never get persisted to storage
+
+/* A real CSV parser, not a split(','). Referee schedules routinely
+   contain "Smith, John" in one cell, which split would tear in half.
+   This walks character by character tracking whether it is inside
+   quotes, and treats a doubled quote inside a quoted field as an
+   escaped quote, per RFC 4180. */
+function parseDelimited(text, delim){
+  const rows = [];
+  let row = [], cell = '', inQ = false;
+  for(let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if(inQ){
+      if(ch === '"'){
+        if(text[i+1] === '"'){ cell += '"'; i++; }
+        else inQ = false;
+      } else cell += ch;
+    } else if(ch === '"'){ inQ = true; }
+    else if(ch === delim){ row.push(cell); cell = ''; }
+    else if(ch === '\n'){ row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if(ch === '\r'){ /* swallow; \n does the work */ }
+    else cell += ch;
+  }
+  if(cell.length || row.length){ row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(c => c.trim()));
+}
+
+/* Copying cells out of Google Sheets puts TABS on the clipboard, while
+   a downloaded export uses commas. Guess from whichever appears more
+   in the first few lines rather than making you tell us. */
+function detectDelim(text){
+  const head = text.split('\n').slice(0,5).join('\n');
+  const tabs = (head.match(/\t/g) || []).length;
+  const commas = (head.match(/,/g) || []).length;
+  return tabs > commas ? '\t' : ',';
+}
+
+const HEAD_WORDS = /date|time|field|pitch|venue|division|age|level|grade|ref|center|centre|\bcr\b|\bar\d?\b|assistant|official|crew|home|away|team/i;
+
+/* Schedules often have a title row, a blank row, then the real headers.
+   Score the first few rows by how many cells look like column names and
+   take the best; you can override it with the selector in the UI. */
+function guessHeaderRow(rows){
+  let best = 0, bestScore = -1;
+  rows.slice(0,8).forEach((r,i) => {
+    const filled = r.filter(c => c).length;
+    const words = r.filter(c => HEAD_WORDS.test(c)).length;
+    const score = words * 3 + filled;
+    if(filled >= 2 && score > bestScore){ bestScore = score; best = i; }
+  });
+  return best;
+}
+
+function autoMap(header){
+  const find = (re) => { const i = header.findIndex(h => re.test(h)); return i < 0 ? '' : String(i); };
+  return {
+    date:     find(/date/i),
+    time:     find(/time|kick/i),
+    field:    find(/field|pitch|venue|location/i),
+    division: find(/division|age|level|grade|bracket/i),
+    cr:       find(/\bcr\s*#?1\b|^cr$|center|centre|ref(eree)?\s*#?1|official\s*#?1/i),
+    cr2:      find(/\bcr\s*#?2\b|center\s*#?2|centre\s*#?2/i),
+    ar1:      find(/\bar\s*#?1\b|assistant\s*#?1/i),
+    ar2:      find(/\bar\s*#?2\b|assistant\s*#?2/i),
+    crew:     find(/crew|officials|referees|assignment/i),
+    cancel:   find(/cancel/i),
+  };
+}
+
+/* The form's field dropdown has exact strings. A sheet might say "2A",
+   "F2A", "Field 2a" or "Tigers". Normalise both sides down to letters
+   and digits and match on that, so the value Sideline stores is always
+   one you can actually pick on the form. */
+function normField(v){ return normFieldFull(v).name; }
+
+/* Returns {name, sub}. A sheet may write the two Tigers pitches as
+   "Tigers 1" / "Tigers 2", or "Tigers A" / "Tigers B", or just list
+   "Tigers" twice. The first two are recognised here; the third is
+   resolved later by position within the kickoff. */
+function normFieldFull(v){
+  if(!v) return {name:'', sub:''};
+  const k = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g,'');
+  const match = (key) => {
+    let hit = FIELDS.find(f => k(f) === key);
+    if(hit) return hit;
+    hit = FIELDS.find(f => k(f).includes(key) && key.length >= 2);
+    if(hit) return hit;
+    return FIELDS.find(f => key.includes(k(f)));
+  };
+  let raw = String(v).trim();
+  // The master sheet writes "Legacy Park Field 1 (Tigers)" and "Legacy Park
+  // Field 2A"; the evaluation form's dropdown says "Tigers - Field 1" and
+  // "Field 2A". Normalise the venue prefix and the parenthetical first.
+  raw = raw.replace(/^legacy\s*park\s*/i, '').trim();
+  const paren = raw.match(/^field\s*1\s*\((tigers|titans|broncos)\)$/i);
+  if(paren){
+    const nm = paren[1][0].toUpperCase() + paren[1].slice(1).toLowerCase();
+    return {name:`${nm} - Field 1`, sub:''};
+  }
+  const direct = match(k(raw));
+  if(direct) return {name:direct, sub:''};
+
+  // Try again without a trailing pitch designator.
+  const m = raw.match(/^(.*?)[\s\-#_]*([12ab])$/i);
+  if(m){
+    const base = match(k(m[1]));
+    if(base){
+      const d = m[2].toUpperCase();
+      return {name:base, sub:(d === '1' || d === 'A') ? 'A' : 'B'};
+    }
+  }
+  return {name:raw, sub:''};
+}
+function normDiv(v){
+  if(!v) return '';
+  const r = divisionRule(v);
+  if(r) return r.form;   // "Pre-K Girls" -> "PK", "5th/6th Grade Boys" -> "5th"
+  const k = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g,'');
+  const key = k(v);
+  return DIVISIONS.find(d => k(d) === key) || DIVISIONS.find(d => key.includes(k(d))) || v;
+}
+
+/* -> "HH:MM" for the time input. Accepts 6:30 PM, 18:30, 6:30p, 630. */
+function normTime(v){
+  if(!v) return '';
+  const m = String(v).match(/(\d{1,2})\s*[:.]?\s*(\d{2})?\s*(a|p)?/i);
+  if(!m) return '';
+  let h = Number(m[1]); const mi = m[2] ? Number(m[2]) : 0;
+  const ap = (m[3] || '').toLowerCase();
+  if(ap === 'p' && h < 12) h += 12;
+  if(ap === 'a' && h === 12) h = 0;
+  if(h > 23 || mi > 59) return '';
+  return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+}
+/* -> "YYYY-MM-DD". Handles 9/12/2026, 9/12/26, 2026-09-12, and a bare
+   9/12 (assumes the session's year). */
+function normDate(v){
+  if(!v) return '';
+  const t = String(v).trim();
+  let m = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m = t.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+  if(m){
+    let y = m[3] ? Number(m[3]) : Number(S.date.slice(0,4));
+    if(y < 100) y += 2000;
+    return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  }
+  return '';
+}
+
+function splitCrew(v){
+  return String(v || '').split(/[\/,;&]|\s{2,}|\band\b/i)
+    .map(x => x.trim()).filter(x => x && !/^(tbd|tba|open|none|n\/a)$/i.test(x));
+}
+
+/* rows -> games. One row is one game; its officials become a crew. */
+function rowsToGames(ignoreFilters){
+  if(!IMP) return [];
+  const {rows, headerRow, map} = IMP;
+  const col = (r, key) => map[key] === '' ? '' : (r[Number(map[key])] || '');
+  const out = [];
+  rows.slice(headerRow + 1).forEach((r, i) => {
+    if(!r.some(c => c)) return;
+    if(map.cancel !== '' && /^(true|yes|y|1|cancelled|canceled)$/i.test(col(r,'cancel').trim())) return;
+    let names = [];
+    if(map.crew !== '') names = splitCrew(col(r,'crew'));
+    else ['cr','cr2','ar1','ar2'].forEach(k => {
+      const n = col(r, k).trim();
+      if(n && !/^(tbd|tba|open|none|n\/a)$/i.test(n)) names.push(n);
+    });
+    const parsed = normFieldFull(col(r,'field'));
+    const field = parsed.name;
+    const date = normDate(col(r,'date'));
+    if(!field && !names.length) return;
+    out.push({
+      key:'g' + i, date, time:normTime(col(r,'time')), field, sub:parsed.sub,
+      division:normDiv(col(r,'division')), rule:divisionRule(col(r,'division')),
+      names,
+      raw:{field:col(r,'field'), date:col(r,'date')}
+    });
+  });
+  if(ignoreFilters) return out;
+  return out.filter(g => {
+    if(IMP.dateFilter === 'session' && g.date && g.date !== S.date) return false;
+    if(IMP.fieldFilter && !IMP.fieldFilter.includes(g.field || g.raw.field || '(no field)')) return false;
+    return true;
+  });
+}
+
+/* Write the chosen games into the session.
+   Two rules that matter: a game already on the board is updated rather
+   than duplicated (matched on field name plus kickoff), and a referee
+   who already has notes is never renamed out from under those notes. */
+function applyGames(keys){
+  const games = rowsToGames().filter(g => keys.includes(g.key));
+  let added = 0, updated = 0, protectedRefs = 0;
+
+  /* Group by field name + kickoff FIRST. Two rows for Tigers at 8:00 are two
+     pitches, not one game described twice - the old code matched the second
+     row to the first entry and overwrote its referee. Within a group, a sheet
+     that already names the pitch ("Tigers 2") keeps that label; otherwise the
+     rows take A, B in the order they appear. */
+  const groups = new Map();
+  games.forEach(g => {
+    const k = g.field + '|' + g.time;
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(g);
+  });
+
+  groups.forEach((rows) => {
+    /* A Pre-K row carries CR 1 and CR 2, which are the referees of two
+       simultaneous games - so one row becomes two pitches, A and B, with one
+       official each. A 1st or 2nd grade row looks identical in the sheet but
+       is one game with two officials, so it becomes a single pitch. The
+       division is the only thing that distinguishes them. */
+    const rule = rows[0].rule;
+    const perRow = rule ? rule.pitches : 1;
+    const crew = rule ? rule.crew : 0;
+    const multi = perRow > 1 || rows.length > 1 || rows.some(r => r.sub);
+    let auto = 0;
+
+    rows.forEach(g => {
+      for(let k = 0; k < perRow; k++){
+        const sub = multi ? (perRow > 1 ? SUBS[k] : (g.sub || SUBS[auto])) : '';
+        if(perRow === 1) auto++;
+
+        let f = S.fields.find(x => x.name === g.field && (x.sub || '') === sub &&
+                                   (!x.time || !g.time || x.time === g.time));
+        if(!f) f = S.fields.find(x => !x.name && !x.refs.some(r => r.name || r.notes.length));
+        if(f){ updated++; } else { f = newField(''); S.fields.push(f); added++; }
+
+        f.name = g.field || f.name;
+        f.sub = sub;
+        if(g.time) f.time = g.time;
+        if(g.division) f.division = g.division;
+
+        // Split fields take one name each, in CR order; everyone else takes
+        // the whole crew. Crew size comes from the rules doc, so a slot exists
+        // even when the sheet left that referee blank.
+        const mine = perRow > 1 ? g.names.slice(k, k + 1) : g.names;
+        const want = Math.min(Math.max(crew || mine.length || 3, 1), 3);
+        /* Roles come from the division, not from whatever the slot used to be.
+           A 2-official crew in 1st/2nd grade is DUAL REFEREE - both are centers
+           and both submit as CR. Reusing an existing slot without resetting its
+           role left an AR behind and mislabelled the second official. */
+        const roles = want === 1 ? ['CR']
+                    : want === 2 ? (crew === 2 ? ['CR','CR'] : ['CR','AR'])
+                    : ['CR','AR','AR'];
+        for(let i = 0; i < want; i++){
+          if(!f.refs[i]) f.refs.push(newRef('CR', roles[i]));
+          f.refs[i].role = roles[i];
+        }
+        // Keep any extra slot that already carries notes; drop empty leftovers.
+        f.refs = f.refs.filter((r, i) => i < want || r.notes.length);
+        mine.slice(0, f.refs.length).forEach((nm, i) => {
+          const r = f.refs[i]; if(!r) return;
+          if(r.notes.length && r.name.trim() && r.name.trim() !== nm){ protectedRefs++; return; }
+          r.name = nm;
+        });
+        f.crewSize = f.refs.length;
+        relabelSlots(f);
+      }
+    });
+  });
+
+  /* Sort by kickoff first, then
+     by the form's own field order - which runs Tigers, Titans, Broncos, 2A,
+     2B... i.e. roughly how you walk the complex - then by pitch. */
+  const fieldIdx = (n) => { const i = FIELDS.indexOf(n); return i < 0 ? 999 : i; };
+  S.fields.sort((a,b) =>
+    (a.time || '99:99').localeCompare(b.time || '99:99') ||
+    fieldIdx(a.name) - fieldIdx(b.name) ||
+    (a.sub || '').localeCompare(b.sub || ''));
+
+  /* Drop leftover placeholders. An unnamed field with no referee names and
+     no notes holds nothing, and after importing ten games those blanks are
+     just dead chips on the strip. Anything carrying data is untouched. */
+  let pruned = 0;
+  if(added || updated){
+    const before = S.fields.length;
+    S.fields = S.fields.filter(f => f.name || f.refs.some(r => r.name.trim() || r.notes.length));
+    if(!S.fields.length) S.fields.push(newField(''));
+    pruned = before - S.fields.length;
+  }
+  if(!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+
+  save(); renderAll();
+  let msg = `${added} added, ${updated} updated`;
+  if(protectedRefs) msg += `, ${protectedRefs} kept (already have notes)`;
+  flash(msg);
+  return {added, updated, protectedRefs, pruned};
+}
+
+/* ---------- source 1: a Google Sheet tab ---------- */
+function sheetCsvUrl(idOrUrl, gid){
+  const str = String(idOrUrl || '').trim();
+  const m = str.match(/\/d\/([a-zA-Z0-9\-_]{20,})/);
+  const id = m ? m[1] : str;
+  let g = String(gid || '').trim();
+  if(!g){ const gm = str.match(/[#&?]gid=(\d+)/); if(gm) g = gm[1]; }
+  // gviz is the read-only export endpoint; it serves CSV with a permissive
+  // CORS header, which is why this works from the browser with no backend.
+  return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${g ? '&gid=' + encodeURIComponent(g) : ''}`;
+}
+async function fetchSheet(idOrUrl, gid){
+  const url = sheetCsvUrl(idOrUrl, gid);
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  if(/^\s*</.test(text)) throw new Error('Got a login page, not data');
+  return text;
+}
+
+/* ---------- source 2: whatever is already in this browser ----------
+   Whistle lives at codeoverloader.github.io/whistle/ and Sideline at
+   /sideline/. localStorage is scoped to the ORIGIN, not the path, so
+   they share one storage area and Sideline can read Whistle's cached
+   schedule directly. Worth knowing: this only works on GitHub Pages.
+   Inside the APK the origin is sideline.local, a different box
+   entirely, so this source will come up empty there. */
+function scanBrowserCache(){
+  const found = [];
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || k.startsWith('sideline:')) continue;
+      let v;
+      try { v = JSON.parse(localStorage.getItem(k)); } catch(e){ continue; }
+      let arr = null;
+      if(Array.isArray(v)) arr = v;
+      else if(v && typeof v === 'object'){
+        arr = Object.values(v).find(x => Array.isArray(x) && x.length && typeof x[0] === 'object');
+      }
+      if(Array.isArray(arr) && arr.length && typeof arr[0] === 'object' && !Array.isArray(arr[0])){
+        found.push({key:k, rows:arr});
+      }
+    }
+  }catch(e){ /* storage blocked; nothing to offer */ }
+  return found;
+}
+/* Arrays of objects become header + rows so they feed the same mapper. */
+function objectsToTable(objs){
+  const header = [];
+  objs.forEach(o => Object.keys(o).forEach(k => { if(!header.includes(k)) header.push(k); }));
+  const rows = [header].concat(objs.map(o => header.map(h => {
+    const v = o[h];
+    return v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+  })));
+  return {header, rows};
+}
+
+function loadTable(rows){
+  const headerRow = guessHeaderRow(rows);
+  const header = rows[headerRow] || [];
+  const savedMap = store.get('sideline:map');
+  const auto = autoMap(header);
+  // Reuse last time's mapping only if it still points at columns that exist.
+  const map = (savedMap && Object.values(savedMap).every(v => v === '' || Number(v) < header.length))
+    ? {...auto, ...savedMap} : auto;
+  IMP = {rows, headerRow, header, map, text:IMP ? IMP.text : '', source:IMP ? IMP.source : 'sheet',
+         dateFilter:'session', fieldFilter:null, picked:null};
+  IMP.fieldFilter = defaultFieldFilter();
+}
+
+/* Distinct fields present in the parsed rows, with a game count each. */
+function fieldsInImport(){
+  const counts = new Map();
+  rowsToGames(true).forEach(g => {
+    const k = g.field || g.raw.field || '(no field)';
+    counts.set(k, (counts.get(k) || 0) + 1);
+  });
+  return [...counts.entries()].map(([name, n]) => ({name, n}))
+    .sort((a,b) => FIELDS.indexOf(a.name) - FIELDS.indexOf(b.name));
+}
+
+/* You monitor one to three pitches, not the whole complex, and the same
+   pitch recurs all morning. So default the filter to your fields rather
+   than to everything:
+     1. the fields you picked last time, if they appear in this sheet
+     2. otherwise whatever is already on the board
+     3. otherwise everything, for a genuinely first run
+   The date filter handles "today"; this handles "mine". */
+function defaultFieldFilter(){
+  const present = fieldsInImport().map(f => f.name);
+  if(!present.length) return null;
+  const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
+  if(remembered.length) return remembered;
+  const onBoard = present.filter(n => S.fields.some(f => f.name === n));
+  if(onBoard.length) return onBoard;
+  return null;   // null = no filter
+}
+
+/* ============================================================
+   EVENTS
+   ------------------------------------------------------------
+   One click listener on the document instead of hundreds on
+   individual buttons. This is "event delegation": clicks bubble up
+   from the element you touched to the document, so a single handler
+   can read a data-* attribute off the closest matching ancestor.
+   It matters here because the UI is rebuilt from strings constantly
+   - listeners attached to old nodes would die with them, while this
+   one keeps working on elements that did not exist when it was set.
+   ============================================================ */
+document.addEventListener('click', (e) => {
+  const hit = (attr) => { const el = e.target.closest(`[${attr}]`); return el ? el.getAttribute(attr) : null; };
+
+  const tab = hit('data-tab');                if(tab){ setTab(tab); return; }
+  const pick = hit('data-pick');              if(pick){ S.activeRefId = pick; save(); renderAll(); return; }
+  const open = hit('data-open');              if(open){ S.activeRefId = open; save(); setTab('observe'); return; }
+  const cat = hit('data-cat');                if(cat){ S.ui.cat = cat; save(); renderObserve(); return; }
+
+  const gamePick = hit('data-game');
+  if(gamePick){
+    S.ui.fieldId = gamePick;
+    const f = S.fields.find(x => x.id === gamePick);
+    // Move the active referee with the game, or notes would keep landing on
+    // whoever was selected before the switch.
+    if(f && !f.refs.some(r => r.id === S.activeRefId)){
+      const next = f.refs.find(r => r.name.trim()) || f.refs[0];
+      if(next) S.activeRefId = next.id;
+    }
+    save(); closeSheet(); return;
+  }
+  const editF = hit('data-edit');
+  if(editF){ S.ui.editField = S.ui.editField === editF ? null : editF; save(); renderSheet(); return; }
+  const doneG = hit('data-done');
+  if(doneG){ toggleDone(doneG); if(!$('#sheet').hidden) renderSheet(); return; }
+  const delG = hit('data-delgame');
+  if(delG){
+    // Re-render whatever is actually on screen. Only refreshing the tab behind
+    // the sheet left a deleted game still listed in settings until you closed it.
+    deleteGame(delG, () => { renderAll(); if(!$('#sheet').hidden) renderSheet(); });
+    return;
+  }
+  const better = hit('data-better');
+  if(better){
+    const p = activePair(); if(!p) return;
+    const n = p.ref.notes.find(x => x.id === better);
+    if(n){
+      // Keep the original observation and add the follow-up, because both
+      // belong in the report: what needed fixing, and that it got fixed.
+      p.ref.notes.push({id:uid(), cat:n.cat, pol:2, text:n.text, at:Date.now()});
+      if(!p.ref.commentsEdited) p.ref.comments = '';
+      save(); renderAll(); flash('Marked improved');
+    }
+    return;
+  }
+
+  const fieldPick = hit('data-field');
+  if(fieldPick){
+    S.ui.fieldId = fieldPick;
+    // On the Observe tab, changing field has to move the active referee too,
+    // or you would be looking at one crew while notes land on another.
+    const f = S.fields.find(x => x.id === fieldPick);
+    const inGroup = f && groupOf(f).some(pf => pf.refs.some(r => r.id === S.activeRefId));
+    if(S.ui.tab === 'observe' && f && !inGroup){
+      const next = groupOf(f).flatMap(pf => pf.refs)[0];
+      if(next){ S.activeRefId = next.id; flash('Now on ' + refDisplay(next)); }
+    }
+    save(); renderAll(); return;
+  }
+
+  const addGroup = hit('data-addgroup');
+  if(addGroup){
+    const g = FIELD_GROUPS.find(x => x.label === addGroup); if(!g) return;
+    let n = 0;
+    g.members.forEach(m => {
+      if(S.fields.some(f => f.name === m)) return;
+      // A split field arrives as both of its pitches, one official each.
+      const spec = {pitches:1, crew:3};
+      for(let i = 0; i < spec.pitches; i++){
+        const f = addFieldEntry(m, spec.pitches > 1 ? SUBS[i] : '', spec.crew);
+        if(f) n++;
+      }
+    });
+    save(); renderSheet(); flash(n ? `${n} pitch${n === 1 ? '' : 'es'} added` : 'Already on the board'); return;
+  }
+
+  const pitches = hit('data-pitches');
+  if(pitches){
+    const [fid, want] = pitches.split('|');
+    const base = S.fields.find(x => x.id === fid); if(!base) return;
+    const group = groupOf(base);
+    const n = Number(want);
+    if(group.length === n){ return; }
+    if(n > group.length){
+      for(let i = group.length; i < n; i++){
+        const f = newField(base.name);
+        f.sub = SUBS[i]; f.division = base.division; f.time = base.time;
+        f.refs = [newRef('CR','CR')]; f.crewSize = 1;
+        S.fields.push(f);
+      }
+      // The first pitch needs its label too, or you get "Tigers" and "Tigers B".
+      group.forEach((pf, i) => { if(!pf.sub) pf.sub = SUBS[i]; });
+    } else {
+      const doomed = group.slice(n).filter(pf => pf.refs.some(r => r.notes.length || r.name.trim()));
+      const drop = () => {
+        const ids = group.slice(n).map(pf => pf.id);
+        S.fields = S.fields.filter(x => !ids.includes(x.id));
+        if(n === 1){ const keep = S.fields.find(x => x.id === group[0].id); if(keep) keep.sub = ''; }
+        if(!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] && S.fields[0].id;
+        save(); renderSheet();
+      };
+      if(doomed.length){
+        askConfirm(`Removing ${group.length - n} pitch(es) deletes ${doomed.length} referee(s) with data on them.`, 'Remove', drop);
+        return;
+      }
+      drop(); return;
+    }
+    if(!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] && S.fields[0].id;
+    save(); renderSheet(); return;
+  }
+
+  const impSrc = hit('data-impsrc');
+  if(impSrc){
+    if(!IMP) IMP = {rows:null, header:[], map:{}, text:'', source:impSrc, dateFilter:'session', picked:null};
+    IMP.source = impSrc; renderImport(); return;
+  }
+  const useCache = hit('data-usecache');
+  if(useCache){
+    const found = scanBrowserCache()[Number(useCache)]; if(!found) return;
+    const t = objectsToTable(found.rows);
+    const keep = IMP ? IMP.source : 'cache';
+    IMP = null; loadTable(t.rows); IMP.source = keep;
+    renderImport(); flash(`Read ${found.rows.length} rows`); return;
+  }
+  const dateF = hit('data-datef');
+  if(dateF && IMP){ IMP.dateFilter = dateF; IMP.picked = null; renderImport(); return; }
+
+  const impField = hit('data-impfield');
+  if(impField && IMP){
+    const present = fieldsInImport().map(f => f.name);
+    // A null filter means "everything"; make it explicit before toggling one off,
+    // otherwise the first tap would read as deselecting from an empty set.
+    let sel = IMP.fieldFilter ? IMP.fieldFilter.slice() : present.slice();
+    sel = sel.includes(impField) ? sel.filter(n => n !== impField) : sel.concat([impField]);
+    IMP.fieldFilter = sel.length === present.length ? null : sel;
+    IMP.picked = null; renderImport(); return;
+  }
+  const pol = hit('data-pol');                if(pol){ S.ui.pol = Number(pol); save(); renderObserve(); return; }
+
+  const chip = hit('data-chip');
+  if(chip){
+    const [catId, idx] = chip.split('|');
+    const p = activePair(); if(!p) return;
+    const list = CHIPS.filter(c => c.cat === catId && (!c.pos || c.pos === p.ref.role));
+    // With the arrow selected, any chip logs as an improvement instead of
+    // its own polarity - that is how "better X second half" gets recorded.
+    const c = list[Number(idx)]; if(c) addNote(c.cat, S.ui.pol === 2 ? 2 : c.pol, c.text);
+    return;
+  }
+  const del = hit('data-del');
+  if(del){
+    const p = activePair(); if(!p) return;
+    p.ref.notes = p.ref.notes.filter(n => n.id !== del);
+    if(!p.ref.commentsEdited) p.ref.comments = '';
+    save(); renderAll(); return;
+  }
+  const rate = hit('data-rate');
+  if(rate){
+    const [cid, v] = rate.split('|');
+    const p = activePair(); if(!p) return;
+    p.ref.ratings[cid] = p.ref.ratings[cid] === Number(v) ? null : Number(v);
+    save(); renderScore(); return;
+  }
+  const move = hit('data-move');
+  if(move){
+    const p = activePair(); if(!p) return;
+    p.ref.moveUp = p.ref.moveUp === move ? null : move;
+    save(); renderScore(); return;
+  }
+  const role = hit('data-role');
+  if(role){
+    const [rid, rv] = role.split('|');
+    S.fields.forEach(f => {
+      if(f.refs.some(r => r.id === rid)){
+        f.refs.forEach(r => { if(r.id === rid) r.role = rv; });
+        relabelSlots(f);
+      }
+    });
+    save(); renderSheet(); return;
+  }
+  const crew = hit('data-crew');
+  if(crew){ const [fid, n] = crew.split('|'); setCrewSize(fid, Number(n)); renderSheet(); return; }
+  const dropF = hit('data-dropfield');
+  if(dropF){
+    deleteGame(dropF, () => renderSheet()); return;
+  }
+  const copySaved = hit('data-copysaved');
+  if(copySaved){
+    const r = HIST.find(x => x.id === copySaved); if(!r) return;
+    const L = [`Mentor/Monitor name: ${r.mentor}`,`Date: ${prettyDate(r.date)}`,`Field: ${r.field}`,
+      `Time: ${pretty12(r.time)}`,`Division: ${r.division}`,`Referee being mentored: ${r.referee}`,
+      `Position: ${r.position}`,'', ...RATED.map(c => `${c.label}: ${r.ratings[c.id] ?? '-'}`),
+      `Should they move up: ${r.moveUp || '-'}`,'','COMMENTS:', r.comments];
+    copyText(L.join('\n'), 'Evaluation'); return;
+  }
+  const dropSaved = hit('data-dropsaved');
+  if(dropSaved){
+    askConfirm('Delete this saved evaluation? It is gone for good.', 'Delete', () => {
+      HIST = HIST.filter(x => x.id !== dropSaved); save(); renderSaved();
+    });
+    return;
+  }
+
+  switch(e.target.id){
+    case 'openSettings': case 'openSettings2': case 'editSetup2': openSheet('settings'); return;
+    case 'openPicker': openSheet('games'); return;
+    case 'toggleDone': S.ui.showDone = !S.ui.showDone; save(); renderPicker(); return;
+    case 'dlgYes': closeDlg(true); return;
+    case 'dlgNo': closeDlg(false); return;
+    case 'openImport': case 'openImport2': openSheet('import'); return;
+    case 'backToSettings': sheetMode = 'settings'; renderSheet(); return;
+    case 'closePicker': closeSheet(); return;
+    case 'doFetch': {
+      const id = $('#shId').value, gid = $('#shGid').value;
+      if(!id.trim()){ flash('Paste the link or ID first'); return; }
+      store.set('sideline:sheet', {id, gid});
+      flash('Fetching...');
+      fetchSheet(id, gid).then(text => {
+        const rows = parseDelimited(text, detectDelim(text));
+        if(!rows.length) throw new Error('empty');
+        const keep = IMP ? IMP.source : 'sheet';
+        IMP = null; loadTable(rows); IMP.source = keep;
+        renderImport(); flash(`Read ${rows.length} rows`);
+      }).catch(err => {
+        flash('Could not read that tab');
+        const box = $('#sheetBody');
+        if(box) box.insertAdjacentHTML('afterbegin',
+          `<div class="warn">Fetch failed: ${esc(err.message)}. Check the tab is shared with
+           anyone who has the link, and that the gid matches the tab you want. You can always
+           copy the cells and use Paste instead.</div>`);
+      });
+      return;
+    }
+    case 'doParse': {
+      const text = $('#pasteBox').value;
+      if(!text.trim()){ flash('Nothing pasted yet'); return; }
+      const rows = parseDelimited(text, detectDelim(text));
+      const keep = 'paste';
+      IMP = null; loadTable(rows); IMP.source = keep; IMP.text = text;
+      renderImport(); flash(`Read ${rows.length} rows`); return;
+    }
+    case 'fieldsAll':
+      if(IMP){ IMP.fieldFilter = null; IMP.picked = null; renderImport(); }
+      return;
+    case 'fieldsBoard': {
+      if(!IMP) return;
+      const present = fieldsInImport().map(f => f.name);
+      const onBoard = present.filter(n => S.fields.some(f => f.name === n));
+      if(!onBoard.length){ flash('No fields from this sheet are on the board yet'); return; }
+      IMP.fieldFilter = onBoard; IMP.picked = null; renderImport(); return;
+    }
+    case 'pickAll':
+      if(IMP){ IMP.picked = rowsToGames().map(g => g.key); renderImport(); }
+      return;
+    case 'pickNone':
+      if(IMP){ IMP.picked = []; renderImport(); }
+      return;
+    case 'doApply': {
+      if(!IMP || !IMP.picked || !IMP.picked.length){ flash('Nothing selected'); return; }
+      store.set('sideline:map', IMP.map);
+      // Remember which pitches you monitor so next week's import defaults to them.
+      const chosen = [...new Set(rowsToGames().filter(g => IMP.picked.includes(g.key))
+        .map(g => g.field || g.raw.field).filter(Boolean))];
+      if(chosen.length) store.set('sideline:myfields', chosen);
+      applyGames(IMP.picked);
+      closeSheet(); setTab('fields'); return;
+    }
+    case 'closeSheet': case 'scrim': closeSheet(); return;
+    case 'addField':
+      // No cap: monitoring a full slate means every field with a game on it.
+      S.fields.push(newField('')); save(); renderSheet(); return;
+    case 'newSession':
+      askConfirm('Clear every game and all in-progress notes? Saved evaluations are kept.',
+        'Clear everything', () => { S = blankSession(); save(); closeSheet(); setTab('fields'); });
+      return;
+    case 'addNote':
+      addNote(S.ui.cat, S.ui.pol, $('#noteText').value);
+      return;
+    case 'toScore': setTab('score'); return;
+    case 'rebuild': {
+      const p = activePair(); if(!p) return;
+      p.ref.comments = buildComments(p.ref, p.field); p.ref.commentsEdited = false;
+      save(); renderScore(); return;
+    }
+    case 'copyComments': {
+      const p = activePair(); if(p) copyText(p.ref.comments, 'Comments'); return;
+    }
+    case 'copyAll': {
+      const p = activePair(); if(p) copyText(formBlock(p.field, p.ref), 'Evaluation'); return;
+    }
+    case 'saveEval': saveEval(); return;
+    case 'exportCsv': exportCSV(); return;
+    case 'openForm': case 'openForm2': window.open(FORM_URL, '_blank', 'noopener'); return;
+  }
+});
+
+/* Text and select changes. These deliberately do NOT re-render the
+   whole tab: rebuilding the HTML mid-typing would rip focus out of
+   the field under your thumb. State updates, disk write is debounced,
+   and only the dependent header text is refreshed. */
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  const nameFor = t.getAttribute && t.getAttribute('data-name');
+  if(nameFor){
+    allRefs().forEach(({ref}) => { if(ref.id === nameFor) ref.name = t.value; });
+    save(); renderWatching(); return;
+  }
+  if(t.id === 'noteText'){ S.ui.draftText = t.value; save(); return; }
+  if(t.id === 'pasteBox' && IMP){ IMP.text = t.value; return; }
+  if(t.id === 'mentorName'){ S.mentor = t.value; save(); return; }
+  if(t.id === 'comments'){
+    const p = activePair(); if(!p) return;
+    p.ref.comments = t.value; p.ref.commentsEdited = true; save(); return;
+  }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target, g = (a) => t.getAttribute && t.getAttribute(a);
+  const fn = g('data-fname'), fd = g('data-fdiv'), ft = g('data-ftime');
+  if(fn || fd || ft){
+    const f = S.fields.find(x => x.id === (fn || fd || ft)); if(!f) return;
+    if(fn) f.name = t.value;
+    if(fd) f.division = t.value;
+    if(ft) f.time = t.value;
+    save(); return;
+  }
+  if(t.id === 'sessDate'){ S.date = t.value; save(); if(sheetMode === 'import') renderImport(); return; }
+  const mapKey = g('data-map');
+  if(mapKey && IMP){
+    IMP.map[mapKey] = t.value; IMP.picked = null; renderImport(); return;
+  }
+  if(t.id === 'hdrRow' && IMP){
+    IMP.headerRow = Number(t.value);
+    IMP.header = IMP.rows[IMP.headerRow] || [];
+    IMP.map = autoMap(IMP.header); IMP.picked = null;
+    renderImport(); return;
+  }
+  const pickGame = g('data-pickgame');
+  if(pickGame && IMP){
+    IMP.picked = t.checked ? IMP.picked.concat([pickGame]) : IMP.picked.filter(k => k !== pickGame);
+    renderImport(); return;
+  }
+  if(t.id === 'addSingle'){
+    const name = t.value; if(!name) return;
+    if(S.fields.some(f => f.name === name)){ flash('Already on the board'); return; }
+    const spec = {pitches:1, crew:3};
+    for(let i = 0; i < spec.pitches; i++){
+      addFieldEntry(name, spec.pitches > 1 ? SUBS[i] : '', spec.crew);
+    }
+    save(); renderSheet(); flash(name + ' added'); return;
+  }
+  if(t.id === 'noOff'){
+    const p = activePair(); if(!p) return;
+    p.ref.noOffsides = t.checked;
+    if(t.checked) p.ref.ratings.offsides = 1;
+    if(!p.ref.commentsEdited) p.ref.comments = buildComments(p.ref, p.field);
+    save(); renderScore(); return;
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && e.target.id === 'noteText'){
+    e.preventDefault(); addNote(S.ui.cat, S.ui.pol, e.target.value);
+  }
+  // SVG markers are not buttons, so give them keyboard equivalence.
+  if((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('[data-pick]')){
+    e.preventDefault();
+    S.activeRefId = e.target.closest('[data-pick]').getAttribute('data-pick');
+    save(); renderAll();
+  }
+});
+
+/* ---------- start ---------- */
+setTab(S.ui.tab || 'fields');
+if(!S.mentor || !S.fields.some(f => f.name)) openSheet('settings');
+
+/* The service worker earns its keep on GitHub Pages. Inside the Android
+   shell the assets are already on the device, so registering it would
+   only add a second cache layer that can serve stale HTML after an
+   app update. Skip it there. */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')
+   && location.hostname !== 'sideline.local'){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
