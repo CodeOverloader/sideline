@@ -9,10 +9,23 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <meta name="theme-color" content="#38bdf8" />
+  <meta name="theme-color" content="#0b0d10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Sideline" />
+
+  <script>
+    /* Set the theme before first paint, so someone using the sunlight theme
+       never sees a flash of the dark UI. The full theme logic (and the toggle)
+       lives in the main script; this only has to agree with it. */
+    (function () {
+      var mode = 'dark';
+      try { mode = JSON.parse(localStorage.getItem('sideline:theme')) || 'dark'; } catch (e) { }
+      var prefersDark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+      var light = mode === 'light' || (mode === 'auto' && !prefersDark);
+      document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+    })();
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,6 +43,10 @@
    apps never get confused at a glance.
    ============================================================ */
     :root {
+      /* color-scheme tells the browser to draw native controls (the date and
+         time pickers, scrollbars) for a dark page. Without it the calendar
+         icon in the date input is black on a near-black field. */
+      color-scheme: dark;
       --bg: #0b0d10;
       --panel: #14181d;
       --panel2: #1b2127;
@@ -45,8 +62,52 @@
       --grass: #0f1d17;
       /* pitch fill */
       --chalk: rgba(233, 238, 243, .22);
+      /* text sitting on a filled primary / plus / minus surface */
+      --on-primary: #06212e;
+      --on-plus: #04241a;
+      --on-minus: #251100;
+      /* translucent accents, so tints follow the theme too */
+      --primary-faint: rgba(56, 189, 248, .04);
+      --primary-tint: rgba(56, 189, 248, .1);
+      --primary-strong: rgba(56, 189, 248, .16);
+      --primary-line: rgba(56, 189, 248, .38);
+      --minus-tint: rgba(251, 146, 60, .1);
+      --minus-line: rgba(251, 146, 60, .38);
+      --glass: rgba(11, 13, 16, .94);
+      --scrim: rgba(0, 0, 0, .62);
+      --marker-ring: #e9eef3;
       --r: 12px;
       --pad: 14px;
+    }
+
+    /* SUNLIGHT theme. A dark screen washes out in direct sun, which is exactly
+       where this app gets used. Same structure with the ground inverted, and
+       every accent darkened until its text clears WCAG AA on white. */
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #eef2f5;
+      --panel: #ffffff;
+      --panel2: #f4f7f9;
+      --line: #c5d0d9;
+      --ink: #0b1218;
+      --mute: #4a5764;
+      --primary: #0369a1;
+      --plus: #047857;
+      --minus: #c2410c;
+      --grass: #d7ecdf;
+      --chalk: rgba(11, 18, 24, .34);
+      --on-primary: #ffffff;
+      --on-plus: #ffffff;
+      --on-minus: #ffffff;
+      --primary-faint: rgba(3, 105, 161, .03);
+      --primary-tint: rgba(3, 105, 161, .08);
+      --primary-strong: rgba(3, 105, 161, .14);
+      --primary-line: rgba(3, 105, 161, .45);
+      --minus-tint: rgba(194, 65, 12, .07);
+      --minus-line: rgba(194, 65, 12, .4);
+      --glass: rgba(238, 242, 245, .95);
+      --scrim: rgba(11, 18, 24, .45);
+      --marker-ring: #0b1218;
     }
 
     * {
@@ -104,7 +165,7 @@
       position: sticky;
       top: 0;
       z-index: 40;
-      background: rgba(11, 13, 16, .94);
+      background: var(--glass);
       backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--line);
       padding: calc(8px + env(safe-area-inset-top)) var(--pad) 0;
@@ -152,8 +213,8 @@
       margin: 10px 0;
       padding: 9px 11px;
       border-radius: var(--r);
-      background: linear-gradient(90deg, rgba(56, 189, 248, .16), rgba(56, 189, 248, .04));
-      border: 1px solid rgba(56, 189, 248, .38);
+      background: linear-gradient(90deg, var(--primary-strong), var(--primary-faint));
+      border: 1px solid var(--primary-line);
     }
 
     .watching .who {
@@ -176,7 +237,7 @@
       font-size: 12px;
       font-weight: 700;
       background: var(--primary);
-      color: #06212e;
+      color: var(--on-primary);
       padding: 3px 7px;
       border-radius: 6px;
     }
@@ -190,12 +251,14 @@
       white-space: nowrap;
     }
 
-    .watching.empty {
+    /* "idle", not "empty": the generic .empty rule further down is for
+       empty-state messages and was centring and re-padding this bar. */
+    .watching.idle {
       background: var(--panel);
       border-color: var(--line)
     }
 
-    .watching.empty .who {
+    .watching.idle .who {
       color: var(--mute);
       font-weight: 500
     }
@@ -210,7 +273,7 @@
       display: flex;
       max-width: 600px;
       margin: 0 auto;
-      background: rgba(11, 13, 16, .96);
+      background: var(--glass);
       backdrop-filter: blur(10px);
       border-top: 1px solid var(--line);
       padding-bottom: env(safe-area-inset-bottom);
@@ -224,7 +287,7 @@
       align-items: center;
       gap: 3px;
       color: var(--mute);
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 600;
     }
 
@@ -233,20 +296,8 @@
       line-height: 1
     }
 
-    nav button[aria-selected="true"] {
+    nav button[aria-current="page"] {
       color: var(--primary)
-    }
-
-    nav button .badge {
-      position: absolute;
-      transform: translate(16px, -4px);
-      background: var(--minus);
-      color: #251100;
-      font-size: 9px;
-      font-weight: 800;
-      min-width: 15px;
-      padding: 1px 3px;
-      border-radius: 8px;
     }
 
     main {
@@ -302,6 +353,9 @@
       border: 1px solid var(--line);
       border-radius: 10px;
       padding: 10px 11px;
+      /* iOS Safari zooms the whole page into any input under 16px and does
+         not zoom back out, which throws the layout off mid-game. */
+      font-size: 16px;
     }
 
     textarea {
@@ -332,7 +386,7 @@
 
     .btn.primary {
       background: var(--primary);
-      color: #06212e;
+      color: var(--on-primary);
       border-color: var(--primary)
     }
 
@@ -342,7 +396,12 @@
 
     .btn.danger {
       color: var(--minus);
-      border-color: rgba(251, 146, 60, .4)
+      border-color: var(--minus-line)
+    }
+
+    .btn:disabled {
+      opacity: .45;
+      cursor: default
     }
 
     .btn.sm {
@@ -381,12 +440,17 @@
       transform: translateX(-50%);
       z-index: 90;
       background: var(--ink);
-      color: #0b0d10;
+      color: var(--bg);
       font-weight: 650;
       font-size: 13.5px;
       padding: 9px 15px;
       border-radius: 20px;
-      box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: max-content;
+      max-width: calc(100vw - 32px);
       opacity: 0;
       pointer-events: none;
       transition: opacity .16s, transform .16s;
@@ -397,6 +461,23 @@
       transform: translateX(-50%) translateY(-4px)
     }
 
+    /* Only a toast that carries an action (Undo) takes taps; a plain one must
+       not swallow touches on whatever sits under it. */
+    .toast.act.show {
+      pointer-events: auto
+    }
+
+    .toast button {
+      color: inherit;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      padding: 6px 2px 6px 12px;
+      margin: -6px 0;
+      border-left: 1px solid currentColor
+    }
+
     /* ---------- pitch map ---------- */
     .fieldblock {
       margin: 12px 0 18px
@@ -404,7 +485,7 @@
 
     .fieldhead {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 8px;
       margin-bottom: 6px
     }
@@ -446,7 +527,7 @@
 
     svg.pitch .mk.on .mkbg {
       fill: var(--primary);
-      stroke: #e9eef3;
+      stroke: var(--marker-ring);
       stroke-width: 2.4
     }
 
@@ -464,12 +545,12 @@
     }
 
     svg.pitch .mk.on .mklabel {
-      fill: #06212e
+      fill: var(--on-primary)
     }
 
     svg.pitch .mkname {
       font-family: Inter, sans-serif;
-      font-size: 8px;
+      font-size: 9px;
       fill: var(--ink);
       text-anchor: middle;
       pointer-events: none;
@@ -480,7 +561,7 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 8px;
       font-weight: 700;
-      fill: #06212e;
+      fill: var(--on-plus);
       text-anchor: middle;
       pointer-events: none
     }
@@ -509,7 +590,7 @@
 
     .crewrow.on {
       border-color: var(--primary);
-      background: rgba(56, 189, 248, .09)
+      background: var(--primary-tint)
     }
 
     .crewrow .slot {
@@ -546,8 +627,9 @@
       flex: none;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 5px 8px;
-      font-size: 12px;
+      min-height: 36px;
+      padding: 0 12px;
+      font-size: 12.5px;
       font-weight: 700;
       background: var(--panel2)
     }
@@ -579,7 +661,7 @@
 
     .mini.on {
       border-color: var(--primary);
-      background: rgba(56, 189, 248, .13);
+      background: var(--primary-strong);
       color: var(--ink)
     }
 
@@ -587,10 +669,6 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 10.5px;
       font-weight: 700;
-      color: var(--primary)
-    }
-
-    .mini.on .m1 {
       color: var(--primary)
     }
 
@@ -620,7 +698,7 @@
 
     .cat.on {
       background: var(--ink);
-      color: #0b0d10;
+      color: var(--bg);
       border-color: var(--ink)
     }
 
@@ -665,6 +743,16 @@
       color: var(--minus)
     }
 
+    /* With the arrow selected every chip logs as "improved", so the chips say
+       so instead of still showing their own + or - */
+    .chip.b {
+      border-left: 3px solid var(--primary)
+    }
+
+    .chip.b .m {
+      color: var(--primary)
+    }
+
     .chip:active {
       background: var(--panel2)
     }
@@ -689,23 +777,27 @@
     }
 
     .polset button {
-      width: 34px;
+      width: 40px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
+      font-size: 16px;
       background: var(--panel2);
       color: var(--mute)
     }
 
-    .polset button[aria-pressed="true"] {
-      color: #06212e
-    }
-
     .polset button[data-pol="1"][aria-pressed="true"] {
-      background: var(--plus)
+      background: var(--plus);
+      color: var(--on-plus)
     }
 
     .polset button[data-pol="-1"][aria-pressed="true"] {
-      background: var(--minus)
+      background: var(--minus);
+      color: var(--on-minus)
+    }
+
+    .polset button[data-pol="2"][aria-pressed="true"] {
+      background: var(--primary);
+      color: var(--on-primary)
     }
 
     .timeline {
@@ -748,10 +840,6 @@
       display: block
     }
 
-    .nrow.p .bd {
-      border-left: 0
-    }
-
     .nrow .mk2 {
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
@@ -774,15 +862,22 @@
       color: var(--mute)
     }
 
-    .polset button[data-pol="2"][aria-pressed="true"] {
-      background: var(--primary)
-    }
-
+    /* Was a ~20px target sitting right beside the "improved" arrow. Deleting
+       is now undoable, but it should still be hard to hit by accident. */
     .nrow .del {
       flex: none;
       color: var(--mute);
-      padding: 2px 4px;
-      font-size: 15px
+      width: 36px;
+      height: 36px;
+      margin: -6px -4px -6px 0;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 17px
+    }
+
+    .nrow .del:active {
+      background: var(--panel2)
     }
 
     /* ---------- score ---------- */
@@ -837,7 +932,7 @@
 
     .scale .nums button[aria-pressed="true"] {
       background: var(--primary);
-      color: #06212e;
+      color: var(--on-primary);
       border-color: var(--primary)
     }
 
@@ -871,15 +966,15 @@
       font-weight: 700
     }
 
-    .yesno button[aria-pressed="true"][data-v="Yes"] {
+    .yesno button[aria-pressed="true"][data-move="Yes"] {
       background: var(--plus);
-      color: #04241a;
+      color: var(--on-plus);
       border-color: var(--plus)
     }
 
-    .yesno button[aria-pressed="true"][data-v="No"] {
+    .yesno button[aria-pressed="true"][data-move="No"] {
       background: var(--minus);
-      color: #251100;
+      color: var(--on-minus);
       border-color: var(--minus)
     }
 
@@ -899,7 +994,7 @@
       display: grid;
       place-items: center;
       padding: 22px;
-      background: rgba(0, 0, 0, .66)
+      background: var(--scrim)
     }
 
     .dlg[hidden] {
@@ -954,7 +1049,9 @@
       flex: none
     }
 
-    .slot {
+    /* Kickoff heading in the game picker. Was named .slot, which collided
+       with the crew-row .slot label and pushed a 14px margin onto it. */
+    .slothead {
       margin: 14px 0 6px;
       font-family: 'Bebas Neue', sans-serif;
       font-size: 19px;
@@ -975,7 +1072,7 @@
 
     .grow.on {
       border-color: var(--primary);
-      background: rgba(56, 189, 248, .1)
+      background: var(--primary-tint)
     }
 
     .grow.done {
@@ -1017,8 +1114,8 @@
 
     .iconsm {
       flex: none;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel2);
@@ -1033,7 +1130,7 @@
       position: fixed;
       inset: 0;
       z-index: 60;
-      background: rgba(0, 0, 0, .6);
+      background: var(--scrim);
       backdrop-filter: blur(2px)
     }
 
@@ -1053,7 +1150,10 @@
       border-top: 1px solid var(--line);
       border-radius: 18px 18px 0 0;
       max-height: 88vh;
+      /* dvh tracks the mobile browser bars; vh stays as the fallback */
+      max-height: 88dvh;
       overflow-y: auto;
+      overscroll-behavior: contain;
       padding: 6px var(--pad) calc(24px + env(safe-area-inset-bottom));
     }
 
@@ -1106,7 +1206,7 @@
 
     .seg button[aria-pressed="true"] {
       background: var(--primary);
-      color: #06212e
+      color: var(--on-primary)
     }
 
     .saved {
@@ -1167,7 +1267,7 @@
 
     .fchip.on {
       border-color: var(--primary);
-      background: rgba(56, 189, 248, .13);
+      background: var(--primary-strong);
       color: var(--ink)
     }
 
@@ -1271,12 +1371,59 @@
     }
 
     .warn {
-      background: rgba(251, 146, 60, .1);
-      border: 1px solid rgba(251, 146, 60, .35);
+      background: var(--minus-tint);
+      border: 1px solid var(--minus-line);
       border-radius: 10px;
       padding: 9px 11px;
       font-size: 12.5px;
       margin: 8px 0
+    }
+
+    .okbox {
+      background: var(--primary-tint);
+      border: 1px solid var(--primary-line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      font-size: 12.5px;
+      margin: 8px 0
+    }
+
+    /* compact text button for per-pitch actions (Done / Delete) */
+    .minibtn {
+      flex: none;
+      min-height: 34px;
+      padding: 0 11px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      font-size: 12.5px;
+      font-weight: 650;
+      color: var(--ink)
+    }
+
+    .minibtn.danger {
+      color: var(--minus);
+      border-color: var(--minus-line)
+    }
+
+    details.more {
+      margin-top: 12px
+    }
+
+    details.more summary {
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--mute);
+      padding: 6px 0
+    }
+
+    .sheet:focus {
+      outline: none
+    }
+
+    /* stop the page behind an open sheet from scrolling under your thumb */
+    body.locked {
+      overflow: hidden
     }
   </style>
 </head>
@@ -1287,11 +1434,13 @@
     <div class="brandrow">
       <div class="brand">SIDE<span>LINE</span></div>
       <div class="spacer"></div>
-      <button class="iconbtn" id="openPicker" title="Choose a game">&#9776;</button>
-      <button class="iconbtn" id="openForm" title="Open the Google Form">&#9873;</button>
-      <button class="iconbtn" id="openSettings" title="Settings">&#9881;</button>
+      <button class="iconbtn" id="themeToggle" title="Switch to sunlight theme"
+        aria-label="Switch to sunlight theme">&#9728;&#xFE0E;</button>
+      <button class="iconbtn" id="openPicker" title="Choose a game" aria-label="Choose a game">&#9776;</button>
+      <button class="iconbtn" id="openForm" title="Open the Google Form" aria-label="Open the Google Form">&#9873;</button>
+      <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
-    <div class="watching empty" id="watching">
+    <div class="watching idle" id="watching" aria-live="polite">
       <div style="min-width:0">
         <div class="who">No referee selected</div>
         <div class="sub">Pick a position on a field to start</div>
@@ -1303,10 +1452,6 @@
     <!-- ============ FIELDS TAB: the pitch map ============ -->
     <section class="tab" id="tab-fields">
       <div id="fieldsWrap"></div>
-      <div class="hint" style="margin-top:10px">
-        Tap a position on the pitch to switch who you are watching. Every note you
-        take goes to whoever is named in the blue bar at the top.
-      </div>
     </section>
 
     <!-- ============ OBSERVE TAB ============ -->
@@ -1323,20 +1468,21 @@
     <!-- ============ SAVED TAB ============ -->
     <section class="tab" id="tab-saved" hidden>
       <h2 class="sec">Saved evaluations</h2>
-      <p class="hint">Kept on this device only. Export before you clear anything.</p>
+      <p class="hint">Kept on this device only. Make a backup (bottom of this page) so a lost or reset
+        phone does not take them with it.</p>
       <div id="savedBody"></div>
     </section>
   </main>
 
-  <nav>
-    <button data-tab="fields" aria-selected="true"><span class="ico">&#9917;</span>Fields</button>
-    <button data-tab="observe" aria-selected="false"><span class="ico">&#9998;</span>Observe</button>
-    <button data-tab="score" aria-selected="false"><span class="ico">&#9878;</span>Score</button>
-    <button data-tab="saved" aria-selected="false"><span class="ico">&#128193;</span>Saved</button>
+  <nav aria-label="Sections">
+    <button data-tab="fields" aria-current="page"><span class="ico" aria-hidden="true">&#9917;</span>Fields</button>
+    <button data-tab="observe"><span class="ico" aria-hidden="true">&#9998;</span>Observe</button>
+    <button data-tab="score"><span class="ico" aria-hidden="true">&#9878;</span>Score</button>
+    <button data-tab="saved"><span class="ico" aria-hidden="true">&#128193;</span>Saved</button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
-  <div class="sheet" id="sheet" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1" hidden>
     <div class="grab"></div>
     <div class="sheethead">
       <h3 id="sheetTitle">Settings</h3>
@@ -1346,7 +1492,7 @@
     <div id="sheetBody"></div>
   </div>
 
-  <div class="dlg" id="dlg" hidden>
+  <div class="dlg" id="dlg" role="alertdialog" aria-modal="true" aria-describedby="dlgMsg" hidden>
     <div class="dlgbox">
       <p id="dlgMsg"></p>
       <div class="row">
@@ -1356,7 +1502,8 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button
+      id="toastAct" hidden></button></div>
 
   <script>
     "use strict";
@@ -1434,7 +1581,6 @@
     function shortTime(hm) {
       if (!hm) return '';
       let [h, m] = hm.split(':').map(Number);
-      const ap = h >= 12 ? 'a' : 'a';
       const suffix = h >= 12 ? 'p' : 'a';
       h = h % 12 || 12;
       return m ? `${h}:${String(m).padStart(2, '0')}${suffix}` : `${h}${suffix}`;
@@ -1617,6 +1763,51 @@
       h = h % 12 || 12;
       return `${h}:${String(m).padStart(2, '0')} ${ap}`;
     }
+    /* Epoch ms -> "10:42 AM", for stamping notes and saves. */
+    function clockOf(ts) {
+      const d = new Date(ts);
+      return pretty12(`${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`);
+    }
+    /* Epoch ms -> "today", "yesterday", "3 days ago", or a plain date. */
+    function ago(ts) {
+      const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const days = Math.round((startOf(new Date()) - startOf(new Date(ts))) / 864e5);
+      if (days <= 0) return 'today';
+      if (days === 1) return 'yesterday';
+      if (days < 14) return `${days} days ago`;
+      return new Date(ts).toLocaleDateString();
+    }
+
+    /* ---------- theme ----------
+       'dark' is the original look, 'light' the sunlight theme, 'auto' follows
+       the phone. The script in <head> already set data-theme before first
+       paint; this keeps it, the status-bar color and the header toggle in step. */
+    const THEMES = [['dark', 'Dark'], ['light', 'Sunlight'], ['auto', 'Match phone']];
+    const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+    let themeMode = store.get('sideline:theme') || 'dark';
+    function isLight() {
+      return themeMode === 'light' || (themeMode === 'auto' && !(darkQuery && darkQuery.matches));
+    }
+    function applyTheme() {
+      const light = isLight();
+      document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', light ? '#eef2f5' : '#0b0d10');
+      const btn = document.getElementById('themeToggle');
+      if (btn) {
+        const label = light ? 'Switch to dark theme' : 'Switch to sunlight theme';
+        btn.innerHTML = light ? '&#9790;&#xFE0E;' : '&#9728;&#xFE0E;';
+        btn.title = label; btn.setAttribute('aria-label', label);
+      }
+    }
+    function setTheme(mode) {
+      themeMode = THEMES.some(([k]) => k === mode) ? mode : 'dark';
+      store.set('sideline:theme', themeMode);
+      applyTheme();
+    }
+    if (darkQuery && darkQuery.addEventListener) {
+      darkQuery.addEventListener('change', () => {if (themeMode === 'auto') applyTheme();});
+    }
 
     /* ============================================================
        STATE
@@ -1644,34 +1835,55 @@
         refs: [newRef('CR', 'CR'), newRef('AR1', 'AR'), newRef('AR2', 'AR')]
       };
     }
+    function blankUI() {
+      return {tab: 'fields', cat: 'workrate', pol: 1, draftText: '', fieldId: null, showDone: false, keepDate: null};
+    }
     function blankSession() {
       return {
         mentor: store.get('sideline:mentor') || '',
         date: todayISO(),
         fields: [newField('')],
         activeRefId: null,
-        ui: {tab: 'fields', cat: 'workrate', pol: 1, draftText: '', fieldId: null, showDone: false}
+        ui: blankUI()
       };
     }
 
     let S = store.get('sideline:session') || blankSession();
     let HIST = store.get('sideline:history') || [];
+    if (!Array.isArray(HIST)) HIST = [];
 
     /* Migration guard: if a stored session predates a field added later,
        fill the gap rather than crash on undefined. Cheap insurance for an
-       app whose data lives on your phone across versions. */
-    (function normalize() {
-      if (!S.ui) S.ui = {tab: 'fields', cat: 'workrate', pol: 1, draftText: '', fieldId: null, showDone: false};
+       app whose data lives on your phone across versions - and it is also
+       the gate every restored backup passes through, since a backup file
+       may come from an older build. */
+    function normalize() {
+      if (!S || typeof S !== 'object') S = blankSession();
+      S.ui = {...blankUI(), ...(S.ui || {})};
+      if (typeof S.mentor !== 'string') S.mentor = store.get('sideline:mentor') || '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date || '')) S.date = todayISO();
       if (!Array.isArray(S.fields) || !S.fields.length) S.fields = [newField('')];
       S.fields.forEach(f => {
         if (!Array.isArray(f.refs)) f.refs = [];
         f.refs.forEach(r => {
-          if (!r.ratings) r.ratings = Object.fromEntries(RATED.map(c => [c.id, null]));
+          r.ratings = {...Object.fromEntries(RATED.map(c => [c.id, null])), ...(r.ratings || {})};
           if (!Array.isArray(r.notes)) r.notes = [];
+          if (typeof r.name !== 'string') r.name = '';
+          if (typeof r.comments !== 'string') r.comments = '';
         });
         relabelSlots(f);
       });
-    })();
+    }
+    normalize();
+
+    /* A session restored from storage keeps the date it was created on, so the
+       next Saturday the import's "today only" filter matched nothing and new
+       saves carried last week's date. An empty session just rolls forward; one
+       holding games gets a banner on the Fields tab asking what to do. */
+    function sessionHasData() {
+      return S.fields.some(f => f.name || f.refs.some(r => r.name.trim() || r.notes.length));
+    }
+    if (S.date !== todayISO() && !sessionHasData()) S.date = todayISO();
 
     let saveTimer = null;
     function save() {
@@ -1765,7 +1977,6 @@
 
     function setCrewSize(fid, n) {
       const f = S.fields.find(x => x.id === fid); if (!f) return;
-      const labels = n === 1 ? ['CR'] : n === 2 ? ['CR', 'AR1'] : ['CR', 'AR1', 'AR2'];
       const doomed = f.refs.slice(n).filter(r => r.notes.length || r.name.trim());
       if (doomed.length) {
         askConfirm(`Dropping to ${n} official${n === 1 ? '' : 's'} removes ${doomed.length} referee(s) with data on them.`,
@@ -1893,19 +2104,26 @@
     function visibleGames() {
       return S.fields.filter(f => S.ui.showDone || !f.done);
     }
+    /* The two lines that identify a game everywhere it is listed. One helper,
+       so an edit in Settings can refresh every visible copy in place. */
+    function gameHeadHTML(f, withTime) {
+      const g = gameSummary(f);
+      const when = withTime && f.time ? ' &middot; ' + esc(pretty12(f.time)) : '';
+      return `<div class="t1">${esc(pitchLabel(f) || 'Field not set')}${when}${f.done ? ' &check;' : ''}</div>
+      <div class="t2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>`;
+    }
     function gameRow(f, opts) {
       const g = gameSummary(f);
       const on = f.id === S.ui.fieldId;
-      const who = g.names.length ? g.names.join(', ') : 'no referees named';
+      const doneLabel = f.done ? 'Put back on the list' : 'Mark done';
       return `<div class="grow${on ? ' on' : ''}${f.done ? ' done' : ''}">
-    <button style="flex:1;min-width:0;text-align:left;background:none" data-game="${f.id}">
-      <div class="t1">${esc(pitchLabel(f) || 'Field not set')}${f.done ? ' &check;' : ''}</div>
-      <div class="t2">${esc(f.division || 'no division')} &mdash; ${esc(who)}</div>
+    <button style="flex:1;min-width:0;text-align:left;background:none" data-game="${f.id}" data-gamehead="${f.id}">
+      ${gameHeadHTML(f, false)}
     </button>
     <div class="meter">${g.notes ? `<b>${g.notes}</b> note${g.notes === 1 ? '' : 's'}` : 'no notes'}<br>${g.rated}/${g.total} rated</div>
     ${opts && opts.actions ? `
-      <button class="iconsm" data-done="${f.id}" title="${f.done ? 'Put back on the list' : 'Mark done'}">${f.done ? '&#8634;' : '&check;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game">&times;</button>` : ''}
+      <button class="iconsm" data-done="${f.id}" title="${doneLabel}" aria-label="${doneLabel}">${f.done ? '&#8634;' : '&check;'}</button>
+      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>` : ''}
   </div>`;
     }
 
@@ -1922,12 +2140,13 @@
       const body = [...slots.entries()].sort((a, b) => (a[0] || '99:99').localeCompare(b[0] || '99:99'))
         .map(([time, list]) => {
           list.sort((a, b) => fieldIdx(a.name) - fieldIdx(b.name) || (a.sub || '').localeCompare(b.sub || ''));
-          return `<div class="slot">${time ? esc(pretty12(time)) : 'No kickoff set'}</div>
+          return `<div class="slothead">${time ? esc(pretty12(time)) : 'No kickoff set'}</div>
         ${list.map(f => gameRow(f, {actions: true})).join('')}`;
         }).join('');
 
       $('#sheetBody').innerHTML = `
-    ${games.length ? body : '<div class="empty">Nothing to show. Import the day\'s schedule to get started.</div>'}
+    ${games.length ? body : `<div class="empty">${doneCount ? 'Every game is marked done.'
+          : 'Nothing to show. Import the day\'s schedule to get started.'}</div>`}
     ${doneCount ? `<button class="btn sm ghost" id="toggleDone" style="margin-top:14px">
       ${S.ui.showDone ? 'Hide' : 'Show'} ${doneCount} finished game${doneCount === 1 ? '' : 's'}</button>` : ''}
     <div class="row" style="margin-top:10px">
@@ -1941,7 +2160,9 @@
       const f = selectedField();
       if (!f) return '';
       const g = gameSummary(f);
-      return `<button class="nowgame" id="openPicker">
+      // data-openpicker, not id="openPicker": this bar is rendered on two tabs at
+      // once (hidden tabs keep their markup) and the header button owns that id.
+      return `<button class="nowgame" data-openpicker="1" aria-haspopup="dialog">
     <div style="min-width:0">
       <div class="g1">${esc(pitchLabel(f) || 'Pick a game')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
       <div class="g2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
@@ -1951,18 +2172,32 @@
     }
 
     function renderFields() {
-      if (!S.fields.length) {
-        $('#fieldsWrap').innerHTML = `<div class="empty">No fields on the board yet.<br>
-      Import the day's schedule, or add fields by hand.</div>`;
+      const f = selectedField();
+      /* First run (or a cleared session) used to draw a blank "Field not set"
+         pitch and pop Settings open on every launch. A setup card asks for the
+         two things that matter instead: your name and the schedule. */
+      if (!f || !sessionHasData()) {
+        $('#fieldsWrap').innerHTML = `${staleDateBanner()}
+    <div class="card" style="margin-top:14px">
+      <h2 class="sec" style="margin-top:0">Set up today</h2>
+      <p class="hint">Import the schedule and every field, kickoff and referee name comes in at once.</p>
+      <label class="f"><span>Your name, as it goes on the form</span>
+        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Mentor/Monitor name" autocomplete="name" /></label>
+      <button class="btn primary" id="openImport" style="margin-top:12px">Import the schedule</button>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm" id="openSettings2">Add a game by hand</button>
+        <button class="btn sm ghost" data-tab="saved">Restore a backup</button>
+      </div>
+    </div>`;
         return;
       }
-      const f = selectedField();
       const group = groupOf(f);
       const refs = allRefs();
       const named = refs.filter(x => x.ref.name.trim());
       const withNotes = refs.filter(x => x.ref.notes.length);
       const fullyRated = refs.filter(x => RATED.every(c => x.ref.ratings[c.id] != null));
-      const unwatched = named.filter(x => !x.ref.notes.length)
+      // Finished games are off the list, so their referees should not nag here.
+      const unwatched = named.filter(x => !x.ref.notes.length && !x.field.done)
         .map(x => `${fieldLabel(x.field)}${x.field.sub ? ' ' + x.field.sub : ''} ${x.ref.slot}`);
 
       // Every pitch at this field and kickoff, each with its own crew.
@@ -1978,10 +2213,16 @@
         <button class="go" data-open="${r.id}">Notes</button>
       </div>`;
         }).join('');
+        /* Done / Delete live on each pitch. They used to sit once at the bottom
+           and acted only on the selected pitch, even with two pitches shown. */
         return `<div class="fieldblock">
       <div class="fieldhead">
         <div class="fname">${esc(pf.sub ? shortField(pf.name) + ' ' + pf.sub : pf.name || 'Field not set')}</div>
+        ${pf.done ? '<span class="pill">done</span>' : ''}
         <div class="spacer"></div>
+        <button class="minibtn" data-done="${pf.id}">${pf.done ? 'Reopen' : '&check; Done'}</button>
+        <button class="minibtn danger" data-delgame="${pf.id}"
+          aria-label="Delete ${esc(pitchLabel(pf) || 'this game')}">Delete</button>
       </div>
       ${pitchSVG(pf)}
       <div class="crew">${crew}</div>
@@ -1991,6 +2232,7 @@
       const meta = [f.name, f.division, pretty12(f.time)].filter(Boolean).join(', ');
 
       $('#fieldsWrap').innerHTML = `
+    ${staleDateBanner()}
     ${nowGameBar()}
     <div class="card" style="margin-top:2px">
       <div class="cov">
@@ -2004,9 +2246,20 @@
     <div class="hint" style="margin:10px 0 0">${esc(meta || 'Field not set')}${group.length > 1
           ? ` &mdash; ${group.length} pitches, one referee each` : ''}</div>
     ${blocks}
-    <div class="row" style="margin-top:4px">
-      <button class="btn sm" data-done="${f.id}">${f.done ? 'Put back on the list' : 'Mark this game done'}</button>
-      <button class="btn sm danger" data-delgame="${f.id}">Delete this game</button>
+    <div class="hint" style="margin-top:6px">Tap a position on the pitch to switch who you are watching.
+      Every note goes to whoever is named in the blue bar at the top.</div>`;
+    }
+
+    function staleDateBanner() {
+      if (S.date === todayISO() || S.ui.keepDate === todayISO()) return '';
+      return `<div class="warn" style="margin-top:12px">
+      <b>This session is dated ${esc(prettyDate(S.date))}</b>, but today is ${esc(prettyDate(todayISO()))}.
+      Saved evaluations and the import's date filter use the session date.
+      <button class="btn sm primary" id="dateFresh" style="margin-top:8px">Clear it and start today</button>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" id="dateToday">Keep games, use today</button>
+        <button class="btn sm ghost" id="dateKeep">Keep ${esc(prettyDate(S.date))}</button>
+      </div>
     </div>`;
     }
 
@@ -2017,7 +2270,7 @@
       const p = activePair();
       const box = $('#watching');
       if (!p) {
-        box.className = 'watching empty';
+        box.className = 'watching idle';
         box.innerHTML = `<div style="min-width:0"><div class="who">No referee selected</div>
       <div class="sub">Tap a position on a field to start</div></div>`;
         return;
@@ -2065,37 +2318,48 @@
 
       // Role filter: a chip with pos:'AR' is hidden from a center referee
       // and vice versa. Fewer wrong taps when you are watching live.
+      const improving = S.ui.pol === 2;
       const chips = CHIPS.filter(c => c.cat === S.ui.cat && (!c.pos || c.pos === ref.role))
-        .map((c, i) => `<button class="chip ${c.pol > 0 ? 'p' : 'm-'}" data-chip="${S.ui.cat}|${i}">
-        <span class="m">${c.pol > 0 ? '+' : '\u2212'}</span><span>${esc(c.text)}</span></button>`).join('');
+        .map((c, i) => {
+          const cls = improving ? 'b' : c.pol > 0 ? 'p' : 'm-';
+          const mark = improving ? '\u2191' : c.pol > 0 ? '+' : '\u2212';
+          return `<button class="chip ${cls}" data-chip="${S.ui.cat}|${i}">
+        <span class="m">${mark}</span><span>${esc(c.text)}</span></button>`;
+        }).join('');
 
       const notes = ref.notes.slice().reverse().map(n => {
         const cat = CATS.find(c => c.id === n.cat);
         const cls = n.pol === 1 ? 'p' : n.pol === -1 ? 'n' : n.pol === 2 ? 'b' : 'o';
+        // The time each note was taken was always recorded and never shown.
+        const meta = [cat ? cat.short : '', n.at ? clockOf(n.at) : ''].filter(Boolean).join(' \u00b7 ');
         return `<div class="nrow ${cls}">
       <span class="mk2">${POL[n.pol] ? POL[n.pol].mark : '\u00b7'}</span>
-      <span class="bd">${esc(n.text)}<span class="cn">${esc(cat ? cat.short : '')}</span></span>
+      <span class="bd">${esc(n.text)}<span class="cn">${esc(meta)}</span></span>
       ${n.pol === -1 ? `<button class="del" data-better="${n.id}"
         title="They fixed this after halftime" aria-label="Mark improved">&uarr;</button>` : ''}
-      <button class="del" data-del="${n.id}" aria-label="Delete note">&times;</button>
+      <button class="del" data-del="${n.id}" title="Delete note" aria-label="Delete note">&times;</button>
     </div>`;
       }).join('');
 
+      const placeholder = improving ? 'What improved?' : S.ui.pol === -1 ? 'Something to work on' : 'A strength';
       $('#observeBody').innerHTML = `
     <div class="cats">${catRow}</div>
+    ${improving ? `<div class="hint" style="margin:0 0 8px">&uarr; is on: every note you add now logs as
+      <b>improved after halftime</b>.</div>` : ''}
     <div class="chipgrid">${chips || '<div class="hint">No quick notes for this role. Type one below.</div>'}</div>
     <div class="noteadd">
-      <div class="polset">
-        <button data-pol="1"  aria-pressed="${S.ui.pol === 1}">+</button>
-        <button data-pol="-1" aria-pressed="${S.ui.pol === -1}">&minus;</button>
-        <button data-pol="2"  aria-pressed="${S.ui.pol === 2}">&uarr;</button>
+      <div class="polset" role="group" aria-label="Note type">
+        <button data-pol="1"  aria-pressed="${S.ui.pol === 1}" title="Strength" aria-label="Strength">+</button>
+        <button data-pol="-1" aria-pressed="${S.ui.pol === -1}" title="To work on" aria-label="To work on">&minus;</button>
+        <button data-pol="2"  aria-pressed="${S.ui.pol === 2}" title="Improved after halftime"
+          aria-label="Improved after halftime">&uarr;</button>
       </div>
-      <input type="text" id="noteText" placeholder="Type anything else" value="${esc(S.ui.draftText)}"
+      <input type="text" id="noteText" placeholder="${placeholder}" aria-label="Note text" value="${esc(S.ui.draftText)}"
              enterkeyhint="done" autocapitalize="sentences" />
       <button class="btn primary" style="width:auto;padding:11px 15px" id="addNote">Add</button>
     </div>
     <div class="timeline">${notes || '<div class="empty">No notes on this referee yet.</div>'}</div>
-    ${ref.notes.length ? `<button class="btn ghost sm" id="toScore">Rate ${esc(refDisplay(ref))} &rarr;</button>` : ''}
+    ${ref.notes.length ? `<button class="btn ghost sm" id="toScore" style="margin-top:10px">Rate ${esc(refDisplay(ref))} &rarr;</button>` : ''}
   `;
     }
 
@@ -2105,11 +2369,22 @@
       // from S.ui.draftText, so clearing it afterwards would reprint the
       // text you just submitted.
       S.ui.draftText = '';
-      p.ref.notes.push({id: uid(), cat, pol, text: text.trim(), at: Date.now()});
+      const note = {id: uid(), cat, pol, text: text.trim(), at: Date.now()};
+      const ref = p.ref;
+      ref.notes.push(note);
       // Blanking an unedited draft marks it stale; the Score tab rebuilds it
       // on arrival. If you have already typed your own comments, they stand.
-      if (!p.ref.commentsEdited) p.ref.comments = '';
-      save(); renderAll(); flash('Added to ' + refDisplay(p.ref));
+      if (!ref.commentsEdited) ref.comments = '';
+      save(); renderAll();
+      // A mis-tapped chip while watching live is the most common slip, so every
+      // add can be taken back from the toast without hunting for the note.
+      flash('Added to ' + refDisplay(ref), {label: 'Undo', run: () => dropNote(ref, note.id)});
+    }
+
+    function dropNote(ref, id) {
+      ref.notes = ref.notes.filter(n => n.id !== id);
+      if (!ref.commentsEdited) ref.comments = '';
+      save(); renderAll();
     }
 
     /* ============================================================
@@ -2207,37 +2482,80 @@
         <div class="spacer" style="flex:1"></div>
         <button class="btn sm ghost" style="width:auto" id="rebuild">Rebuild</button>
       </div>
-      <textarea id="comments" rows="7" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
-      <div class="charcount">${ref.comments.length} characters</div>
+      <textarea id="comments" rows="7" aria-label="Comments" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
+      <div class="charcount" id="charCount">${charCountText(ref.comments)}</div>
       <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
     </div>
+    <div id="readyBox">${readyHTML(field, ref)}</div>
     <button class="btn primary" id="copyAll">Copy everything in form order</button>
     <div class="row" style="margin-top:8px">
       <button class="btn sm" id="openForm2">Open the form</button>
       <button class="btn sm" id="saveEval">Save this referee</button>
     </div>
+    <div class="hint" id="saveHint" style="margin-top:6px;text-align:right" hidden></div>
     <div class="hint" style="margin-top:10px">Copy, open the form, then paste into COMMENTS. Everything above
       the comments is short enough to tap straight in while the copied block is on screen.</div>
   `;
+      paintSaveState(field, ref);
     }
 
-    /* ---------- text assembly for the clipboard ---------- */
-    function formBlock(field, ref) {
-      const L = [];
-      L.push(`Mentor/Monitor name: ${S.mentor}`);
-      L.push(`Date: ${prettyDate(S.date)}`);
-      L.push(`Field: ${field.name}`);
-      L.push(`Time: ${pretty12(field.time)}`);
-      L.push(`Division: ${field.division}`);
-      L.push(`Referee being mentored: ${ref.name}`);
-      L.push(`Position: ${ref.role}`);
-      L.push('');
-      RATED.forEach(c => L.push(`${c.label}: ${ref.ratings[c.id] == null ? '-' : ref.ratings[c.id]}`));
-      L.push(`Should they move up: ${ref.moveUp || '-'}`);
-      L.push('');
-      L.push('COMMENTS:');
-      L.push(ref.comments);
-      return L.join('\n');
+    /* What the form still needs, shown beside the copy button so a half-rated
+       referee gets noticed before you are standing in the parking lot. */
+    function missingFor(field, ref) {
+      const out = [];
+      if (!S.mentor.trim()) out.push('your name (Settings)');
+      if (!field.name) out.push('field');
+      if (!field.time) out.push('kickoff');
+      if (!field.division) out.push('division');
+      if (!ref.name.trim()) out.push('referee name');
+      RATED.forEach(c => {if (ref.ratings[c.id] == null) out.push(c.short);});
+      if (!ref.moveUp) out.push('move up');
+      if (!ref.comments.trim()) out.push('comments');
+      return out;
+    }
+    function readyHTML(field, ref) {
+      const miss = missingFor(field, ref);
+      return miss.length
+        ? `<div class="warn"><b>Still missing:</b> ${esc(miss.join(', '))}</div>`
+        : `<div class="okbox">&check; Everything the form asks for is filled in.</div>`;
+    }
+    function charCountText(s) {return `${s.length} character${s.length === 1 ? '' : 's'}`;}
+
+    /* ---------- text assembly for the clipboard ----------
+       recordFor() is the one place a live referee becomes a plain record, and
+       formText() the one place a record becomes the form-order block. The
+       Score tab, the Saved list and the "changed since saving" check all go
+       through them, so they cannot drift apart. */
+    function recordFor(field, ref) {
+      return {
+        mentor: S.mentor, date: S.date, field: field.name, sub: field.sub || '', time: field.time,
+        division: field.division, referee: ref.name, position: ref.role,
+        ratings: {...ref.ratings}, moveUp: ref.moveUp, comments: ref.comments,
+        notes: ref.notes.map(n => ({...n}))
+      };
+    }
+    function formText(r) {
+      return [
+        `Mentor/Monitor name: ${r.mentor}`, `Date: ${prettyDate(r.date)}`, `Field: ${r.field}`,
+        `Time: ${pretty12(r.time)}`, `Division: ${r.division}`, `Referee being mentored: ${r.referee}`,
+        `Position: ${r.position}`, '',
+        ...RATED.map(c => `${c.label}: ${r.ratings[c.id] == null ? '-' : r.ratings[c.id]}`),
+        `Should they move up: ${r.moveUp || '-'}`, '', 'COMMENTS:', r.comments
+      ].join('\n');
+    }
+    function formBlock(field, ref) {return formText(recordFor(field, ref));}
+
+    function savedRecordFor(ref) {return HIST.find(h => h.refId === ref.id) || null;}
+    /* The save button says whether this referee is saved, and whether they
+       have changed since - so a late edit is not silently left out of the record. */
+    function paintSaveState(field, ref) {
+      const b = $('#saveEval'), h = $('#saveHint'); if (!b || !h) return;
+      const saved = savedRecordFor(ref);
+      const current = !!saved && formText(saved) === formText(recordFor(field, ref));
+      b.innerHTML = saved ? (current ? 'Saved &check;' : 'Update saved copy') : 'Save this referee';
+      b.classList.toggle('primary', !!saved && !current);
+      h.hidden = !saved;
+      h.textContent = saved ? `${current ? 'Saved at' : 'Changed since the save at'} ${clockOf(saved.savedAt)}` : '';
     }
 
     async function copyText(t, label) {
@@ -2248,13 +2566,17 @@
       try {
         await navigator.clipboard.writeText(t);
         flash(label + ' copied');
+        return true;
       } catch (e) {
         const ta = document.createElement('textarea');
-        ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
+        ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        // iOS ignores select() on its own; it needs an explicit selection range.
+        ta.select(); ta.setSelectionRange(0, t.length);
         const ok = document.execCommand('copy');
         ta.remove();
         flash(ok ? label + ' copied' : 'Copy blocked - select the text manually');
+        return ok;
       }
     }
 
@@ -2265,19 +2587,18 @@
       const p = activePair(); if (!p) return;
       const {field, ref} = p;
       if (!ref.name.trim()) {flash('Add the referee name first'); return;}
-      const rec = {
-        id: uid(), savedAt: Date.now(),
-        mentor: S.mentor, date: S.date, field: field.name, sub: field.sub || '', time: field.time, division: field.division,
-        referee: ref.name, position: ref.role,
-        ratings: {...ref.ratings}, moveUp: ref.moveUp, comments: ref.comments,
-        notes: ref.notes.map(n => ({...n}))
-      };
-      HIST.unshift(rec); ref.submitted = true;
+      // Saving the same referee again updates their record instead of stacking
+      // a duplicate (which also listed them twice in the CSV).
+      const prev = savedRecordFor(ref);
+      const rec = {id: prev ? prev.id : uid(), refId: ref.id, savedAt: Date.now(), ...recordFor(field, ref)};
+      if (prev) HIST[HIST.indexOf(prev)] = rec; else HIST.unshift(rec);
+      ref.submitted = true;
       // Once every official on this pitch is filed, the game is finished - retire
       // it from the picker automatically instead of making you tidy up later.
+      const wasDone = field.done;
       if (field.refs.every(r => r.submitted)) field.done = true;
-      save(); renderAll();
-      flash(field.done ? 'Saved. Game marked done.' : 'Saved to this device');
+      save(); renderAll(); requestPersistence();
+      flash(prev ? 'Saved copy updated' : field.done && !wasDone ? 'Saved. Game marked done.' : 'Saved to this device');
     }
 
     function csvCell(v) {
@@ -2297,34 +2618,112 @@
       const rows = HIST.map(r => [r.mentor, prettyDate(r.date), r.field, r.sub || '', pretty12(r.time), r.division,
       r.referee, r.position, ...RATED.map(c => r.ratings[c.id] ?? ''), r.moveUp || '', r.comments]);
       const csv = [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
-      download(`referee-evaluations-${S.date}.csv`, csv, 'text/csv');
+      // The byte-order mark makes Excel read the file as UTF-8, so accented
+      // names do not turn into mojibake.
+      saveFile(`referee-evaluations-${S.date}.csv`, '﻿' + csv, 'text/csv');
     }
-    function download(name, text, mime) {
+
+    /* Touch devices get the share sheet (Save to Files, Drive, email...),
+       because a download link lands somewhere hard to find on a phone and does
+       nothing at all inside the Android app's WebView. Desktops, and anything
+       that cannot share this file type, fall back to an ordinary download.
+       Resolves true unless the person cancelled. */
+    async function saveFile(name, text, mime) {
+      const blob = new Blob([text], {type: mime + ';charset=utf-8'});
+      const touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+      if (touch && navigator.canShare && typeof File === 'function') {
+        const file = new File([blob], name, {type: mime});
+        if (navigator.canShare({files: [file]})) {
+          try {await navigator.share({files: [file], title: name}); return true;}
+          catch (e) {if (e.name === 'AbortError') return false; /* otherwise fall back to a download */}
+        }
+      }
       // A Blob is just an in-memory file. createObjectURL hands back a
       // temporary URL pointing at it, which a normal link can "download".
       // Revoking afterwards releases the memory.
-      const url = URL.createObjectURL(new Blob([text], {type: mime + ';charset=utf-8'}));
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = name; a.click();
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
-      flash('Downloaded');
+      flash('Downloaded ' + name);
+      return true;
+    }
+
+    /* ============================================================
+       BACKUP + RESTORE
+       ------------------------------------------------------------
+       Everything lives in this one browser, and browsers do lose it: a
+       reset or replaced phone, cleared site data, and Safari in a normal
+       tab wipes script storage for sites you have not opened in seven
+       days - about one weekend off. The CSV is a report and cannot be
+       read back in. This JSON file can, on any device, which covers
+       carrying data between phone and laptop without needing accounts.
+       ============================================================ */
+    const BACKUP_KEYS = ['sideline:mentor', 'sideline:sheet', 'sideline:map', 'sideline:myfields', 'sideline:theme'];
+
+    function backupText() {
+      const prefs = {};
+      BACKUP_KEYS.forEach(k => {const v = store.get(k); if (v !== undefined) prefs[k] = v;});
+      return JSON.stringify({app: 'sideline', version: 1, exportedAt: new Date().toISOString(),
+        session: S, history: HIST, prefs});
+    }
+    function markBackedUp() {
+      store.set('sideline:lastBackup', Date.now());
+      if (S.ui.tab === 'saved') renderSaved();
+    }
+
+    function restoreBackup(text) {
+      let data = null;
+      try {data = JSON.parse(String(text || '').trim());} catch (e) { /* reported below */}
+      if (!data || data.app !== 'sideline' || !data.session || !Array.isArray(data.session.fields)
+        || !Array.isArray(data.history)) {
+        flash('That is not a Sideline backup'); return;
+      }
+      const have = new Set(HIST.map(h => h.id));
+      const fresh = data.history.filter(h => h && h.id && h.ratings && typeof h.ratings === 'object' && !have.has(h.id));
+      const games = data.session.fields.filter(f => f && f.name).length;
+      const when = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'an unknown date';
+      const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+      askConfirm(`Restore the backup from ${when}? Its ${plural(games, 'game')} replace the games and ` +
+        `in-progress notes on this device, and ${plural(fresh.length, 'saved evaluation')} not already here ` +
+        `get added. Saved evaluations on this device are kept.`, 'Restore', () => {
+          HIST = HIST.concat(fresh).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+          const localMentor = S.mentor;
+          S = data.session; normalize();
+          if (!S.mentor) S.mentor = localMentor;
+          Object.entries(data.prefs || {}).forEach(([k, v]) => {if (BACKUP_KEYS.includes(k)) store.set(k, v);});
+          if (data.prefs && data.prefs['sideline:theme']) setTheme(data.prefs['sideline:theme']);
+          save(); setTab('fields'); flash('Backup restored');
+        });
+    }
+
+    /* Asks the browser to exempt this site from storage eviction. Chrome grants
+       it quietly for installed or regularly used apps; elsewhere it is a no-op.
+       Called after a save, once there is something worth keeping. */
+    function requestPersistence() {
+      try {
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => { });
+        }
+      } catch (e) { }
     }
 
     function renderSaved() {
-      if (!HIST.length) {
-        $('#savedBody').innerHTML = '<div class="empty">No evaluations saved yet.</div>';
-        return;
-      }
+      const last = store.get('sideline:lastBackup') || 0;
+      const unbacked = HIST.filter(r => (r.savedAt || 0) > last).length;
       const items = HIST.map(r => {
-        const scores = RATED.map(c => r.ratings[c.id] ?? '-').join(' ');
+        // Labelled scores. The old "3 2 4 - 1 2" string needed the form open
+        // beside it to know which number was which.
+        const scores = RATED.map(c => `<span class="pill">${esc(c.short)} ${esc(r.ratings[c.id] ?? '-')}</span>`).join('');
         return `<div class="saved">
       <div class="sh">
         <b>${esc(r.referee)}</b><span class="pill">${esc(r.position)}</span>
         <div class="spacer"></div>
-        <span class="pill">${esc(r.moveUp || '-')}</span>
+        <span class="pill">Move up: ${esc(r.moveUp || '-')}</span>
       </div>
-      <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}, ${esc(r.division)}</div>
-      <div class="pill" style="margin-top:6px">${esc(scores)}</div>
+      <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
       <pre>${esc(r.comments)}</pre>
       <div class="row" style="margin-top:8px">
         <button class="btn sm" data-copysaved="${r.id}">Copy</button>
@@ -2332,8 +2731,30 @@
       </div>
     </div>`;
       }).join('');
-      $('#savedBody').innerHTML = items +
-        `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`;
+
+      $('#savedBody').innerHTML = `
+    ${unbacked ? `<div class="warn">${unbacked} saved evaluation${unbacked === 1 ? ' is' : 's are'} not in a backup yet.
+      <button class="btn sm primary" id="backupFile" style="margin-top:8px">Save a backup now</button></div>` : ''}
+    ${HIST.length ? items + `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`
+          : '<div class="empty">No evaluations saved yet. Use <b>Save this referee</b> on the Score tab.</div>'}
+    <h2 class="sec" style="margin-top:26px">Backup &amp; restore</h2>
+    <div class="card" style="margin-top:4px">
+      <p class="hint" style="margin-top:0">A backup file carries your games, notes, saved evaluations and
+        import settings to another phone or computer.
+        ${last ? `Last backup: ${esc(ago(last))}.` : 'No backup made on this device yet.'}</p>
+      <div class="row">
+        <button class="btn sm primary" id="backupFile2">Save backup file</button>
+        <button class="btn sm" id="restoreFile">Restore from file</button>
+      </div>
+      <details class="more">
+        <summary>File buttons not working? Copy and paste instead</summary>
+        <button class="btn sm" id="backupCopy" style="margin-top:8px">Copy backup text</button>
+        <textarea id="restoreText" rows="3" placeholder="Paste backup text here"
+          aria-label="Backup text to restore" style="margin-top:8px"></textarea>
+        <button class="btn sm" id="restorePaste" style="margin-top:8px">Restore pasted text</button>
+      </details>
+      <input type="file" id="restoreInput" accept=".json,application/json,text/plain" hidden />
+    </div>`;
     }
 
     /* ============================================================
@@ -2357,14 +2778,13 @@
         fieldIdx(a.name) - fieldIdx(b.name) || (a.sub || '').localeCompare(b.sub || ''));
 
       const gameCards = ordered.map(f => {
-        const g = gameSummary(f);
         const head = `<div class="grow${f.done ? ' done' : ''}" style="margin:6px 0 0">
-      <button style="flex:1;min-width:0;text-align:left;background:none" data-edit="${f.id}">
-        <div class="t1">${esc(pitchLabel(f) || 'Field not set')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
-        <div class="t2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
+      <button style="flex:1;min-width:0;text-align:left;background:none" data-edit="${f.id}"
+        data-gamehead="${f.id}" data-withtime aria-expanded="${editing === f.id}">
+        ${gameHeadHTML(f, true)}
       </button>
-      <button class="iconsm" data-edit="${f.id}">${editing === f.id ? '&#9652;' : '&#9662;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game">&times;</button>
+      <button class="iconsm" data-edit="${f.id}" aria-label="${editing === f.id ? 'Close editor' : 'Edit this game'}">${editing === f.id ? '&#9652;' : '&#9662;'}</button>
+      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>
     </div>`;
         if (editing !== f.id) return head;
 
@@ -2406,9 +2826,17 @@
       $('#sheetBody').innerHTML = `
     <div class="card">
       <label class="f"><span>Mentor/Monitor name</span>
-        <input type="text" id="mentorName" value="${esc(S.mentor)}" placeholder="Your name" /></label>
+        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
       <label class="f"><span>Date</span><input type="date" id="sessDate" value="${esc(S.date)}" /></label>
       <button class="btn sm primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
+    </div>
+
+    <div class="card">
+      <div class="rlabel" style="font-size:12.5px;color:var(--mute);margin-bottom:6px">Theme</div>
+      <div class="seg" role="group" aria-label="Theme">${THEMES.map(([k, l]) =>
+          `<button data-theme-set="${k}" aria-pressed="${themeMode === k}">${l}</button>`).join('')}</div>
+      <div class="hint" style="margin:8px 0 0">Sunlight is far easier to read outdoors. The &#9728;&#xFE0E; button
+        in the header switches in one tap.</div>
     </div>
 
     <h2 class="sec">Games (${S.fields.length})</h2>
@@ -2552,9 +2980,22 @@
     <button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>`;
     }
 
-    function openSheet(mode) {sheetMode = mode || 'settings'; $('#scrim').hidden = false; $('#sheet').hidden = false; renderSheet();}
+    let sheetReturnFocus = null;
+    function openSheet(mode) {
+      const sheet = $('#sheet');
+      // Remember what opened the sheet so focus returns there on close, instead
+      // of dropping keyboard and screen-reader users back at the top of the page.
+      if (sheet.hidden) sheetReturnFocus = document.activeElement;
+      sheetMode = mode || 'settings';
+      $('#scrim').hidden = false; sheet.hidden = false;
+      document.body.classList.add('locked');
+      renderSheet();
+      sheet.scrollTop = 0;
+      sheet.focus({preventScroll: true});
+    }
     function closeSheet() {
       $('#scrim').hidden = true; $('#sheet').hidden = true; sheetMode = 'settings';
+      document.body.classList.remove('locked');
       // Empty the sheet rather than just hiding it. A hidden element is still in
       // the document: its inputs still match selectors, and after an import that
       // means a hidden textarea holding the entire pasted schedule sits in the
@@ -2562,6 +3003,8 @@
       // IMP itself is kept in memory, so reopening restores the parsed rows.
       $('#sheetBody').innerHTML = '';
       renderAll();
+      const back = sheetReturnFocus; sheetReturnFocus = null;
+      if (back && back.isConnected && back.focus) back.focus({preventScroll: true});
     }
 
     /* ============================================================
@@ -2572,7 +3015,8 @@
       ['fields', 'observe', 'score', 'saved'].forEach(name => {
         $('#tab-' + name).hidden = name !== t;
         const b = document.querySelector(`nav button[data-tab="${name}"]`);
-        if (b) b.setAttribute('aria-selected', String(name === t));
+        // aria-current, not aria-selected: these are plain buttons, not role="tab".
+        if (b) {if (name === t) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');}
       });
       renderAll();
       window.scrollTo({top: 0});
@@ -2590,23 +3034,42 @@
        false instantly and every guarded action was skipped. It worked in the
        browser and silently failed in the APK. This replaces it with real DOM,
        which behaves the same everywhere and can be styled and tested. */
-    let dlgAction = null;
+    let dlgAction = null, dlgReturnFocus = null;
     function askConfirm(message, label, onYes) {
       $('#dlgMsg').textContent = message;
       $('#dlgYes').textContent = label;
       dlgAction = onYes;
+      dlgReturnFocus = document.activeElement;
       $('#dlg').hidden = false;
+      // Focus lands on Cancel, so the choice a stray Enter hits is the safe one.
+      $('#dlgNo').focus();
     }
     function closeDlg(run) {
       $('#dlg').hidden = true;
       const fn = dlgAction; dlgAction = null;
+      const back = dlgReturnFocus; dlgReturnFocus = null;
       if (run && fn) fn();
+      if (back && back.isConnected && back.focus) back.focus({preventScroll: true});
     }
 
-    let toastTimer = null;
-    function flash(msg) {
-      const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1500);
+    /* flash(msg) for a plain notice; flash(msg, {label, run}) adds a button,
+       used for Undo. An action toast stays up longer so there is time to reach it. */
+    let toastTimer = null, toastAction = null;
+    function flash(msg, action) {
+      const t = $('#toast'), b = $('#toastAct');
+      $('#toastMsg').textContent = msg;
+      toastAction = action ? action.run : null;
+      b.hidden = !action;
+      if (action) b.textContent = action.label;
+      t.classList.toggle('act', !!action);
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, action ? 5000 : 1600);
+    }
+    function hideToast() {
+      clearTimeout(toastTimer);
+      $('#toast').classList.remove('show', 'act');
+      toastAction = null;
     }
 
     /* ============================================================
@@ -2757,6 +3220,10 @@
       const ap = (m[3] || '').toLowerCase();
       if (ap === 'p' && h < 12) h += 12;
       if (ap === 'a' && h === 12) h = 0;
+      // A bare "1:00" is a 1 PM kickoff, not a 1 AM one - nothing on a youth
+      // schedule starts before 7 in the morning. Without this, afternoon games
+      // written without AM/PM sorted ahead of the whole morning.
+      if (!ap && h >= 1 && h <= 6) h += 12;
       if (h > 23 || mi > 59) return '';
       return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
     }
@@ -3000,7 +3467,11 @@
         counts.set(k, (counts.get(k) || 0) + 1);
       });
       return [...counts.entries()].map(([name, n]) => ({name, n}))
-        .sort((a, b) => FIELDS.indexOf(a.name) - FIELDS.indexOf(b.name));
+        // Unmatched names index as -1, which used to sort them ahead of every real field.
+        .sort((a, b) => {
+          const i = (n) => {const x = FIELDS.indexOf(n); return x < 0 ? 999 : x;};
+          return i(a.name) - i(b.name);
+        });
     }
 
     /* You monitor one to three pitches, not the whole complex, and the same
@@ -3034,7 +3505,13 @@
     document.addEventListener('click', (e) => {
       const hit = (attr) => {const el = e.target.closest(`[${attr}]`); return el ? el.getAttribute(attr) : null;};
 
+      // Backdrops close only when the backdrop itself is tapped, never a child.
+      if (e.target.id === 'scrim') {closeSheet(); return;}
+      if (e.target.id === 'dlg') {closeDlg(false); return;}
+
       const tab = hit('data-tab'); if (tab) {setTab(tab); return;}
+      if (hit('data-openpicker')) {openSheet('games'); return;}
+      const themeSet = hit('data-theme-set'); if (themeSet) {setTheme(themeSet); renderSheet(); return;}
       const pick = hit('data-pick'); if (pick) {S.activeRefId = pick; save(); renderAll(); return;}
       const open = hit('data-open'); if (open) {S.activeRefId = open; save(); setTab('observe'); return;}
       const cat = hit('data-cat'); if (cat) {S.ui.cat = cat; save(); renderObserve(); return;}
@@ -3069,25 +3546,13 @@
         if (n) {
           // Keep the original observation and add the follow-up, because both
           // belong in the report: what needed fixing, and that it got fixed.
-          p.ref.notes.push({id: uid(), cat: n.cat, pol: 2, text: n.text, at: Date.now()});
-          if (!p.ref.commentsEdited) p.ref.comments = '';
-          save(); renderAll(); flash('Marked improved');
+          const up = {id: uid(), cat: n.cat, pol: 2, text: n.text, at: Date.now()};
+          const ref = p.ref;
+          ref.notes.push(up);
+          if (!ref.commentsEdited) ref.comments = '';
+          save(); renderAll(); flash('Marked improved', {label: 'Undo', run: () => dropNote(ref, up.id)});
         }
         return;
-      }
-
-      const fieldPick = hit('data-field');
-      if (fieldPick) {
-        S.ui.fieldId = fieldPick;
-        // On the Observe tab, changing field has to move the active referee too,
-        // or you would be looking at one crew while notes land on another.
-        const f = S.fields.find(x => x.id === fieldPick);
-        const inGroup = f && groupOf(f).some(pf => pf.refs.some(r => r.id === S.activeRefId));
-        if (S.ui.tab === 'observe' && f && !inGroup) {
-          const next = groupOf(f).flatMap(pf => pf.refs)[0];
-          if (next) {S.activeRefId = next.id; flash('Now on ' + refDisplay(next));}
-        }
-        save(); renderAll(); return;
       }
 
       const addGroup = hit('data-addgroup');
@@ -3095,13 +3560,7 @@
         const g = FIELD_GROUPS.find(x => x.label === addGroup); if (!g) return;
         let n = 0;
         g.members.forEach(m => {
-          if (S.fields.some(f => f.name === m)) return;
-          // A split field arrives as both of its pitches, one official each.
-          const spec = {pitches: 1, crew: 3};
-          for (let i = 0; i < spec.pitches; i++) {
-            const f = addFieldEntry(m, spec.pitches > 1 ? SUBS[i] : '', spec.crew);
-            if (f) n++;
-          }
+          if (!S.fields.some(f => f.name === m) && addFieldEntry(m, '', 3)) n++;
         });
         save(); renderSheet(); flash(n ? `${n} pitch${n === 1 ? '' : 'es'} added` : 'Already on the board'); return;
       }
@@ -3143,7 +3602,7 @@
 
       const impSrc = hit('data-impsrc');
       if (impSrc) {
-        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', picked: null};
+        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', fieldFilter: null, picked: null};
         IMP.source = impSrc; renderImport(); return;
       }
       const useCache = hit('data-usecache');
@@ -3182,9 +3641,19 @@
       const del = hit('data-del');
       if (del) {
         const p = activePair(); if (!p) return;
-        p.ref.notes = p.ref.notes.filter(n => n.id !== del);
-        if (!p.ref.commentsEdited) p.ref.comments = '';
-        save(); renderAll(); return;
+        const ref = p.ref, idx = ref.notes.findIndex(n => n.id === del); if (idx < 0) return;
+        const [gone] = ref.notes.splice(idx, 1);
+        if (!ref.commentsEdited) ref.comments = '';
+        save(); renderAll();
+        // Undo instead of a confirm dialog: deleting stays one tap, and a slip costs nothing.
+        flash('Note deleted', {
+          label: 'Undo', run: () => {
+            ref.notes.splice(Math.min(idx, ref.notes.length), 0, gone);
+            if (!ref.commentsEdited) ref.comments = '';
+            save(); renderAll();
+          }
+        });
+        return;
       }
       const rate = hit('data-rate');
       if (rate) {
@@ -3212,18 +3681,10 @@
       }
       const crew = hit('data-crew');
       if (crew) {const [fid, n] = crew.split('|'); setCrewSize(fid, Number(n)); renderSheet(); return;}
-      const dropF = hit('data-dropfield');
-      if (dropF) {
-        deleteGame(dropF, () => renderSheet()); return;
-      }
       const copySaved = hit('data-copysaved');
       if (copySaved) {
-        const r = HIST.find(x => x.id === copySaved); if (!r) return;
-        const L = [`Mentor/Monitor name: ${r.mentor}`, `Date: ${prettyDate(r.date)}`, `Field: ${r.field}`,
-        `Time: ${pretty12(r.time)}`, `Division: ${r.division}`, `Referee being mentored: ${r.referee}`,
-        `Position: ${r.position}`, '', ...RATED.map(c => `${c.label}: ${r.ratings[c.id] ?? '-'}`),
-        `Should they move up: ${r.moveUp || '-'}`, '', 'COMMENTS:', r.comments];
-        copyText(L.join('\n'), 'Evaluation'); return;
+        const r = HIST.find(x => x.id === copySaved); if (r) copyText(formText(r), 'Evaluation');
+        return;
       }
       const dropSaved = hit('data-dropsaved');
       if (dropSaved) {
@@ -3233,15 +3694,36 @@
         return;
       }
 
-      switch (e.target.id) {
-        case 'openSettings': case 'openSettings2': case 'editSetup2': openSheet('settings'); return;
+      /* Resolve to the BUTTON, not the exact node under the finger. Switching on
+         e.target.id meant a tap on text inside a button - the game bar is almost
+         all text - landed on a child with no id and did nothing. */
+      const btn = e.target.closest('button[id]');
+      switch (btn ? btn.id : '') {
+        case 'openSettings': case 'openSettings2': openSheet('settings'); return;
         case 'openPicker': openSheet('games'); return;
+        case 'themeToggle':
+          setTheme(isLight() ? 'dark' : 'light');
+          if (!$('#sheet').hidden && sheetMode === 'settings') renderSheet();
+          return;
+        case 'toastAct': {const fn = toastAction; hideToast(); if (fn) fn(); return;}
         case 'toggleDone': S.ui.showDone = !S.ui.showDone; save(); renderPicker(); return;
         case 'dlgYes': closeDlg(true); return;
         case 'dlgNo': closeDlg(false); return;
         case 'openImport': case 'openImport2': openSheet('import'); return;
-        case 'backToSettings': sheetMode = 'settings'; renderSheet(); return;
-        case 'closePicker': closeSheet(); return;
+        case 'backToSettings': sheetMode = 'settings'; renderSheet(); $('#sheet').scrollTop = 0; return;
+        case 'dateToday': S.date = todayISO(); save(); renderAll(); flash('Session date set to today'); return;
+        case 'dateKeep': S.ui.keepDate = todayISO(); save(); renderAll(); return;
+        case 'dateFresh':
+          askConfirm('Clear the old games and in-progress notes and start today? Saved evaluations are kept.',
+            'Start fresh', () => {S = blankSession(); save(); setTab('fields');});
+          return;
+        case 'backupFile': case 'backupFile2':
+          saveFile(`sideline-backup-${todayISO()}.json`, backupText(), 'application/json')
+            .then(ok => {if (ok) markBackedUp();});
+          return;
+        case 'backupCopy': copyText(backupText(), 'Backup').then(ok => {if (ok) markBackedUp();}); return;
+        case 'restoreFile': $('#restoreInput').click(); return;
+        case 'restorePaste': restoreBackup($('#restoreText').value); return;
         case 'doFetch': {
           const id = $('#shId').value, gid = $('#shGid').value;
           if (!id.trim()) {flash('Paste the link or ID first'); return;}
@@ -3297,7 +3779,7 @@
           applyGames(IMP.picked);
           closeSheet(); setTab('fields'); return;
         }
-        case 'closeSheet': case 'scrim': closeSheet(); return;
+        case 'closeSheet': closeSheet(); return;
         case 'addField':
           // No cap: monitoring a full slate means every field with a game on it.
           S.fields.push(newField('')); save(); renderSheet(); return;
@@ -3339,10 +3821,16 @@
       }
       if (t.id === 'noteText') {S.ui.draftText = t.value; save(); return;}
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
-      if (t.id === 'mentorName') {S.mentor = t.value; save(); return;}
+      if (t.hasAttribute && t.hasAttribute('data-mentor')) {S.mentor = t.value; save(); return;}
       if (t.id === 'comments') {
         const p = activePair(); if (!p) return;
-        p.ref.comments = t.value; p.ref.commentsEdited = true; save(); return;
+        p.ref.comments = t.value; p.ref.commentsEdited = true; save();
+        // Patch the counter, checklist and save state in place. The count used
+        // to freeze at its render-time value; a full re-render would drop the keyboard.
+        $('#charCount').textContent = charCountText(t.value);
+        $('#readyBox').innerHTML = readyHTML(p.field, p.ref);
+        paintSaveState(p.field, p.ref);
+        return;
       }
     });
     document.addEventListener('change', (e) => {
@@ -3353,6 +3841,10 @@
         if (fn) f.name = t.value;
         if (fd) f.division = t.value;
         if (ft) f.time = t.value;
+        // Refresh the game's heading in place; it used to keep showing the old
+        // field and kickoff until the sheet was closed and reopened.
+        document.querySelectorAll(`[data-gamehead="${f.id}"]`)
+          .forEach(el => {el.innerHTML = gameHeadHTML(f, el.hasAttribute('data-withtime'));});
         save(); return;
       }
       if (t.id === 'sessDate') {S.date = t.value; save(); if (sheetMode === 'import') renderImport(); return;}
@@ -3364,6 +3856,8 @@
         IMP.headerRow = Number(t.value);
         IMP.header = IMP.rows[IMP.headerRow] || [];
         IMP.map = autoMap(IMP.header); IMP.picked = null;
+        // The field filter was built from the old header's columns; rebuild it too.
+        IMP.fieldFilter = defaultFieldFilter();
         renderImport(); return;
       }
       const pickGame = g('data-pickgame');
@@ -3374,35 +3868,49 @@
       if (t.id === 'addSingle') {
         const name = t.value; if (!name) return;
         if (S.fields.some(f => f.name === name)) {flash('Already on the board'); return;}
-        const spec = {pitches: 1, crew: 3};
-        for (let i = 0; i < spec.pitches; i++) {
-          addFieldEntry(name, spec.pitches > 1 ? SUBS[i] : '', spec.crew);
-        }
+        addFieldEntry(name, '', 3);
         save(); renderSheet(); flash(name + ' added'); return;
+      }
+      if (t.id === 'restoreInput') {
+        const file = t.files && t.files[0];
+        t.value = '';   // so choosing the same file again still fires change
+        if (file) file.text().then(restoreBackup).catch(() => flash('Could not read that file'));
+        return;
       }
       if (t.id === 'noOff') {
         const p = activePair(); if (!p) return;
         p.ref.noOffsides = t.checked;
-        if (t.checked) p.ref.ratings.offsides = 1;
+        // Checking forces the form's "1 if no offsides"; unchecking has to release
+        // that forced 1, not leave it behind looking like a real rating.
+        p.ref.ratings.offsides = t.checked ? 1 : null;
         if (!p.ref.commentsEdited) p.ref.comments = buildComments(p.ref, p.field);
         save(); renderScore(); return;
       }
     });
     document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (!$('#dlg').hidden) {closeDlg(false); return;}
+        if (!$('#sheet').hidden) {closeSheet(); return;}
+      }
       if (e.key === 'Enter' && e.target.id === 'noteText') {
         e.preventDefault(); addNote(S.ui.cat, S.ui.pol, e.target.value);
       }
-      // SVG markers are not buttons, so give them keyboard equivalence.
-      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('[data-pick]')) {
+      // SVG markers are not buttons, so give them keyboard equivalence. Only the
+      // <g> markers: real buttons with data-pick already click on Enter/Space,
+      // and matching them here ran every keyboard selection twice.
+      const mk = e.target.closest && e.target.closest('g[data-pick]');
+      if ((e.key === 'Enter' || e.key === ' ') && mk) {
         e.preventDefault();
-        S.activeRefId = e.target.closest('[data-pick]').getAttribute('data-pick');
+        S.activeRefId = mk.getAttribute('data-pick');
         save(); renderAll();
       }
     });
 
     /* ---------- start ---------- */
+    applyTheme();
     setTab(S.ui.tab || 'fields');
-    if (!S.mentor || !S.fields.some(f => f.name)) openSheet('settings');
+    // Settings no longer pops open on every launch that lacks a named game; the
+    // Fields tab has its own first-run card for your name and the import.
 
     /* The service worker earns its keep on GitHub Pages. Inside the Android
        shell the assets are already on the device, so registering it would
