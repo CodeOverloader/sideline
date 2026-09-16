@@ -28,9 +28,13 @@
 //     morning silently never arrived.
 // ============================================================
 
-const CACHE_NAME = 'sideline-shell-v2';
+const CACHE_NAME = 'sideline-shell-v3';
 const SHELL_ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+// The sign-in library, only when accounts are configured. The URL names an
+// exact version, so a cached copy can never be stale. Supabase's own API
+// (*.supabase.co) is deliberately absent: its answers must always be live.
+const PINNED_LIBS = /^https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@\d+\.\d+\.\d+\//;
 const NETWORK_TIMEOUT_MS = 3500;
 
 self.addEventListener('install', (event) => {
@@ -59,7 +63,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(req.mode === 'navigate' ? networkFirst(req) : cacheFirst(req));
     return;
   }
-  if (FONT_HOSTS.includes(url.hostname)) {
+  if (FONT_HOSTS.includes(url.hostname) || PINNED_LIBS.test(req.url)) {
     event.respondWith(cacheFirst(req));
   }
   // Anything else falls through to the browser's normal network handling.

@@ -344,6 +344,8 @@
     }
 
     input[type=text],
+    input[type=email],
+    input[type=search],
     input[type=date],
     input[type=time],
     select,
@@ -1425,6 +1427,191 @@
     body.locked {
       overflow: hidden
     }
+
+    /* ---------- accounts ---------- */
+    /* a dot on the settings cog: green when signed in, orange while pending */
+    #openSettings {
+      position: relative
+    }
+
+    #openSettings[data-acct]::after {
+      content: '';
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--plus);
+      box-shadow: 0 0 0 2px var(--panel)
+    }
+
+    #openSettings[data-acct="pending"]::after {
+      background: var(--minus)
+    }
+
+    .acctline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      overflow-wrap: anywhere;
+      margin-bottom: 6px
+    }
+
+    /* ---------- referee profiles ---------- */
+    .histline {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 10px;
+      align-items: center;
+      font-size: 12.5px;
+      line-height: 1.35;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--primary);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin: 8px 0
+    }
+
+    .histline>div {
+      grid-column: 1;
+      min-width: 0
+    }
+
+    .histline .minibtn {
+      grid-column: 2;
+      grid-row: 1 / span 2
+    }
+
+    .watching .minibtn {
+      margin-left: auto
+    }
+
+    .refrow {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 10px 12px;
+      margin: 6px 0
+    }
+
+    .refrow .rr1 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 14.5px
+    }
+
+    .refrow .rr2,
+    .refrow .rr3 {
+      font-size: 12px;
+      color: var(--mute);
+      margin-top: 2px
+    }
+
+    .refrow .rr3 {
+      color: var(--minus)
+    }
+
+    .pill.low {
+      background: var(--minus-tint);
+      color: var(--minus)
+    }
+
+    .catrow {
+      display: grid;
+      grid-template-columns: 84px 1fr 86px;
+      align-items: center;
+      gap: 8px;
+      margin: 7px 0;
+      font-size: 13px
+    }
+
+    .catrow .bar {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--panel2);
+      overflow: hidden
+    }
+
+    .catrow .bar i {
+      display: block;
+      height: 100%;
+      background: var(--primary)
+    }
+
+    .catrow .bar i.low {
+      background: var(--minus)
+    }
+
+    .catrow .cv {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      text-align: right;
+      white-space: nowrap
+    }
+
+    .catrow .cv small {
+      color: var(--mute)
+    }
+
+    .profhead {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px
+    }
+
+    .bigavg {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1
+    }
+
+    .plist {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      font-size: 13.5px
+    }
+
+    .plist li {
+      margin: 4px 0
+    }
+
+    .muted {
+      color: var(--mute)
+    }
+
+    details.evald {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      margin: 6px 0
+    }
+
+    details.evald summary {
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.45
+    }
+
+    details.evald pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: Inter, sans-serif;
+      font-size: 12.5px;
+      color: var(--mute);
+      margin: 8px 0 0
+    }
   </style>
 </head>
 
@@ -1466,10 +1653,13 @@
     </section>
 
     <!-- ============ SAVED TAB ============ -->
+    <!-- ============ REFS TAB: referee profiles ============ -->
+    <section class="tab" id="tab-refs" hidden>
+      <div id="refsBody"></div>
+    </section>
+
     <section class="tab" id="tab-saved" hidden>
       <h2 class="sec">Saved evaluations</h2>
-      <p class="hint">Kept on this device only. Make a backup (bottom of this page) so a lost or reset
-        phone does not take them with it.</p>
       <div id="savedBody"></div>
     </section>
   </main>
@@ -1478,6 +1668,7 @@
     <button data-tab="fields" aria-current="page"><span class="ico" aria-hidden="true">&#9917;</span>Fields</button>
     <button data-tab="observe"><span class="ico" aria-hidden="true">&#9998;</span>Observe</button>
     <button data-tab="score"><span class="ico" aria-hidden="true">&#9878;</span>Score</button>
+    <button data-tab="refs"><span class="ico" aria-hidden="true">&#128101;</span>Refs</button>
     <button data-tab="saved"><span class="ico" aria-hidden="true">&#128193;</span>Saved</button>
   </nav>
 
@@ -1518,6 +1709,23 @@
        ============================================================ */
 
     const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSd-Hc5iO0ygjxnme1FirULuMauqI1JFCG_vYob_pYAfAZZPOg/viewform';
+
+    /* ---------- mentor accounts (optional) ----------
+       Fill in both values to switch on sign-in, shared evaluations and
+       league-wide referee profiles. Leave either empty and Sideline stays
+       the offline, single-device app it always was.
+       Both values are PUBLIC by design: the database's access rules protect
+       the data, not this key. NEVER put the service_role key here.
+       Setup steps: README.md. */
+    const SUPABASE_URL = '';
+    const SUPABASE_ANON_KEY = '';
+    const ACCOUNTS_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+    // Pinned with a Subresource Integrity hash: if the CDN ever serves
+    // different bytes for this version, the browser refuses to run them.
+    const SUPABASE_JS = {
+      src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js',
+      integrity: 'sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP'
+    };
 
     /* Field and division lists copied verbatim from the form's dropdowns,
        in the form's order. Matching exactly means the value you pick here
@@ -2276,11 +2484,15 @@
         return;
       }
       box.className = 'watching';
+      // One tap from the referee you are watching to what earlier mentors said.
+      const past = pastEvaluations(p.ref);
       box.innerHTML = `<span class="rolechip">${esc(p.ref.role)}</span>
     <div style="min-width:0">
       <div class="who">${esc(refDisplay(p.ref))}</div>
       <div class="sub">${esc(p.field.name || 'field not set')}${p.field.sub ? ' ' + esc(p.field.sub) : ''} &nbsp;&middot;&nbsp; ${esc(p.ref.slot)}</div>
     </div>
+    ${past ? `<button class="minibtn" data-profile="${esc(past.g.key)}"
+      aria-label="${esc(past.g.name)}: ${plural(past.past.length, 'earlier evaluation')}">History ${past.past.length}</button>` : ''}
 `;
     }
 
@@ -2343,6 +2555,7 @@
 
       const placeholder = improving ? 'What improved?' : S.ui.pol === -1 ? 'Something to work on' : 'A strength';
       $('#observeBody').innerHTML = `
+    ${historyLine(ref)}
     <div class="cats">${catRow}</div>
     ${improving ? `<div class="hint" style="margin:0 0 8px">&uarr; is on: every note you add now logs as
       <b>improved after halftime</b>.</div>` : ''}
@@ -2468,6 +2681,7 @@
       $('#scoreBody').innerHTML = `
     <h2 class="sec">${esc(refDisplay(ref))} &mdash; ${esc(ref.role)}</h2>
     <p class="hint">${esc(field.name || 'field not set')}${field.division ? ', ' + esc(field.division) : ''}${field.time ? ', ' + esc(pretty12(field.time)) : ''}</p>
+    ${historyLine(ref)}
     <div class="card">${scales}</div>
     <div class="card">
       <div class="rlabel" style="font-size:14px;font-weight:600;margin-bottom:8px">Should they move up</div>
@@ -2597,8 +2811,12 @@
       // it from the picker automatically instead of making you tidy up later.
       const wasDone = field.done;
       if (field.refs.every(r => r.submitted)) field.done = true;
-      save(); renderAll(); requestPersistence();
-      flash(prev ? 'Saved copy updated' : field.done && !wasDone ? 'Saved. Game marked done.' : 'Saved to this device');
+      histChanged();
+      save(); renderAll(); requestPersistence(); syncNow();
+      const sharing = isApproved() && uploadConsent() === true;
+      flash(prev ? (sharing ? 'Saved copy updated; uploading' : 'Saved copy updated')
+        : field.done && !wasDone ? 'Saved. Game marked done.'
+          : sharing ? 'Saved; uploading for other mentors' : 'Saved to this device');
     }
 
     function csvCell(v) {
@@ -2689,6 +2907,7 @@
         `in-progress notes on this device, and ${plural(fresh.length, 'saved evaluation')} not already here ` +
         `get added. Saved evaluations on this device are kept.`, 'Restore', () => {
           HIST = HIST.concat(fresh).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+          histChanged();
           const localMentor = S.mentor;
           S = data.session; normalize();
           if (!S.mentor) S.mentor = localMentor;
@@ -2709,17 +2928,1050 @@
       } catch (e) { }
     }
 
+    /* ============================================================
+       ACCOUNTS
+       ------------------------------------------------------------
+       Optional, and kept away from note-taking on purpose. Signing in only
+       ADDS things: uploading saved evaluations, and reading other mentors'
+       evaluations for referee profiles. Nothing on the Fields, Observe or
+       Score tabs waits on the network or on a login, because the network
+       is exactly what a youth soccer field does not have.
+
+       ACCT.status is one of:
+         off        accounts are not configured in this build
+         signedOut  configured, but nobody is signed in on this device
+         pending    signed in, waiting for an admin to approve
+         mentor     approved
+         admin      approved, and can approve others
+       It is cached so the right UI shows offline. The server enforces every
+       rule regardless of what this cache claims.
+       ============================================================ */
+    const ACCT_BLANK = {status: 'signedOut', id: '', email: '', name: ''};
+    let ACCT = ACCOUNTS_ON ? {...ACCT_BLANK, ...(store.get('sideline:acct') || {})}
+      : {...ACCT_BLANK, status: 'off'};
+    const acctUI = {step: 'email', email: '', code: '', busy: false, error: '', notice: '', offline: false};
+    let sb = null, sbLoading = null, acctStarted = false, mentorLoading = null;
+
+    const isApproved = () => ACCT.status === 'mentor' || ACCT.status === 'admin';
+    const isAdmin = () => ACCT.status === 'admin';
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+    /* The library is only fetched when accounts are configured, so the
+       offline single-device build never downloads it. */
+    function loadSupabase() {
+      if (window.supabase && window.supabase.createClient) return Promise.resolve();
+      if (sbLoading) return sbLoading;
+      sbLoading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = SUPABASE_JS.src;
+        s.integrity = SUPABASE_JS.integrity;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => resolve();
+        s.onerror = () => {
+          sbLoading = null; s.remove();
+          reject(new Error('Could not load the sign-in library. Check your connection.'));
+        };
+        document.head.appendChild(s);
+      });
+      return sbLoading;
+    }
+    function sbc() {
+      if (sb || !ACCOUNTS_ON || !window.supabase || !window.supabase.createClient) return sb;
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+          // The "sideline:" prefix matters: the schedule import's browser-cache
+          // scan skips those keys, so a login token is never offered as a schedule.
+          storageKey: 'sideline:auth'
+        }
+      });
+      return sb;
+    }
+
+    function isNetErr(e) {
+      const m = String((e && (e.message || e)) || '');
+      return !navigator.onLine || /failed to fetch|networkerror|network request|load failed|timed? ?out/i.test(m);
+    }
+    function friendly(e) {
+      if (isNetErr(e)) return 'No connection. It will try again when you are back online.';
+      const m = String((e && (e.message || e)) || 'Something went wrong');
+      if (e && e.code === '42501') return 'Your account is not approved for that.';
+      if (/rate limit|too many/i.test(m)) return 'Too many attempts. Wait a minute, then try again.';
+      if (/otp|token/i.test(m) && /expired|invalid/i.test(m)) return 'That code is wrong or has expired. Send a new one.';
+      return m;
+    }
+
+    /* Background work (sync, profile refresh, token refresh) must never
+       rebuild a tab under someone's thumb, so it re-renders only when no
+       text field on the page has focus. The next user action catches up. */
+    function renderQuietly() {
+      const a = document.activeElement;
+      const typing = a && (a.tagName === 'TEXTAREA' ||
+        (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'file'].includes(a.type)));
+      if (typing && !$('#sheet').contains(a)) {renderWatching(); return;}
+      renderAll();
+    }
+
+    async function initAccounts() {
+      if (!ACCOUNTS_ON || acctStarted) return;
+      if (isApproved()) loadLeagueCache().then(renderQuietly);
+      else idb.del('league');   // nothing from other mentors stays on a device that is not approved
+      try {await loadSupabase();} catch (e) {return;}   // offline first launch: keep the cached status
+      const c = sbc();
+      if (!c || acctStarted) return;
+      acctStarted = true;
+      c.auth.onAuthStateChange((event, session) => {
+        // Supabase warns against awaiting its own calls inside this callback,
+        // so the work moves to the next tick.
+        setTimeout(() => handleSession(event, session), 0);
+      });
+    }
+
+    async function handleSession(event, session) {
+      if (!session) {
+        // A stored login that could not be refreshed because the phone is
+        // offline still counts. Only an explicit sign-out, or the server
+        // rejecting the login, ends it.
+        if (event !== 'SIGNED_OUT' && ACCT.status !== 'signedOut' && !navigator.onLine) return;
+        if (ACCT.status !== 'signedOut') setAcct({status: 'signedOut'});
+        return;
+      }
+      if (event === 'TOKEN_REFRESHED' && ACCT.id === session.user.id) return;
+      if (ACCT.id !== session.user.id) {
+        clearLeague();
+        setAcct({status: 'pending', id: session.user.id, email: session.user.email || ''});
+      }
+      await refreshMentor();
+    }
+
+    function refreshMentor() {
+      const c = sbc();
+      if (!c) return Promise.resolve();
+      if (mentorLoading) return mentorLoading;
+      // Next tick, for the same reason as syncNow().
+      mentorLoading = Promise.resolve().then(async () => {
+        try {
+          const {data: {session}} = await c.auth.getSession();
+          if (!session) return;
+          const {data, error} = await c.from('mentors')
+            .select('id,email,display_name,role').eq('id', session.user.id).maybeSingle();
+          if (error) throw error;
+          const row = data || {id: session.user.id, email: session.user.email, display_name: '', role: 'pending'};
+          acctUI.offline = false;
+          setAcct({status: row.role, id: row.id, email: row.email || session.user.email || '', name: row.display_name || ''});
+          if (!row.display_name && S.mentor.trim()) {
+            c.from('mentors').update({display_name: S.mentor.trim().slice(0, 80)}).eq('id', row.id)
+              .then(() => { }, () => { });
+          }
+          if (isApproved()) {offerFirstUpload(); syncNow(); pullLeague();}
+        } catch (e) {
+          // Offline, or the project is paused: keep the cached status.
+          acctUI.offline = isNetErr(e);
+        } finally {
+          mentorLoading = null;
+        }
+      });
+      return mentorLoading;
+    }
+
+    function setAcct(next) {
+      const wasApproved = isApproved();
+      ACCT = {...ACCT_BLANK, ...next};
+      store.set('sideline:acct', ACCT);
+      if (wasApproved && !isApproved()) clearLeague();
+      if (!wasApproved && isApproved()) loadLeagueCache().then(renderQuietly);
+      invalidateProfiles();
+      paintAccount();
+    }
+
+    function paintAccount() {
+      const b = $('#openSettings');
+      if (b) {
+        const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
+        if (on) b.setAttribute('data-acct', ACCT.status); else b.removeAttribute('data-acct');
+        const label = !on ? 'Settings'
+          : ACCT.status === 'pending' ? 'Settings (account waiting for approval)'
+            : `Settings (signed in as ${ACCT.email})`;
+        b.title = label; b.setAttribute('aria-label', label);
+      }
+      paintAcctCard(false);
+      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
+      renderQuietly();
+    }
+
+    async function sendCode() {
+      const email = acctUI.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        acctUI.error = 'Enter a valid email address.'; paintAcctCard(true); return;
+      }
+      acctUI.busy = true; acctUI.error = ''; paintAcctCard(true);
+      try {
+        await loadSupabase();
+        const c = sbc(); if (!c) throw new Error('Sign-in is not available right now.');
+        initAccounts();
+        const {error} = await c.auth.signInWithOtp({email, options: {shouldCreateUser: true}});
+        if (error) throw error;
+        Object.assign(acctUI, {step: 'code', code: '', email,
+          notice: `We emailed a code to ${email}. It can take a minute to arrive; check spam too.`});
+      } catch (e) {
+        acctUI.error = friendly(e);
+      }
+      acctUI.busy = false; paintAcctCard(true);
+      if (acctUI.step === 'code') {const i = $('#acctCode'); if (i) i.focus();}
+    }
+
+    async function verifyCode() {
+      const token = acctUI.code.replace(/\s+/g, '');
+      if (!/^\d{6,10}$/.test(token)) {acctUI.error = 'Enter the code from the email.'; paintAcctCard(true); return;}
+      acctUI.busy = true; acctUI.error = ''; paintAcctCard(true);
+      try {
+        const c = sbc(); if (!c) throw new Error('Sign-in is not available right now.');
+        const {error} = await c.auth.verifyOtp({email: acctUI.email.trim().toLowerCase(), token, type: 'email'});
+        if (error) throw error;
+        Object.assign(acctUI, {step: 'email', code: '', notice: '', error: ''});
+        flash('Signed in');   // onAuthStateChange(SIGNED_IN) loads the account
+      } catch (e) {
+        acctUI.error = friendly(e);
+      }
+      acctUI.busy = false; paintAcctCard(true);
+    }
+
+    function signOut() {
+      askConfirm('Sign out on this device? Other mentors’ evaluations are removed from this device until ' +
+        'you sign in again. Your notes and saved evaluations stay.', 'Sign out', async () => {
+          try {const c = sbc(); if (c) await c.auth.signOut({scope: 'local'});} catch (e) { }
+          setAcct({status: 'signedOut'});
+          flash('Signed out');
+        });
+    }
+
+    function accountCardInner() {
+      const head = '<div class="rlabel" style="font-size:12.5px;color:var(--mute);margin-bottom:6px">Account</div>';
+      const err = acctUI.error ? `<div class="warn">${esc(acctUI.error)}</div>` : '';
+      const s = ACCT.status;
+      if (s === 'signedOut') {
+        if (acctUI.step === 'code') {
+          return `${head}
+        <p class="hint" style="margin-top:0">${esc(acctUI.notice)}</p>
+        <label class="f"><span>Sign-in code</span>
+          <input type="text" id="acctCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"
+            value="${esc(acctUI.code)}" placeholder="123456" /></label>
+        <button class="btn sm primary" id="acctVerify" style="margin-top:10px" ${acctUI.busy ? 'disabled' : ''}>
+          ${acctUI.busy ? 'Checking&hellip;' : 'Sign in'}</button>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm ghost" id="acctResend" ${acctUI.busy ? 'disabled' : ''}>Send a new code</button>
+          <button class="btn sm ghost" id="acctBack">Different email</button>
+        </div>${err}`;
+        }
+        return `${head}
+        <p class="hint" style="margin-top:0">Sign in to share your saved evaluations with other mentors and see
+          league-wide referee profiles. Taking notes never needs an account.</p>
+        <label class="f"><span>Email</span>
+          <input type="email" id="acctEmail" autocomplete="email" inputmode="email" autocapitalize="off"
+            spellcheck="false" value="${esc(acctUI.email)}" placeholder="you@example.com" /></label>
+        <button class="btn sm primary" id="acctSend" style="margin-top:10px" ${acctUI.busy ? 'disabled' : ''}>
+          ${acctUI.busy ? 'Sending&hellip;' : 'Email me a sign-in code'}</button>${err}`;
+      }
+      const role = s === 'admin' ? 'Admin' : s === 'mentor' ? 'Mentor' : 'Waiting for approval';
+      const body = s === 'pending'
+        ? `<div class="warn">An admin has to approve this account before it can upload or read shared evaluations.</div>
+        <button class="btn sm" id="acctCheck">Check again</button>`
+        : `<label class="switchrow"><input type="checkbox" id="acctUpload" ${uploadConsent() === true ? 'checked' : ''} />
+          Upload my saved evaluations</label>
+        <div class="hint" style="margin:0 0 8px">${esc(syncSummaryText())}</div>
+        ${s === 'admin' ? '<button class="btn sm" id="openAdmin">Manage mentors</button>' : ''}`;
+      return `${head}
+        <div class="acctline"><b>${esc(ACCT.email)}</b><span class="pill">${role}</span>
+          ${acctUI.offline ? '<span class="pill">offline</span>' : ''}</div>
+        ${body}
+        <button class="btn sm ghost" id="acctSignOut" style="margin-top:8px">Sign out</button>`;
+    }
+    function paintAcctCard(force) {
+      const box = $('#acctCard');
+      if (!box || $('#sheet').hidden) return;
+      const a = document.activeElement;
+      if (!force && a && box.contains(a) && a.tagName === 'INPUT' && a.type !== 'checkbox') return;
+      box.innerHTML = accountCardInner();
+    }
+
+    /* ---------- admin: approving mentors ---------- */
+    const ADMIN = {list: null, loading: false, error: ''};
+    async function loadMentors() {
+      const c = sbc(); if (!c || !isAdmin()) return;
+      ADMIN.loading = true; ADMIN.error = '';
+      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
+      try {
+        const {data, error} = await c.from('mentors')
+          .select('id,email,display_name,role,created_at,approved_at').order('created_at', {ascending: true});
+        if (error) throw error;
+        ADMIN.list = data || [];
+      } catch (e) {
+        ADMIN.error = friendly(e);
+      }
+      ADMIN.loading = false;
+      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
+    }
+    async function adminCall(fn, args, doneMsg) {
+      const c = sbc(); if (!c) return;
+      try {
+        const {error} = await c.rpc(fn, args);
+        if (error) throw error;
+        flash(doneMsg);
+      } catch (e) {
+        flash(friendly(e));
+      }
+      loadMentors();
+    }
+    function renderAdmin() {
+      const back = '<button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>';
+      if (!isAdmin()) {$('#sheetBody').innerHTML = `<div class="empty">Only admins can manage mentors.</div>${back}`; return;}
+      const list = ADMIN.list || [];
+      const pending = list.filter(m => m.role === 'pending');
+      const approved = list.filter(m => m.role !== 'pending');
+      // The title is the name when there is one; the email then moves to the
+      // second line instead of printing twice.
+      const row = (m, actions) => `<div class="gamerow">
+      <div style="flex:1;min-width:0">
+        <div class="g1" style="overflow-wrap:anywhere">${esc(m.display_name || m.email)}${m.id === ACCT.id ? ' <span class="pill">you</span>' : ''}</div>
+        <div class="g2" style="overflow-wrap:anywhere">${m.display_name ? esc(m.email) + ' &middot; ' : ''}${m.role === 'pending'
+          ? 'asked ' + esc(ago(Date.parse(m.created_at))) : m.role === 'admin' ? 'Admin' : 'Mentor'}</div>
+      </div>${actions}</div>`;
+      const pendingRows = pending.map(m => row(m, `
+        <button class="minibtn" data-approve="${esc(m.id)}">Approve</button>
+        <button class="minibtn danger" data-reject="${esc(m.id)}">Reject</button>`)).join('');
+      const approvedRows = approved.map(m => row(m, m.id === ACCT.id ? '' : `
+        <button class="minibtn" data-role-set="${esc(m.id)}|${m.role === 'admin' ? 'mentor' : 'admin'}">
+          ${m.role === 'admin' ? 'Make mentor' : 'Make admin'}</button>
+        <button class="minibtn danger" data-revoke="${esc(m.id)}">Revoke</button>`)).join('');
+      $('#sheetBody').innerHTML = `
+    <p class="hint">Approved mentors upload their saved evaluations and can read everyone's. New sign-ups wait
+      here and see nothing until you approve them.</p>
+    ${ADMIN.error ? `<div class="warn">${esc(ADMIN.error)}</div>` : ''}
+    ${ADMIN.loading && !ADMIN.list ? '<div class="empty">Loading&hellip;</div>' : ''}
+    <h2 class="sec">Waiting for approval (${pending.length})</h2>
+    ${pendingRows || '<div class="hint">Nobody is waiting.</div>'}
+    <h2 class="sec">Mentors (${approved.length})</h2>
+    ${approvedRows || '<div class="hint">No approved mentors yet.</div>'}
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm" id="adminReload">Refresh</button>
+      <button class="btn sm ghost" id="backToSettings">Back to settings</button>
+    </div>`;
+    }
+
+    /* ============================================================
+       UPLOADING SAVED EVALUATIONS
+       ------------------------------------------------------------
+       Only saved evaluations travel; games and notes in progress stay on
+       the phone. Each HIST record remembers when, and for which account,
+       it was last uploaded (syncedAt / syncedBy). saveEval() replaces the
+       record, which clears both, so an edited evaluation goes up again.
+       The server matches on the record's own id, so repeats and restored
+       backups update in place instead of duplicating.
+       ============================================================ */
+    const SYNC = {running: null, error: '', retryTimer: null, backoff: 0, lastOk: store.get('sideline:lastSync') || 0};
+
+    function uploadConsent() {
+      const m = store.get('sideline:uploadConsent') || {};
+      return m[ACCT.id];
+    }
+    function setUploadConsent(v) {
+      const m = store.get('sideline:uploadConsent') || {};
+      m[ACCT.id] = v;
+      store.set('sideline:uploadConsent', m);
+    }
+    const needsUpload = (r) => !!(r.referee && r.referee.trim()) && (!r.syncedAt || r.syncedBy !== ACCT.id);
+    const pendingDeletes = () => (store.get('sideline:pendingDeletes') || []).filter(d => d && d.id && d.by);
+
+    function toPayload(r) {
+      const cut = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+      const out = {
+        client_id: r.id,
+        referee_name: cut(r.referee, 120),
+        mentor_name: cut(r.mentor, 80),
+        eval_date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? r.date : '',
+        field: cut(r.field, 80),
+        pitch: cut(r.sub, 8),
+        kickoff: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : '',
+        division: cut(r.division, 40),
+        position: r.position === 'AR' ? 'AR' : 'CR',
+        move_up: r.moveUp === 'Yes' || r.moveUp === 'No' ? r.moveUp : '',
+        comments: String(r.comments || '').slice(0, 20000),
+        notes: (r.notes || []).slice(0, 500).map(n => ({
+          cat: n.cat, pol: n.pol, text: String(n.text || '').slice(0, 500), at: n.at || 0
+        })),
+        saved_at: new Date(r.savedAt || Date.now()).toISOString()
+      };
+      // The rated category ids are the column names.
+      RATED.forEach(c => {
+        const v = r.ratings && r.ratings[c.id];
+        out[c.id] = [1, 2, 3, 4].includes(v) ? v : null;
+      });
+      return out;
+    }
+
+    /* A deleted record might already be on the server - or be on its way,
+       if an upload was in flight - so the delete is queued either way.
+       Deleting a row that does not exist is harmless. */
+    function queueRemoteDelete(rec) {
+      const by = rec.syncedBy || (isApproved() && uploadConsent() === true ? ACCT.id : '');
+      if (!by) return;
+      store.set('sideline:pendingDeletes', pendingDeletes().concat([{id: rec.id, by}]));
+    }
+
+    let offeredUpload = false;
+    function offerFirstUpload() {
+      if (offeredUpload || !isApproved() || uploadConsent() !== undefined) return;
+      const n = HIST.filter(needsUpload).length;
+      if (!n) {setUploadConsent(true); return;}
+      if (!$('#dlg').hidden) return;   // never stack on another question; asked again next time
+      offeredUpload = true;
+      askConfirm(`Upload ${plural(n, 'saved evaluation')} from this device? Every approved mentor will be able ` +
+        `to read ${n === 1 ? 'it' : 'them'}. New saves upload automatically; you can turn this off in Settings.`,
+        'Upload', () => {setUploadConsent(true); syncNow(); paintSync();},
+        {tone: 'primary', noLabel: 'Not now', onNo: () => {setUploadConsent(false); paintSync();}});
+    }
+
+    function syncNow() {
+      const c = sbc();
+      if (!c || !isApproved() || uploadConsent() !== true) return Promise.resolve();
+      if (SYNC.running) return SYNC.running;
+      clearTimeout(SYNC.retryTimer);
+      let resaved = false;
+      // Started on the next tick, never inline: with nothing to send, the body
+      // finishes without awaiting, and its `finally` (which clears
+      // SYNC.running) would then run BEFORE this assignment - leaving a
+      // finished promise parked in SYNC.running and every later sync skipped.
+      SYNC.running = Promise.resolve().then(async () => {
+        const me = ACCT.id;
+        try {
+          const mine = pendingDeletes().filter(d => d.by === me);
+          if (mine.length) {
+            const ids = mine.map(d => d.id);
+            const {error} = await c.from('evaluations').delete().eq('mentor_id', me).in('client_id', ids);
+            if (error) throw error;
+            store.set('sideline:pendingDeletes', pendingDeletes().filter(d => !(d.by === me && ids.includes(d.id))));
+          }
+          const todo = HIST.filter(needsUpload);
+          for (let i = 0; i < todo.length; i += 50) {
+            const batch = todo.slice(i, i + 50);
+            const sent = new Map(batch.map(r => [r.id, r.savedAt]));
+            const {data, error} = await c.rpc('save_evaluations', {p_items: batch.map(toPayload)});
+            if (error) throw error;
+            (data || []).forEach(row => {
+              const r = HIST.find(h => h.id === row.out_client_id);
+              if (!r) return;
+              // Saved again while this batch was on its way: the newer version goes next pass.
+              if (r.savedAt !== sent.get(r.id)) {resaved = true; return;}
+              r.syncedAt = Date.now(); r.syncedBy = me; r.serverRefereeId = row.out_referee_id;
+            });
+            histChanged(); save();
+          }
+          SYNC.error = ''; SYNC.backoff = 0;
+          SYNC.lastOk = Date.now(); store.set('sideline:lastSync', SYNC.lastOk);
+          if (todo.length || mine.length) pullLeague('force');
+        } catch (e) {
+          SYNC.error = friendly(e);
+          SYNC.backoff = Math.min((SYNC.backoff || 15000) * 2, 10 * 60000);
+          if (navigator.onLine) SYNC.retryTimer = setTimeout(syncNow, SYNC.backoff);
+        } finally {
+          SYNC.running = null;
+          if (resaved && !SYNC.error) setTimeout(syncNow, 500);
+          paintSync();
+        }
+      });
+      paintSync();
+      return SYNC.running;
+    }
+
+    function paintSync() {
+      paintAcctCard(false);
+      if (S.ui.tab === 'saved') renderQuietly();
+    }
+    function syncSummaryText() {
+      if (uploadConsent() !== true) return 'Uploading is off on this device.';
+      const waiting = HIST.filter(needsUpload).length;
+      if (SYNC.running) return 'Uploading…';
+      if (waiting) return `${plural(waiting, 'saved evaluation')} waiting to upload.${SYNC.error ? ' ' + SYNC.error : ''}`;
+      return 'All saved evaluations are uploaded.';
+    }
+    function syncStatusHTML() {
+      if (!ACCOUNTS_ON) return '';
+      const s = ACCT.status;
+      if (s === 'signedOut') {
+        return `<div class="okbox">Signed out: these stay on this device. Sign in to share them with other mentors.
+      <button class="btn sm" id="openAccount" style="margin-top:8px">Sign in</button></div>`;
+      }
+      if (s === 'pending') return '<div class="warn">Your account is waiting for approval. Saved evaluations upload once an admin approves it.</div>';
+      if (uploadConsent() !== true) {
+        return `<div class="warn">Uploading is off on this device, so other mentors cannot see these.
+      <button class="btn sm" id="uploadOn" style="margin-top:8px">Upload my saved evaluations</button></div>`;
+      }
+      const waiting = HIST.filter(needsUpload).length;
+      if (SYNC.running) return `<div class="okbox">Uploading ${plural(waiting, 'saved evaluation')}&hellip;</div>`;
+      if (waiting) {
+        return `<div class="warn">${plural(waiting, 'saved evaluation')} waiting to upload${navigator.onLine ? '' : ' (offline)'}.
+      ${SYNC.error ? esc(SYNC.error) : ''}
+      <button class="btn sm" id="syncRetry" style="margin-top:8px">Upload now</button></div>`;
+      }
+      return `<div class="okbox">&#9729;&#xFE0E; All saved evaluations are uploaded${SYNC.lastOk
+        ? ` (checked ${esc(sinceText(SYNC.lastOk))})` : ''}.</div>`;
+    }
+
+    /* "just now", "12 min ago", "at 9:41 AM", then ago()'s wording. */
+    function sinceText(ts) {
+      const mins = Math.floor((Date.now() - ts) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins} min ago`;
+      if (ago(ts) === 'today') return 'at ' + clockOf(ts);
+      return ago(ts);
+    }
+
+    /* ============================================================
+       LEAGUE CACHE
+       ------------------------------------------------------------
+       Every approved mentor's evaluations, kept on the device so profiles
+       work at the field with no signal. IndexedDB, not localStorage:
+       localStorage caps out around 5 MB, and a season of evaluations with
+       their notes can pass that. Pulls are incremental by updated_at, with
+       a five-minute overlap (a row written by a transaction that started
+       before our last pull can carry an earlier timestamp) and a full
+       refresh once a day. Deletions arrive as tombstones.
+       ============================================================ */
+    const idb = (() => {
+      let dbp = null, chain = Promise.resolve();
+      const mem = new Map();   // fallback when IndexedDB is blocked (private windows, some embeds)
+      function open() {
+        if (!dbp) {
+          dbp = new Promise((resolve) => {
+            try {
+              const req = indexedDB.open('sideline', 1);
+              req.onupgradeneeded = () => req.result.createObjectStore('kv');
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => resolve(null);
+              req.onblocked = () => resolve(null);
+            } catch (e) {resolve(null);}
+          });
+        }
+        return dbp;
+      }
+      // Operations run one at a time, in order, so a delete can never lose a
+      // race with a read that was issued after it.
+      function run(mode, fn) {
+        const job = chain.then(async () => {
+          const db = await open();
+          if (!db) return undefined;
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction('kv', mode);
+            const req = fn(tx.objectStore('kv'));
+            tx.oncomplete = () => resolve(req.result);
+            tx.onerror = tx.onabort = () => reject(tx.error);
+          });
+        });
+        chain = job.catch(() => { });
+        return job;
+      }
+      return {
+        get: (k) => run('readonly', s => s.get(k)).then(v => (v === undefined ? mem.get(k) : v), () => mem.get(k)),
+        set: (k, v) => {mem.set(k, v); return run('readwrite', s => s.put(v, k)).catch(() => { });},
+        del: (k) => {mem.delete(k); return run('readwrite', s => s.delete(k)).catch(() => { });}
+      };
+    })();
+
+    const leagueBlank = () => ({account: '', evals: new Map(), referees: new Map(), cursor: '', delCursor: '', pulledAt: 0, fullAt: 0});
+    let LEAGUE = leagueBlank();
+    let leagueLoaded = false, pulling = null, pullError = '';
+
+    async function loadLeagueCache() {
+      if (leagueLoaded) return;
+      leagueLoaded = true;
+      const v = await idb.get('league');
+      if (!v || v.account !== ACCT.id || !isApproved()) return;
+      LEAGUE = {
+        ...v,
+        evals: new Map((v.evals || []).map(r => [r.serverId, r])),
+        referees: new Map((v.referees || []).map(x => [x.id, x]))
+      };
+      invalidateProfiles();
+    }
+    function persistLeague() {
+      idb.set('league', {...LEAGUE, evals: [...LEAGUE.evals.values()], referees: [...LEAGUE.referees.values()]});
+    }
+    function clearLeague() {
+      LEAGUE = leagueBlank();
+      leagueLoaded = false; pullError = '';
+      invalidateProfiles();
+      idb.del('league');
+    }
+
+    const EVAL_COLS = 'id,mentor_id,client_id,referee_id,referee_name,mentor_name,eval_date,field,pitch,kickoff,' +
+      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at,updated_at';
+
+    /* PostgREST returns at most 1000 rows per request, so page through. */
+    async function pageAll(build) {
+      const out = [], size = 1000;
+      for (let from = 0; ; from += size) {
+        const {data, error} = await build().range(from, from + size - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < size) return out;
+      }
+    }
+
+    /* A server row, reshaped like a HIST record so one set of profile code
+       reads both. */
+    function fromRow(row) {
+      return {
+        id: row.client_id, serverId: row.id, mentorId: row.mentor_id, refereeId: row.referee_id,
+        savedAt: Date.parse(row.saved_at) || 0, updatedAt: row.updated_at,
+        mentor: row.mentor_name || '', date: row.eval_date || '', field: row.field || '', sub: row.pitch || '',
+        time: String(row.kickoff || '').slice(0, 5), division: row.division || '',
+        referee: row.referee_name || '', position: row.position,
+        ratings: Object.fromEntries(RATED.map(c => [c.id, row[c.id]])),
+        moveUp: row.move_up, comments: row.comments || '',
+        notes: Array.isArray(row.notes) ? row.notes : []
+      };
+    }
+
+    function pullLeague(mode) {
+      const c = sbc();
+      if (!c || !isApproved()) return Promise.resolve();
+      if (pulling) return pulling;
+      if (!mode && Date.now() - LEAGUE.pulledAt < 2 * 60000) return Promise.resolve();
+      // Next tick, for the same reason as syncNow().
+      pulling = Promise.resolve().then(async () => {
+        try {
+          await loadLeagueCache();
+          const me = ACCT.id;
+          const full = mode === 'full' || LEAGUE.account !== me || !LEAGUE.fullAt || Date.now() - LEAGUE.fullAt > 864e5;
+          const overlap = (iso) => new Date(Date.parse(iso) - 5 * 60000).toISOString();
+          const refs = await pageAll(() => c.from('referees').select('id,display_name,name_key,merged_into').order('id'));
+          const rows = await pageAll(() => {
+            let q = c.from('evaluations').select(EVAL_COLS).order('updated_at').order('id');
+            if (!full && LEAGUE.cursor) q = q.gt('updated_at', overlap(LEAGUE.cursor));
+            return q;
+          });
+          const dels = await pageAll(() => {
+            let q = c.from('evaluation_deletions').select('evaluation_id,deleted_at').order('deleted_at').order('evaluation_id');
+            if (!full && LEAGUE.delCursor) q = q.gt('deleted_at', overlap(LEAGUE.delCursor));
+            return q;
+          });
+          if (ACCT.id !== me || !isApproved()) return;   // signed out or demoted mid-pull
+
+          const evals = full ? new Map() : new Map(LEAGUE.evals);
+          rows.forEach(r => evals.set(r.id, fromRow(r)));
+          dels.forEach(d => evals.delete(d.evaluation_id));
+          const latest = (list, key, start) => list.reduce((m, x) => (x[key] > m ? x[key] : m), start || '');
+          LEAGUE = {
+            account: me, evals,
+            referees: new Map(refs.map(x => [x.id, x])),
+            cursor: latest(rows, 'updated_at', full ? '' : LEAGUE.cursor),
+            delCursor: latest(dels, 'deleted_at', full ? '' : LEAGUE.delCursor),
+            pulledAt: Date.now(),
+            fullAt: full ? Date.now() : LEAGUE.fullAt
+          };
+          leagueLoaded = true; pullError = '';
+          persistLeague(); invalidateProfiles();
+        } catch (e) {
+          pullError = friendly(e);
+        } finally {
+          pulling = null;
+          renderQuietly();
+          const a = document.activeElement;
+          const busyInSheet = a && $('#sheet').contains(a) && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName);
+          if (!$('#sheet').hidden && sheetMode === 'profile' && !busyInSheet) renderSheet();
+        }
+      });
+      return pulling;
+    }
+
+    /* ============================================================
+       REFEREE PROFILES
+       ------------------------------------------------------------
+       One profile per referee, built from the league cache plus this
+       device's own saved evaluations (which may not be uploaded yet).
+       Signed out, or with accounts off, it is this device's records only.
+       The app never scores anyone: every number here is an average of
+       ratings mentors gave, shown with the count behind it.
+       ============================================================ */
+    // Mirrors public.name_key() in supabase/schema.sql - keep the two in step.
+    function nameKey(n) {
+      let s = String(n || '');
+      const m = s.match(/^([^,]+),([^,]+)$/);
+      if (m) s = m[2].trim() + ' ' + m[1].trim();
+      return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+    /* "Ref, Alice" / "alice  REF" -> "Alice Ref". Words already in mixed case
+       ("McDonald") are left alone. */
+    function tidyName(s) {
+      let t = String(s || '').trim().replace(/\s+/g, ' ');
+      const m = t.match(/^([^,]+),([^,]+)$/);
+      if (m) t = m[2].trim() + ' ' + m[1].trim();
+      return t.split(' ').map(w => (w.length > 1 && (w === w.toLowerCase() || w === w.toUpperCase()))
+        ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
+    }
+    const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
+    const fmtAvg = (v) => (v == null ? '–' : v.toFixed(1));
+    function evalAvg(r) {return mean(RATED.map(c => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number'));}
+
+    let profileCache = null;
+    function invalidateProfiles() {profileCache = null;}
+    const histChanged = invalidateProfiles;
+
+    function canonicalRef(id) {
+      let cur = id;
+      for (let hops = 0; cur && hops < 10; hops++) {
+        const x = LEAGUE.referees.get(cur);
+        if (!x || !x.merged_into) break;
+        cur = x.merged_into;
+      }
+      return cur;
+    }
+
+    function profileIndex() {
+      if (profileCache) return profileCache;
+      const keyToRef = new Map();   // name_key -> surviving referee id
+      LEAGUE.referees.forEach(x => keyToRef.set(x.name_key, canonicalRef(x.id)));
+
+      // One record per (mentor, evaluation). A local copy that is newer than
+      // the league's (edited, not re-uploaded yet) wins.
+      const recs = new Map();
+      const put = (k, r) => {const cur = recs.get(k); if (!cur || (r.savedAt || 0) >= (cur.savedAt || 0)) recs.set(k, r);};
+      LEAGUE.evals.forEach(r => put(`${r.mentorId || 'x' + r.serverId}|${r.id}`, r));
+      const me = isApproved() ? ACCT.id : 'local';
+      HIST.forEach(h => {
+        if (!h.referee || !h.referee.trim()) return;
+        const owner = h.syncedBy || me;
+        put(`${owner}|${h.id}`, {...h, mentorId: owner, refereeId: h.serverRefereeId || '', local: true});
+      });
+
+      const groups = new Map();
+      recs.forEach(r => {
+        const refId = r.refereeId && LEAGUE.referees.has(r.refereeId) ? canonicalRef(r.refereeId) : keyToRef.get(nameKey(r.referee));
+        const key = refId ? 'r:' + refId : 'k:' + nameKey(r.referee);
+        if (!groups.has(key)) groups.set(key, {key, refereeId: refId || '', records: []});
+        groups.get(key).records.push(r);
+      });
+
+      // Display name: the most common spelling; on a tie, the tidiest (no
+      // "Last, First", capitalised words), then the fullest.
+      const tidy = (s) => (s.includes(',') ? 0 : 2) + (/^(\p{Lu}[\p{Ll}'’.-]*\s?)+$/u.test(s) ? 1 : 0);
+      const nameIdx = new Map();
+      groups.forEach(g => {
+        const counts = new Map();
+        g.records.forEach(r => {
+          const nm = r.referee.trim().replace(/\s+/g, ' ');
+          counts.set(nm, (counts.get(nm) || 0) + 1);
+          nameIdx.set(nameKey(nm), g.key);
+        });
+        const best = [...counts.entries()]
+          .sort((a, b) => b[1] - a[1] || tidy(b[0]) - tidy(a[0]) || b[0].length - a[0].length || a[0].localeCompare(b[0]))[0][0];
+        g.name = tidy(best) === 3 ? best : tidyName(best);
+        g.profile = buildProfile(g.records);
+      });
+      keyToRef.forEach((id, k) => {if (groups.has('r:' + id)) nameIdx.set(k, 'r:' + id);});
+      profileCache = {groups, nameIdx};
+      return profileCache;
+    }
+    function profileFor(name) {
+      const k = nameKey(name);
+      if (!k) return null;
+      const idx = profileIndex();
+      const key = idx.nameIdx.get(k);
+      return key ? idx.groups.get(key) : null;
+    }
+
+    function buildProfile(records) {
+      const evals = records.slice().sort((a, b) =>
+        (b.date || '').localeCompare(a.date || '') || (b.savedAt || 0) - (a.savedAt || 0));
+      const cats = RATED.map(c => {
+        const vals = evals.map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
+        // Trend compares the three most recent ratings with everything before.
+        let trend = null;
+        if (vals.length >= 4) {
+          const d = mean(vals.slice(0, 3)) - mean(vals.slice(3));
+          trend = d >= 0.35 ? 'up' : d <= -0.35 ? 'down' : 'flat';
+        }
+        return {id: c.id, short: c.short, label: c.label, avg: mean(vals), n: vals.length, trend};
+      });
+      const avgs = evals.map(evalAvg).filter(v => v != null);   // newest first
+
+      // Notes counted once per evaluation, so one game's three late flags
+      // cannot outweigh a pattern across games.
+      const tally = (pol) => {
+        const m = new Map();
+        evals.forEach(r => {
+          const seen = new Set();
+          (r.notes || []).forEach(n => {
+            if (n.pol !== pol || !n.text) return;
+            const k = String(n.text).trim().toLowerCase();
+            if (seen.has(k)) return;
+            seen.add(k);
+            const cur = m.get(k) || {text: String(n.text).trim(), cat: n.cat, evals: 0, last: r.date || ''};
+            cur.evals++;
+            m.set(k, cur);
+          });
+        });
+        return [...m.values()].sort((a, b) => b.evals - a.evals || b.last.localeCompare(a.last));
+      };
+      const latest = evals[0];
+      const fixedLatest = new Set(((latest && latest.notes) || []).filter(n => n.pol === 2)
+        .map(n => String(n.text).trim().toLowerCase()));
+      const lastWork = [];
+      ((latest && latest.notes) || []).forEach(n => {
+        const k = String(n.text || '').trim().toLowerCase();
+        if (n.pol === -1 && k && !fixedLatest.has(k) && !lastWork.some(x => x.k === k)) lastWork.push({k, text: String(n.text).trim()});
+      });
+
+      return {
+        evals, count: evals.length,
+        mentors: new Set(evals.map(r => r.mentorId || r.mentor || '?')).size,
+        lastSeen: latest ? latest.date : '',
+        cats,
+        overall: mean(avgs), recentAvg: mean(avgs.slice(0, 3)), rated: avgs.length,
+        moveUp: {yes: evals.filter(r => r.moveUp === 'Yes').length, no: evals.filter(r => r.moveUp === 'No').length},
+        watch: tally(-1).filter(w => w.evals >= 2),
+        lowCats: cats.filter(c => c.avg != null && c.avg <= 2),
+        lastWork,
+        improved: tally(2),
+        strengths: tally(1).filter(g => g.evals >= 2)
+      };
+    }
+
+    /* The one-line "what to look for" summary used on rows and banners. */
+    function topConcern(p) {
+      if (p.watch.length) return p.watch[0].text;
+      if (p.lowCats.length) return `${p.lowCats[0].short} averages ${fmtAvg(p.lowCats[0].avg)}`;
+      if (p.lastWork.length) return p.lastWork[0].text;
+      return '';
+    }
+
+    /* Shown on Observe and Score: what earlier evaluations said about the
+       referee you are watching now, excluding this game's own saved copy. */
+    function pastEvaluations(ref) {
+      if (!ref.name.trim()) return null;
+      const g = profileFor(ref.name);
+      if (!g) return null;
+      const own = savedRecordFor(ref);
+      const past = g.profile.evals.filter(r => !(own && r.local && r.id === own.id) && !(r.local && r.refId === ref.id));
+      return past.length ? {g, past} : null;
+    }
+    function historyLine(ref) {
+      const h = pastEvaluations(ref);
+      if (!h) return '';
+      const {g, past} = h;
+      const p = buildProfile(past);
+      const last = past[0];
+      const watch = [];
+      p.watch.concat(p.lastWork).forEach(w => {if (watch.length < 2 && !watch.includes(w.text)) watch.push(w.text);});
+      const avg = evalAvg(last);
+      return `<div class="histline">
+      <div><b>Last watched ${esc(prettyDate(last.date) || 'earlier')}</b>${last.mentor ? ' by ' + esc(last.mentor) : ''}${avg != null
+          ? ` &middot; avg ${fmtAvg(avg)}` : ''}${past.length > 1 ? ` &middot; ${plural(past.length, 'evaluation')}` : ''}</div>
+      <div class="muted">${watch.length ? 'Watch for: ' + esc(watch.join('; ')) : 'No recurring concerns noted.'}</div>
+      <button class="minibtn" data-profile="${esc(g.key)}">Profile</button>
+    </div>`;
+    }
+
+    /* ---------- Refs tab ---------- */
+    const REFS_UI = {q: '', sort: 'support'};
+    function scopeText() {
+      if (!ACCOUNTS_ON) return 'Built from the evaluations saved on this device.';
+      if (ACCT.status === 'signedOut') return 'This device only. Sign in to include other mentors’ evaluations.';
+      if (ACCT.status === 'pending') return 'This device only until your account is approved.';
+      return `Every approved mentor’s saved evaluations${LEAGUE.pulledAt ? ', updated ' + sinceText(LEAGUE.pulledAt) : ''}.`;
+    }
+    function renderRefs() {
+      const sorts = [['support', 'Support first'], ['recent', 'Recent'], ['name', 'A–Z']];
+      $('#refsBody').innerHTML = `
+    <h2 class="sec">Referees</h2>
+    <p class="hint">${esc(scopeText())}</p>
+    ${pullError && isApproved() ? `<div class="warn">Could not refresh: ${esc(pullError)}</div>` : ''}
+    <div class="row" style="margin-bottom:8px">
+      ${ACCOUNTS_ON && ACCT.status === 'signedOut' ? '<button class="btn sm" id="openAccount">Sign in</button>' : ''}
+      ${isApproved() ? `<button class="btn sm" id="refsRefresh" ${pulling ? 'disabled' : ''}>${pulling ? 'Refreshing&hellip;' : 'Refresh'}</button>` : ''}
+    </div>
+    <input type="search" id="refSearch" placeholder="Search by name" aria-label="Search referees"
+      value="${esc(REFS_UI.q)}" autocomplete="off" />
+    <div class="seg" style="margin:8px 0" role="group" aria-label="Sort referees">
+      ${sorts.map(([k, l]) => `<button data-refsort="${k}" aria-pressed="${REFS_UI.sort === k}">${l}</button>`).join('')}
+    </div>
+    <div id="refsList">${refsListHTML()}</div>
+    <p class="hint" style="margin-top:12px">"Support first" lists the lowest recent averages first (each
+      referee's last three evaluations). Averages mix mentors and divisions, so read them next to the counts.</p>`;
+    }
+    function refsListHTML() {
+      const q = nameKey(REFS_UI.q);
+      let list = [...profileIndex().groups.values()];
+      if (q) list = list.filter(g => g.records.some(r => nameKey(r.referee).includes(q)));
+      const byName = (a, b) => a.name.localeCompare(b.name);
+      if (REFS_UI.sort === 'name') list.sort(byName);
+      else if (REFS_UI.sort === 'recent') list.sort((a, b) => (b.profile.lastSeen || '').localeCompare(a.profile.lastSeen || '') || byName(a, b));
+      else {
+        list.sort((a, b) => {
+          const x = a.profile.recentAvg, y = b.profile.recentAvg;
+          if (x == null || y == null) return (x == null) - (y == null) || byName(a, b);
+          return x - y || b.profile.count - a.profile.count || byName(a, b);
+        });
+      }
+      if (!list.length) {
+        return `<div class="empty">${q ? 'No referee matches that name.'
+          : 'No saved evaluations yet. Profiles build from evaluations saved on the Score tab.'}</div>`;
+      }
+      return list.map(g => {
+        const p = g.profile, concern = topConcern(p);
+        const low = p.recentAvg != null && p.recentAvg <= 2;
+        return `<button class="refrow" data-profile="${esc(g.key)}">
+      <div class="rr1"><b>${esc(g.name)}</b>
+        <span class="pill${low ? ' low' : ''}">${p.recentAvg == null ? 'no ratings' : 'recent avg ' + fmtAvg(p.recentAvg)}</span></div>
+      <div class="rr2">${plural(p.count, 'evaluation')} &middot; ${plural(p.mentors, 'mentor')} &middot; last ${esc(prettyDate(p.lastSeen) || '–')}</div>
+      ${concern ? `<div class="rr3">Watch for: ${esc(concern)}</div>` : ''}
+    </button>`;
+      }).join('');
+    }
+
+    /* ---------- profile sheet ---------- */
+    let profileKey = '';
+    function openProfile(key) {profileKey = key; openSheet('profile');}
+    function currentProfile() {return profileIndex().groups.get(profileKey) || null;}
+
+    function renderProfile() {
+      const g = currentProfile();
+      if (!g) {
+        $('#sheetBody').innerHTML = '<div class="empty">There are no evaluations for this referee any more.</div>';
+        return;
+      }
+      const p = g.profile;
+      const catShort = (id) => {const c = CATS.find(x => x.id === id); return c ? c.short : '';};
+      const trendMark = (t) => t === 'up' ? ' <span title="Better in the last three evaluations" style="color:var(--plus)">&uarr;</span>'
+        : t === 'down' ? ' <span title="Worse in the last three evaluations" style="color:var(--minus)">&darr;</span>' : '';
+      const cats = p.cats.map(c => `<div class="catrow">
+      <span>${esc(c.short)}</span>
+      <span class="bar" aria-hidden="true"><i class="${c.avg != null && c.avg <= 2 ? 'low' : ''}" style="width:${c.avg == null ? 0 : (c.avg / 4) * 100}%"></i></span>
+      <span class="cv">${fmtAvg(c.avg)}<small> (${c.n})</small>${trendMark(c.trend)}</span>
+    </div>`).join('');
+
+      const list = (items) => `<ul class="plist">${items.join('')}</ul>`;
+      const watchItems = p.watch.map(w => `<li>${esc(w.text)} <span class="muted">&mdash; in ${w.evals} evaluations${w.cat ? ', ' + esc(catShort(w.cat)) : ''}</span></li>`)
+        .concat(p.lowCats.map(c => `<li>${esc(c.label)} <span class="muted">&mdash; averages ${fmtAvg(c.avg)} over ${plural(c.n, 'rating')}</span></li>`));
+      const sections = [];
+      if (watchItems.length) sections.push(`<div class="card"><div class="rlabel">Watch for</div>${list(watchItems)}</div>`);
+      if (p.lastWork.length) {
+        sections.push(`<div class="card"><div class="rlabel">Still to work on after the last evaluation</div>
+        ${list(p.lastWork.map(n => `<li>${esc(n.text)}</li>`))}</div>`);
+      }
+      if (p.improved.length) {
+        sections.push(`<div class="card"><div class="rlabel">Fixed after being told</div>
+        ${list(p.improved.slice(0, 8).map(n => `<li>${esc(n.text)}${n.evals > 1 ? ` <span class="muted">&mdash; ${n.evals} times</span>` : ''}</li>`))}</div>`);
+      }
+      if (p.strengths.length) {
+        sections.push(`<div class="card"><div class="rlabel">Consistent strengths</div>
+        ${list(p.strengths.slice(0, 6).map(n => `<li>${esc(n.text)} <span class="muted">&mdash; in ${n.evals} evaluations</span></li>`))}</div>`);
+      }
+
+      const evals = p.evals.map(r => {
+        const avg = evalAvg(r);
+        const scores = RATED.map(c => `<span class="pill">${esc(c.short)} ${esc(r.ratings && r.ratings[c.id] != null ? r.ratings[c.id] : '-')}</span>`).join('');
+        const notes = (r.notes || []).map(n => `<li><b style="color:${n.pol === 1 ? 'var(--plus)' : n.pol === -1 ? 'var(--minus)' : 'var(--primary)'}">${POL[n.pol] ? POL[n.pol].mark : '·'}</b> ${esc(n.text)}</li>`);
+        return `<details class="evald">
+      <summary><b>${esc(prettyDate(r.date) || 'No date')}</b> &middot; ${esc(shortField(r.field))}${r.sub ? ' ' + esc(r.sub) : ''}
+        &middot; ${esc(r.division || 'no division')} &middot; ${esc(r.position || '')}${avg != null ? ` &middot; avg ${fmtAvg(avg)}` : ''}
+        <span class="muted">&middot; ${esc(r.mentor || 'unknown mentor')}${r.local && needsUpload(r) && isApproved() ? ' &middot; not uploaded' : ''}</span></summary>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0">${scores}<span class="pill">Move up: ${esc(r.moveUp || '-')}</span></div>
+      ${notes.length ? list(notes) : ''}
+      ${r.comments ? `<pre>${esc(r.comments)}</pre>` : ''}
+    </details>`;
+      }).join('');
+
+      let admin = '';
+      if (isAdmin() && g.refereeId) {
+        const others = [...LEAGUE.referees.values()]
+          .filter(x => !x.merged_into && x.id !== g.refereeId)
+          .sort((a, b) => a.display_name.localeCompare(b.display_name));
+        admin = `<h2 class="sec">Admin</h2>
+    <div class="card">
+      <label class="f" style="margin-top:0"><span>Another spelling of this referee</span>
+        <select id="mergeFrom"><option value="">Choose a referee to merge in</option>
+          ${others.map(x => `<option value="${esc(x.id)}">${esc(x.display_name)}</option>`).join('')}</select></label>
+      <button class="btn sm" id="doMerge" style="margin-top:8px">Merge into ${esc(g.name)}</button>
+      <div class="divider"></div>
+      <button class="btn sm danger" id="deleteRefRecords">Delete all uploaded records</button>
+      <p class="hint" style="margin-bottom:0">For deletion requests: removes every uploaded evaluation of this referee,
+        from every mentor. Copies saved on mentors' own devices are not touched.</p>
+    </div>`;
+      }
+
+      $('#sheetBody').innerHTML = `
+    <p class="hint" style="margin-top:0">${plural(p.count, 'evaluation')} &middot; ${plural(p.mentors, 'mentor')}
+      &middot; last seen ${esc(prettyDate(p.lastSeen) || '–')}<br>${esc(scopeText())}</p>
+    <div class="card">
+      <div class="profhead">
+        <div><div class="bigavg">${fmtAvg(p.overall)}</div>
+          <div class="hint" style="margin:4px 0 0">average rating across ${plural(p.rated, 'evaluation')}${p.rated > 3
+            ? `; last three ${fmtAvg(p.recentAvg)}` : ''}</div></div>
+        <div class="hint" style="text-align:right;margin:0;white-space:nowrap;flex:none">Move up<br><b>${p.moveUp.yes}</b> yes &middot; <b>${p.moveUp.no}</b> no</div>
+      </div>
+      ${cats}
+      <div class="hint" style="margin:6px 0 0">(n) is how many ratings each average rests on.
+        &uarr;&darr; compare the last three with earlier ones.</div>
+    </div>
+    ${sections.join('')}
+    <h2 class="sec">Evaluations</h2>
+    ${evals}
+    ${admin}`;
+    }
+
+    function mergeIntoProfile() {
+      const g = currentProfile(), sel = $('#mergeFrom');
+      if (!g || !g.refereeId || !sel || !sel.value) {flash('Choose a referee to merge in'); return;}
+      const fromId = sel.value, into = g.refereeId;
+      const from = LEAGUE.referees.get(fromId);
+      askConfirm(`Merge "${from ? from.display_name : 'that referee'}" into "${g.name}"? Their evaluations become ` +
+        'one profile, and later saves under that spelling land here too.', 'Merge', async () => {
+          try {
+            const {error} = await sbc().rpc('merge_referees', {p_from: fromId, p_into: into});
+            if (error) throw error;
+            await pullLeague('full');
+            profileKey = 'r:' + into;
+            renderSheet();
+            flash('Merged');
+          } catch (e) {
+            flash(friendly(e));
+          }
+        }, {tone: 'primary'});
+    }
+    function deleteProfileRecords() {
+      const g = currentProfile();
+      if (!g || !g.refereeId) return;
+      const id = g.refereeId, name = g.name;
+      askConfirm(`Delete every uploaded evaluation of ${name}, from every mentor? This cannot be undone.`,
+        'Delete all', async () => {
+          try {
+            const {data, error} = await sbc().rpc('delete_referee_records', {p_referee: id});
+            if (error) throw error;
+            await pullLeague('full');
+            flash(`${plural(Number(data) || 0, 'evaluation')} deleted`);
+            renderSheet();
+          } catch (e) {
+            flash(friendly(e));
+          }
+        });
+    }
+
     function renderSaved() {
       const last = store.get('sideline:lastBackup') || 0;
       const unbacked = HIST.filter(r => (r.savedAt || 0) > last).length;
+      const sharing = isApproved() && uploadConsent() === true;
       const items = HIST.map(r => {
         // Labelled scores. The old "3 2 4 - 1 2" string needed the form open
         // beside it to know which number was which.
         const scores = RATED.map(c => `<span class="pill">${esc(c.short)} ${esc(r.ratings[c.id] ?? '-')}</span>`).join('');
+        const cloud = !sharing ? '' : needsUpload(r) ? '<span class="pill low">not uploaded</span>'
+          : '<span class="pill">&#9729;&#xFE0E; uploaded</span>';
         return `<div class="saved">
       <div class="sh">
         <b>${esc(r.referee)}</b><span class="pill">${esc(r.position)}</span>
         <div class="spacer"></div>
+        ${cloud}
         <span class="pill">Move up: ${esc(r.moveUp || '-')}</span>
       </div>
       <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
@@ -2733,6 +3985,9 @@
       }).join('');
 
       $('#savedBody').innerHTML = `
+    <p class="hint">${sharing ? 'Kept on this device and uploaded for other approved mentors.'
+          : 'Kept on this device only. Make a backup (bottom of this page) so a lost or reset phone does not take them with it.'}</p>
+    ${syncStatusHTML()}
     ${unbacked ? `<div class="warn">${unbacked} saved evaluation${unbacked === 1 ? ' is' : 's are'} not in a backup yet.
       <button class="btn sm primary" id="backupFile" style="margin-top:8px">Save a backup now</button></div>` : ''}
     ${HIST.length ? items + `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`
@@ -2764,9 +4019,13 @@
 
     function renderSheet() {
       $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
-        : sheetMode === 'games' ? 'Choose a game' : 'Settings';
+        : sheetMode === 'games' ? 'Choose a game'
+          : sheetMode === 'admin' ? 'Manage mentors'
+            : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
       if (sheetMode === 'import') return renderImport();
       if (sheetMode === 'games') return renderPicker();
+      if (sheetMode === 'admin') return renderAdmin();
+      if (sheetMode === 'profile') return renderProfile();
 
       /* Settings used to print a full editor card for every game, so a nine-game
          Saturday was a wall of near-identical forms you had to scroll through.
@@ -2838,6 +4097,8 @@
       <div class="hint" style="margin:8px 0 0">Sunlight is far easier to read outdoors. The &#9728;&#xFE0E; button
         in the header switches in one tap.</div>
     </div>
+
+    ${ACCOUNTS_ON ? `<div class="card" id="acctCard">${accountCardInner()}</div>` : ''}
 
     <h2 class="sec">Games (${S.fields.length})</h2>
     <p class="hint">Tap a game to edit it, or &times; to delete it.</p>
@@ -3012,7 +4273,7 @@
        ============================================================ */
     function setTab(t) {
       S.ui.tab = t; save();
-      ['fields', 'observe', 'score', 'saved'].forEach(name => {
+      ['fields', 'observe', 'score', 'refs', 'saved'].forEach(name => {
         $('#tab-' + name).hidden = name !== t;
         const b = document.querySelector(`nav button[data-tab="${name}"]`);
         // aria-current, not aria-selected: these are plain buttons, not role="tab".
@@ -3026,6 +4287,7 @@
       if (S.ui.tab === 'fields') renderFields();
       if (S.ui.tab === 'observe') {renderMinimap(); renderObserve();}
       if (S.ui.tab === 'score') renderScore();
+      if (S.ui.tab === 'refs') renderRefs();
       if (S.ui.tab === 'saved') renderSaved();
     }
     /* window.confirm() is why "Start a new session" and the remove buttons did
@@ -3034,11 +4296,19 @@
        false instantly and every guarded action was skipped. It worked in the
        browser and silently failed in the APK. This replaces it with real DOM,
        which behaves the same everywhere and can be styled and tested. */
-    let dlgAction = null, dlgReturnFocus = null;
-    function askConfirm(message, label, onYes) {
+    /* opts: {tone: 'primary'} for a non-destructive yes (default is the red
+       danger style), {noLabel} to rename Cancel, {onNo} to run on Cancel,
+       Escape or a backdrop tap. */
+    let dlgAction = null, dlgNoAction = null, dlgReturnFocus = null;
+    function askConfirm(message, label, onYes, opts) {
+      const o = opts || {};
       $('#dlgMsg').textContent = message;
-      $('#dlgYes').textContent = label;
+      const yes = $('#dlgYes');
+      yes.textContent = label;
+      yes.className = 'btn sm ' + (o.tone === 'primary' ? 'primary' : 'danger');
+      $('#dlgNo').textContent = o.noLabel || 'Cancel';
       dlgAction = onYes;
+      dlgNoAction = o.onNo || null;
       dlgReturnFocus = document.activeElement;
       $('#dlg').hidden = false;
       // Focus lands on Cancel, so the choice a stray Enter hits is the safe one.
@@ -3046,10 +4316,12 @@
     }
     function closeDlg(run) {
       $('#dlg').hidden = true;
-      const fn = dlgAction; dlgAction = null;
+      const fn = run ? dlgAction : dlgNoAction;
+      dlgAction = dlgNoAction = null;
       const back = dlgReturnFocus; dlgReturnFocus = null;
-      if (run && fn) fn();
-      if (back && back.isConnected && back.focus) back.focus({preventScroll: true});
+      if (fn) fn();
+      // If the action opened another question, focus belongs to that one.
+      if ($('#dlg').hidden && back && back.isConnected && back.focus) back.focus({preventScroll: true});
     }
 
     /* flash(msg) for a plain notice; flash(msg, {label, run}) adds a button,
@@ -3688,9 +4960,43 @@
       }
       const dropSaved = hit('data-dropsaved');
       if (dropSaved) {
-        askConfirm('Delete this saved evaluation? It is gone for good.', 'Delete', () => {
-          HIST = HIST.filter(x => x.id !== dropSaved); save(); renderSaved();
-        });
+        const rec = HIST.find(x => x.id === dropSaved); if (!rec) return;
+        const shared = !!rec.syncedAt || (isApproved() && uploadConsent() === true);
+        askConfirm(`Delete this saved evaluation? It is gone for good${shared
+          ? ', from this device and from the shared league records' : ''}.`, 'Delete', () => {
+            HIST = HIST.filter(x => x.id !== dropSaved);
+            queueRemoteDelete(rec);
+            histChanged(); save(); renderSaved(); syncNow();
+          });
+        return;
+      }
+
+      const prof = hit('data-profile'); if (prof) {openProfile(prof); return;}
+      const refSort = hit('data-refsort'); if (refSort) {REFS_UI.sort = refSort; renderRefs(); return;}
+      const approve = hit('data-approve');
+      if (approve) {adminCall('set_mentor_role', {p_mentor: approve, p_role: 'mentor'}, 'Approved'); return;}
+      const reject = hit('data-reject');
+      if (reject) {
+        askConfirm('Reject this sign-up and delete the account? They can ask again later.', 'Reject',
+          () => adminCall('remove_mentor', {p_mentor: reject}, 'Sign-up removed'));
+        return;
+      }
+      const roleSet = hit('data-role-set');
+      if (roleSet) {
+        const [mid, role] = roleSet.split('|');
+        const go = () => adminCall('set_mentor_role', {p_mentor: mid, p_role: role},
+          role === 'admin' ? 'Now an admin' : 'Now a mentor');
+        if (role === 'admin') {
+          askConfirm('Make this mentor an admin? Admins can approve and remove mentors, merge referees and ' +
+            'delete records.', 'Make admin', go, {tone: 'primary'});
+        } else go();
+        return;
+      }
+      const revoke = hit('data-revoke');
+      if (revoke) {
+        askConfirm('Revoke access? They can no longer upload or read shared evaluations until approved again. ' +
+          'Evaluations they already uploaded stay.', 'Revoke',
+          () => adminCall('set_mentor_role', {p_mentor: revoke, p_role: 'pending'}, 'Access revoked'));
         return;
       }
 
@@ -3724,6 +5030,28 @@
         case 'backupCopy': copyText(backupText(), 'Backup').then(ok => {if (ok) markBackedUp();}); return;
         case 'restoreFile': $('#restoreInput').click(); return;
         case 'restorePaste': restoreBackup($('#restoreText').value); return;
+        case 'openAccount':
+          openSheet('settings');
+          requestAnimationFrame(() => {const c = $('#acctCard'); if (c) c.scrollIntoView({block: 'start'});});
+          return;
+        case 'acctSend': case 'acctResend': sendCode(); return;
+        case 'acctVerify': verifyCode(); return;
+        case 'acctBack': Object.assign(acctUI, {step: 'email', code: '', error: '', notice: ''}); paintAcctCard(true); return;
+        case 'acctCheck':
+          refreshMentor().then(() => flash(isApproved() ? 'Approved'
+            : acctUI.offline ? 'No connection' : 'Still waiting for approval'));
+          return;
+        case 'acctSignOut': signOut(); return;
+        case 'openAdmin': sheetMode = 'admin'; renderSheet(); loadMentors(); $('#sheet').scrollTop = 0; return;
+        case 'adminReload': loadMentors(); return;
+        case 'uploadOn': setUploadConsent(true); syncNow(); renderSaved(); return;
+        case 'syncRetry': SYNC.backoff = 0; syncNow(); return;
+        case 'refsRefresh':
+          pullLeague('force').then(() => flash(pullError || 'Profiles updated'));
+          renderRefs();
+          return;
+        case 'doMerge': mergeIntoProfile(); return;
+        case 'deleteRefRecords': deleteProfileRecords(); return;
         case 'doFetch': {
           const id = $('#shId').value, gid = $('#shGid').value;
           if (!id.trim()) {flash('Paste the link or ID first'); return;}
@@ -3822,6 +5150,9 @@
       if (t.id === 'noteText') {S.ui.draftText = t.value; save(); return;}
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
       if (t.hasAttribute && t.hasAttribute('data-mentor')) {S.mentor = t.value; save(); return;}
+      if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
+      if (t.id === 'acctCode') {acctUI.code = t.value; return;}
+      if (t.id === 'refSearch') {REFS_UI.q = t.value; $('#refsList').innerHTML = refsListHTML(); return;}
       if (t.id === 'comments') {
         const p = activePair(); if (!p) return;
         p.ref.comments = t.value; p.ref.commentsEdited = true; save();
@@ -3871,6 +5202,13 @@
         addFieldEntry(name, '', 3);
         save(); renderSheet(); flash(name + ' added'); return;
       }
+      if (t.id === 'acctUpload') {
+        setUploadConsent(t.checked);
+        if (t.checked) syncNow();
+        paintAcctCard(true);
+        if (S.ui.tab === 'saved') renderSaved();
+        return;
+      }
       if (t.id === 'restoreInput') {
         const file = t.files && t.files[0];
         t.value = '';   // so choosing the same file again still fires change
@@ -3895,6 +5233,8 @@
       if (e.key === 'Enter' && e.target.id === 'noteText') {
         e.preventDefault(); addNote(S.ui.cat, S.ui.pol, e.target.value);
       }
+      if (e.key === 'Enter' && e.target.id === 'acctEmail' && !acctUI.busy) {e.preventDefault(); sendCode();}
+      if (e.key === 'Enter' && e.target.id === 'acctCode' && !acctUI.busy) {e.preventDefault(); verifyCode();}
       // SVG markers are not buttons, so give them keyboard equivalence. Only the
       // <g> markers: real buttons with data-pick already click on Enter/Space,
       // and matching them here ran every keyboard selection twice.
@@ -3911,6 +5251,15 @@
     setTab(S.ui.tab || 'fields');
     // Settings no longer pops open on every launch that lacks a named game; the
     // Fields tab has its own first-run card for your name and the import.
+
+    // Accounts start after the first paint and never block it.
+    paintAccount();
+    initAccounts();
+    window.addEventListener('online', () => {initAccounts().then(refreshMentor); paintSync();});
+    window.addEventListener('offline', paintSync);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isApproved()) {syncNow(); pullLeague();}
+    });
 
     /* The service worker earns its keep on GitHub Pages. Inside the Android
        shell the assets are already on the device, so registering it would
