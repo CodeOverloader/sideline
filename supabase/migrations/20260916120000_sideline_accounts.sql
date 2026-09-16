@@ -1,12 +1,14 @@
 -- ============================================================
 -- Sideline: shared database for mentor accounts + referee profiles
 -- ------------------------------------------------------------
--- Run this once in the Supabase SQL editor (Dashboard > SQL).
--- It is safe to re-run: every object is created with IF NOT EXISTS
--- or CREATE OR REPLACE, and policies are dropped before re-creation.
+-- Applied by the Supabase GitHub integration when this reaches `main`
+-- (with "Deploy to production" switched on), or paste it into the SQL
+-- editor by hand. Either way it is safe to run more than once: every
+-- object is created with IF NOT EXISTS or CREATE OR REPLACE, and
+-- policies are dropped before re-creation.
 --
 -- The security model in one paragraph: the browser app talks to the
--- database directly with the public "anon" key, so the rules below
+-- database directly with the public "publishable" key, so the rules below
 -- ARE the security. Every table has Row Level Security on. Nobody can
 -- read anything until an admin approves them. Approved mentors can
 -- read every evaluation (that is the point of shared profiles) but can

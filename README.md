@@ -11,7 +11,7 @@ Everything needed to take notes works offline and without an account. Mentor acc
 | `index.html` | The whole app: markup, styles and script in one file. |
 | `sw.js` | Service worker that keeps the app working with no signal. |
 | `manifest.json`, `icon.svg` | Install-to-home-screen metadata. |
-| `supabase/schema.sql` | Database tables, access rules and functions for accounts. |
+| `supabase/migrations/` | Database tables, access rules and functions for accounts. |
 | `supabase/tests.sql` | Checks that the access rules refuse what they should. |
 
 ## Running it locally
@@ -22,7 +22,7 @@ Any static file server works. Open the app over `http://localhost`, not `file://
 python -m http.server 8765
 ```
 
-With `SUPABASE_URL` and `SUPABASE_ANON_KEY` left empty in `index.html`, the app runs exactly as it always has, with no account features.
+With `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` left empty in `index.html`, the app runs exactly as it always has, with no account features.
 
 ## Setting up mentor accounts (Supabase)
 
@@ -44,13 +44,16 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
 4. **Set the site URL.** Under **Authentication → URL Configuration**, set it to `https://codeoverloader.github.io/sideline/`.
 
-5. **Create the database.** Open **SQL Editor**, paste all of `supabase/schema.sql`, and run it. It is safe to run again after future updates.
+5. **Create the database.** Either way below works, and running both is harmless:
+   - **Through GitHub (recommended once the repo is linked).** Under **Project Settings → Integrations → GitHub**, check that the Supabase directory points at the folder containing `supabase/`, and switch on **Deploy to production** for `main`. From then on, every file in `supabase/migrations/` is applied when it is merged into `main`. Future schema changes arrive the same way, as new migration files.
+   - **By hand.** Open **SQL Editor**, paste the file from `supabase/migrations/`, and run it.
 
 6. **Check the access rules.** In a new SQL Editor tab, paste `supabase/tests.sql` and run it. The final result should read `ALL SIDELINE ACCESS TESTS PASSED`. The script cleans up after itself.
 
-7. **Connect the app.** Under **Project Settings → API**, copy the **Project URL** and the **anon public** key into `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `index.html`, then deploy.
-   - The anon key is designed to be public. The access rules protect the data, not the key.
-   - Never put the **service_role** key in this repository or in the app. It bypasses every rule.
+7. **Connect the app.** Open **Settings → API Keys** (or the **Connect** button). Copy the **Project URL** into `SUPABASE_URL` and the **publishable** key (`sb_publishable_…`) into `SUPABASE_PUBLISHABLE_KEY` in `index.html`, then deploy.
+   - The publishable key is designed to be public. The access rules protect the data, not the key.
+   - Never put a **secret** key (`sb_secret_…`) or the legacy **service_role** key in this repository or the app. They bypass every rule. The app refuses to start accounts if it sees a secret key.
+   - Don't use the legacy **anon** key either. Supabase is retiring it by the end of 2026.
 
 8. **Make yourself admin.** Sign in once from the app (Settings → Account), then run this in the SQL Editor:
 

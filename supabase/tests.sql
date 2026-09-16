@@ -1,7 +1,9 @@
 -- ============================================================
 -- Sideline access-rule tests
 -- ------------------------------------------------------------
--- Run AFTER schema.sql, in the Supabase SQL editor.
+-- Run in the Supabase SQL editor AFTER the migration in
+-- supabase/migrations has been applied. Not a migration itself: it
+-- lives outside that folder so the GitHub integration never runs it.
 --
 -- Everything runs inside one transaction that is rolled back at the
 -- end, so the fake accounts and rows never persist. The test referee

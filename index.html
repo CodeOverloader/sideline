@@ -1715,11 +1715,12 @@
        league-wide referee profiles. Leave either empty and Sideline stays
        the offline, single-device app it always was.
        Both values are PUBLIC by design: the database's access rules protect
-       the data, not this key. NEVER put the service_role key here.
-       Setup steps: README.md. */
+       the data, not this key. Use the "publishable" key (sb_publishable_...).
+       NEVER put a secret key (sb_secret_...) or the legacy service_role key
+       here: those bypass every access rule. Setup steps: README.md. */
     const SUPABASE_URL = '';
-    const SUPABASE_ANON_KEY = '';
-    const ACCOUNTS_ON = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+    const SUPABASE_PUBLISHABLE_KEY = '';
+    const ACCOUNTS_ON = !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY) && !/^sb_secret_/.test(SUPABASE_PUBLISHABLE_KEY);
     // Pinned with a Subresource Integrity hash: if the CDN ever serves
     // different bytes for this version, the browser refuses to run them.
     const SUPABASE_JS = {
@@ -2977,7 +2978,7 @@
     }
     function sbc() {
       if (sb || !ACCOUNTS_ON || !window.supabase || !window.supabase.createClient) return sb;
-      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
         auth: {
           persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
           // The "sideline:" prefix matters: the schedule import's browser-cache
@@ -3593,7 +3594,7 @@
        The app never scores anyone: every number here is an average of
        ratings mentors gave, shown with the count behind it.
        ============================================================ */
-    // Mirrors public.name_key() in supabase/schema.sql - keep the two in step.
+    // Mirrors public.name_key() in supabase/migrations - keep the two in step.
     function nameKey(n) {
       let s = String(n || '');
       const m = s.match(/^([^,]+),([^,]+)$/);
