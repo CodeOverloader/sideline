@@ -310,7 +310,8 @@
 
     nav button {
       flex: 1;
-      padding: 9px 2px 11px;
+      padding: 8px 2px 10px;
+      min-height: var(--tap);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -321,8 +322,20 @@
     }
 
     nav button .ico {
-      font-size: var(--fs-lg);
-      line-height: 1
+      width: 24px;
+      height: 24px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* The selected tab gets a heavier stroke as well as the accent colour, so
+       it still reads as selected for anyone who cannot separate the two hues. */
+    nav button[aria-current="page"] .ico {
+      stroke-width: 2.2
     }
 
     nav button[aria-current="page"] {
@@ -1739,12 +1752,16 @@
     </section>
   </main>
 
+  <!-- Inline SVG, not emoji. Emoji carry their own colour, so the people and
+       folder glyphs rendered blue and yellow whether or not their tab was
+       selected - and blue is the selected colour, so two tabs looked active at
+       once. These use stroke:currentColor, so the tab decides the colour. -->
   <nav aria-label="Sections">
-    <button data-tab="fields" aria-current="page"><span class="ico" aria-hidden="true">&#9917;</span>Fields</button>
-    <button data-tab="observe"><span class="ico" aria-hidden="true">&#9998;</span>Observe</button>
-    <button data-tab="score"><span class="ico" aria-hidden="true">&#9878;</span>Score</button>
-    <button data-tab="refs"><span class="ico" aria-hidden="true">&#128101;</span>Refs</button>
-    <button data-tab="saved"><span class="ico" aria-hidden="true">&#128193;</span>Saved</button>
+    <button data-tab="fields" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M12 4.5v15"/><circle cx="12" cy="12" r="3"/><path d="M2.5 8.5h3v7h-3M21.5 8.5h-3v7h3"/></svg>Fields</button>
+    <button data-tab="observe"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 3.5l4 4L8 20H4v-4z"/><path d="M14 6l4 4"/></svg>Observe</button>
+    <button data-tab="score"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 8h12"/><path d="M6 8l-3 6h6zM18 8l-3 6h6z"/><path d="M8 20h8"/></svg>Score</button>
+    <button data-tab="refs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.400 3.5 5.1"/></svg>Refs</button>
+    <button data-tab="saved"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5a2 2 0 012-2h3.2l2 2.5h7.8a2 2 0 012 2v9a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/></svg>Saved</button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
