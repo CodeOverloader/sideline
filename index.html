@@ -255,6 +255,10 @@
     /* the "now watching" bar: the single most important element in the app.
    Two fields of simultaneous refs is exactly how notes end up on the
    wrong person, so attribution is always on screen. */
+    .watching[hidden] {
+      display: none
+    }
+
     .watching {
       display: flex;
       align-items: center;
@@ -2122,6 +2126,16 @@
       return f.sub ? `${shortField(f.name)} ${f.sub}` : shortField(f.name);
     }
 
+    /* The field the way the Google Form spells it, plus the internal A/B pitch
+       letter when there is one. Rows with room use this; shortField's "2A" is
+       for chips and the minimap, where there genuinely is not room. Before,
+       one game could read "Tigers A" on the Fields tab, "2A" in the picker and
+       "Field 2A" on the Score tab - three names for one pitch. */
+    function fullPitchLabel(f) {
+      if (!f.name) return 'Field not set';
+      return f.sub ? `${f.name} ${f.sub}` : f.name;
+    }
+
     function shortField(name) {
       if (!name) return 'Field';
       const t = name.match(/^(Tigers|Titans|Broncos)/i);
@@ -2644,7 +2658,7 @@
     function gameHeadHTML(f, withTime) {
       const g = gameSummary(f);
       const when = withTime && f.time ? ' &middot; ' + esc(pretty12(f.time)) : '';
-      return `<div class="t1">${esc(pitchLabel(f) || 'Field not set')}${when}${f.done ? ' &check;' : ''}</div>
+      return `<div class="t1">${esc(fullPitchLabel(f))}${when}${f.done ? ' &check;' : ''}</div>
       <div class="t2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>`;
     }
     function gameRow(f, opts) {
@@ -2698,7 +2712,7 @@
       // once (hidden tabs keep their markup) and the header button owns that id.
       return `<button class="nowgame" data-openpicker="1" aria-haspopup="dialog">
     <div style="min-width:0">
-      <div class="g1">${esc(pitchLabel(f) || 'Pick a game')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
+      <div class="g1">${esc(fullPitchLabel(f))}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
       <div class="g2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
     </div>
     <span class="chev">&#9662;</span>
@@ -2731,8 +2745,16 @@
       const withNotes = refs.filter(x => x.ref.notes.length);
       const fullyRated = refs.filter(x => RATED.every(c => x.ref.ratings[c.id] != null));
       // Finished games are off the list, so their referees should not nag here.
-      const unwatched = named.filter(x => !x.ref.notes.length && !x.field.done)
-        .map(x => `${fieldLabel(x.field)}${x.field.sub ? ' ' + x.field.sub : ''} ${x.ref.slot}`);
+      /* This used to print "Tigers B CR, 2A CR, 2A AR1, 2A AR2, 2B CR, ..." -
+         a wall of abbreviations you had to decode one at a time. Names are what
+         a mentor actually recognises, so lead with those. */
+      const pend = named.filter(x => !x.ref.notes.length && !x.field.done);
+      const dupe = new Map();
+      pend.forEach(x => dupe.set(x.ref.name.trim(), (dupe.get(x.ref.name.trim()) || 0) + 1));
+      const unwatched = pend.map(x => {
+        const n = x.ref.name.trim();
+        return dupe.get(n) > 1 ? `${n} (${pitchLabel(x.field)})` : n;
+      });
 
       // Every pitch at this field and kickoff, each with its own crew.
       // Two Tigers pitches means two small pitch maps, one above the other, so
@@ -2751,7 +2773,7 @@
            and acted only on the selected pitch, even with two pitches shown. */
         return `<div class="fieldblock">
       <div class="fieldhead">
-        <div class="fname">${esc(pf.sub ? shortField(pf.name) + ' ' + pf.sub : pf.name || 'Field not set')}</div>
+        <div class="fname">${esc(fullPitchLabel(pf))}</div>
         ${pf.done ? '<span class="pill">done</span>' : ''}
         <div class="spacer"></div>
         <button class="minibtn" data-done="${pf.id}">${pf.done ? 'Reopen' : '&check; Done'}</button>
@@ -2773,7 +2795,7 @@
         <span><b>${fullyRated.length}</b> fully rated</span>
       </div>
       ${unwatched.length ? `<div class="hint" style="margin:8px 0 0">Not watched yet:
-        ${esc(unwatched.slice(0, 12).join(', '))}${unwatched.length > 12 ? ` +${unwatched.length - 12} more` : ''}</div>` : ''}
+        ${esc(unwatched.slice(0, 8).join(', '))}${unwatched.length > 8 ? ` and ${unwatched.length - 8} more` : ''}</div>` : ''}
     </div>
     <div class="hint" style="margin:10px 0 0">${esc(meta || 'Field not set')}${group.length > 1
           ? ` &mdash; ${group.length} pitches, one referee each` : ''}</div>
@@ -2801,6 +2823,10 @@
     function renderWatching() {
       const p = activePair();
       const box = $('#watching');
+      const tab = S.ui.tab;
+      // Only where notes can land on the wrong person.
+      box.hidden = (tab === 'refs' || tab === 'saved');
+      if (box.hidden) return;
       if (!p) {
         box.className = 'watching idle';
         box.innerHTML = `<div style="min-width:0"><div class="who">No referee selected</div>
@@ -3781,8 +3807,8 @@
       if (!ACCOUNTS_ON) return '';
       const s = ACCT.status;
       if (s === 'signedOut') {
-        return `<div class="okbox">Signed out: these stay on this device. Sign in to share them with other mentors.
-      <button class="btn sm" id="openAccount" style="margin-top:8px">Sign in</button></div>`;
+        return `<p class="hint">Not signed in, so these stay on this device. Sharing them with other
+      mentors is under the account button, top left.</p>`;
       }
       if (s === 'pending') return '<div class="warn">Your account is waiting for approval. Saved evaluations upload once an admin approves it.</div>';
       if (uploadConsent() !== true) {
@@ -4370,7 +4396,7 @@
 
       $('#savedBody').innerHTML = `
     <p class="hint">${sharing ? 'Kept on this device and uploaded for other approved mentors.'
-          : 'Kept on this device only. Make a backup (bottom of this page) so a lost or reset phone does not take them with it.'}</p>
+          : 'Make a backup (bottom of this page) so a lost or reset phone does not take these with it.'}</p>
     ${syncStatusHTML()}
     ${unbacked ? `<div class="warn">${unbacked} saved evaluation${unbacked === 1 ? ' is' : 's are'} not in a backup yet.
       <button class="btn sm primary" id="backupFile" style="margin-top:8px">Save a backup now</button></div>` : ''}
