@@ -1449,6 +1449,19 @@
       padding-bottom: var(--pad)
     }
 
+    /* Destructive actions live behind one of these. Copy, Done and the rest are
+       everyday taps; deleting a game or an evaluation of a named child is not,
+       and it used to sit at equal weight right beside them. */
+    .disclose.danger {
+      border-style: dashed;
+      background: none
+    }
+
+    .disclose.danger>summary {
+      font-size: var(--fs-xs);
+      font-weight: 600
+    }
+
     .fchip {
       flex: none;
       border: 1px solid var(--line);
@@ -2570,8 +2583,7 @@
     </button>
     <div class="meter">${g.notes ? `<b>${g.notes}</b> note${g.notes === 1 ? '' : 's'}` : 'no notes'}<br>${g.rated}/${g.total} rated</div>
     ${opts && opts.actions ? `
-      <button class="iconsm" data-done="${f.id}" title="${doneLabel}" aria-label="${doneLabel}">${f.done ? '&#8634;' : '&check;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>` : ''}
+      <button class="minibtn" data-done="${f.id}" aria-label="${doneLabel}">${f.done ? 'Reopen' : '&check; Done'}</button>` : ''}
   </div>`;
     }
 
@@ -2669,8 +2681,6 @@
         ${pf.done ? '<span class="pill">done</span>' : ''}
         <div class="spacer"></div>
         <button class="minibtn" data-done="${pf.id}">${pf.done ? 'Reopen' : '&check; Done'}</button>
-        <button class="minibtn danger" data-delgame="${pf.id}"
-          aria-label="Delete ${esc(pitchLabel(pf) || 'this game')}">Delete</button>
       </div>
       ${pitchSVG(pf)}
       <div class="crew">${crew}</div>
@@ -4267,10 +4277,11 @@
       <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
       <pre>${esc(r.comments)}</pre>
-      <div class="row" style="margin-top:8px">
-        <button class="btn sm" data-copysaved="${r.id}">Copy</button>
-        <button class="btn sm danger" data-dropsaved="${r.id}">Delete</button>
-      </div>
+      <button class="btn sm" data-copysaved="${r.id}" style="margin-top:8px">Copy</button>
+      <details class="disclose danger" style="margin-top:8px">
+        <summary>More</summary>
+        <button class="btn sm danger" data-dropsaved="${r.id}" style="margin-bottom:12px">Delete this evaluation</button>
+      </details>
     </div>`;
       }).join('');
 
@@ -4335,7 +4346,6 @@
         ${gameHeadHTML(f, true)}
       </button>
       <button class="iconsm" data-edit="${f.id}" aria-label="${editing === f.id ? 'Close editor' : 'Edit this game'}">${editing === f.id ? '&#9652;' : '&#9662;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>
     </div>`;
         if (editing !== f.id) return head;
 
@@ -4364,6 +4374,11 @@
       <div class="seg">${[1, 2, 3].map(n => `<button data-crew="${f.id}|${n}" aria-pressed="${f.crewSize === n}">${n}</button>`).join('')}</div>
       <div class="crew" style="margin-top:10px">${roles}</div>
       <button class="btn sm" data-done="${f.id}" style="margin-top:10px">${f.done ? 'Put back on the list' : 'Mark done'}</button>
+      <details class="disclose danger" style="margin-top:10px">
+        <summary>More</summary>
+        <button class="btn sm danger" data-delgame="${f.id}" style="margin-bottom:12px"
+          aria-label="Delete ${esc(pitchLabel(f) || 'this game')}">Delete this game</button>
+      </details>
     </div>`;
       }).join('');
 
@@ -4389,7 +4404,7 @@
     </div>
 
     <h2 class="sec">Games (${S.fields.length})</h2>
-    <p class="hint">Tap a game to edit it, or &times; to delete it.</p>
+    <p class="hint">Tap a game to edit it. Deleting one is under <b>More</b> inside it.</p>
     ${gameCards}
 
     <h2 class="sec">Add by hand</h2>
