@@ -78,6 +78,35 @@
       --marker-ring: #e9eef3;
       --r: 12px;
       --pad: 14px;
+
+      /* ---------- TYPE SCALE ----------
+         Sizes are in rem, not px, on purpose. 1rem = whatever the phone's
+         browser has been told a "normal" letter is, so a mentor who has set
+         their phone to Large text gets larger text HERE too. Fixed px ignores
+         that setting entirely, which is exactly backwards for this audience.
+         Seven steps, and nothing below --fs-xs: a design "scale" just means a
+         short list of allowed sizes, so the app never drifts into 11.5px. */
+      --fs-xs: 0.8125rem;
+      /* 13px - the floor. Captions, counts, pills. */
+      --fs-sm: 0.875rem;
+      /* 14px - secondary text, hints */
+      --fs-md: 0.9375rem;
+      /* 15px - dense UI labels */
+      --fs-base: 1rem;
+      /* 16px - body. Also the iOS no-zoom floor for inputs. */
+      --fs-lg: 1.125rem;
+      /* 18px - card titles */
+      --fs-xl: 1.25rem;
+      /* 20px - section headings */
+      --fs-2xl: 1.625rem;
+      /* 26px - brand */
+      --fs-3xl: 1.875rem;
+      /* 30px - display */
+
+      /* Minimum comfortable touch target. Apple asks for 44px, Material for
+         48. Everything you can tap is held to this, because the app is used
+         one-handed, outdoors, often by someone wearing reading glasses. */
+      --tap: 44px;
     }
 
     /* SUNLIGHT theme. A dark screen washes out in direct sun, which is exactly
@@ -125,8 +154,8 @@
       background: var(--bg);
       color: var(--ink);
       font-family: Inter, system-ui, -apple-system, sans-serif;
-      font-size: 15px;
-      line-height: 1.45;
+      font-size: var(--fs-base);
+      line-height: 1.5;
       max-width: 600px;
       margin: 0 auto;
       padding-bottom: calc(84px + env(safe-area-inset-bottom));
@@ -174,12 +203,32 @@
     .brandrow {
       display: flex;
       align-items: center;
-      gap: 10px
+      gap: 10px;
+      /* Collapses on scroll - see header.tuck below. */
+      max-height: 56px;
+      overflow: hidden;
+      transition: max-height .18s ease, opacity .18s ease, margin .18s ease;
+    }
+
+    /* Scrolling down tucks the brand row away and leaves only the "now
+       watching" bar stuck to the top; scrolling up brings it back. This is the
+       same thing Twitter, Instagram and Reddit do, and it matters more here
+       than on any of them: the header was eating a third of the screen before
+       the first note chip, on the one screen you use while a game is running.
+       The watching bar itself never hides - it is the attribution safeguard. */
+    header.tuck .brandrow {
+      max-height: 0;
+      opacity: 0;
+      margin-top: -4px;
+    }
+
+    header.tuck .watching {
+      margin-top: 4px
     }
 
     .brand {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px;
+      font-size: var(--fs-2xl);
       letter-spacing: .06em;
       line-height: 1
     }
@@ -193,19 +242,23 @@
     }
 
     .iconbtn {
-      width: 38px;
-      height: 38px;
+      width: var(--tap);
+      height: var(--tap);
       border-radius: 10px;
       border: 1px solid var(--line);
       background: var(--panel);
       display: grid;
       place-items: center;
-      font-size: 17px;
+      font-size: var(--fs-base);
     }
 
     /* the "now watching" bar: the single most important element in the app.
    Two fields of simultaneous refs is exactly how notes end up on the
    wrong person, so attribution is always on screen. */
+    .watching[hidden] {
+      display: none
+    }
+
     .watching {
       display: flex;
       align-items: center;
@@ -219,7 +272,7 @@
 
     .watching .who {
       font-weight: 650;
-      font-size: 15px;
+      font-size: var(--fs-md);
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
@@ -227,14 +280,14 @@
     }
 
     .watching .sub {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.2
     }
 
     .watching .rolechip {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       background: var(--primary);
       color: var(--on-primary);
@@ -245,7 +298,7 @@
     .watching .clk {
       margin-left: auto;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       color: var(--primary);
       white-space: nowrap;
@@ -281,19 +334,32 @@
 
     nav button {
       flex: 1;
-      padding: 9px 2px 11px;
+      padding: 8px 2px 10px;
+      min-height: var(--tap);
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
       color: var(--mute);
-      font-size: 11px;
+      font-size: var(--fs-xs);
       font-weight: 600;
     }
 
     nav button .ico {
-      font-size: 19px;
-      line-height: 1
+      width: 24px;
+      height: 24px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* The selected tab gets a heavier stroke as well as the accent colour, so
+       it still reads as selected for anyone who cannot separate the two hues. */
+    nav button[aria-current="page"] .ico {
+      stroke-width: 2.2
     }
 
     nav button[aria-current="page"] {
@@ -319,7 +385,7 @@
 
     h2.sec {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 20px;
+      font-size: var(--fs-xl);
       letter-spacing: .04em;
       margin: 18px 0 4px;
       font-weight: 400
@@ -327,7 +393,7 @@
 
     .hint {
       color: var(--mute);
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 2px 0 10px
     }
 
@@ -338,7 +404,7 @@
 
     label.f>span {
       display: block;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin-bottom: 4px
     }
@@ -354,10 +420,12 @@
       background: var(--panel2);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 10px 11px;
+      padding: 11px;
+      min-height: var(--tap);
       /* iOS Safari zooms the whole page into any input under 16px and does
-         not zoom back out, which throws the layout off mid-game. */
-      font-size: 16px;
+         not zoom back out, which throws the layout off mid-game. --fs-base is
+         1rem, so this stays at or above 16px however the phone is set. */
+      font-size: var(--fs-base);
     }
 
     textarea {
@@ -379,7 +447,8 @@
       background: var(--panel2);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 11px 13px;
+      padding: 12px 14px;
+      min-height: var(--tap);
       font-weight: 600;
       text-align: center;
       display: block;
@@ -407,15 +476,18 @@
     }
 
     .btn.sm {
-      padding: 8px 10px;
-      font-size: 13px;
+      /* "sm" is about visual weight, not about being hard to hit: the text and
+         padding are smaller, but min-height keeps the target at --tap. */
+      padding: 8px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-sm);
       font-weight: 600
     }
 
     .pill {
       display: inline-block;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       padding: 2px 6px;
       border-radius: 5px;
       background: var(--panel2);
@@ -430,7 +502,7 @@
 
     .empty {
       color: var(--mute);
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       text-align: center;
       padding: 22px 10px
     }
@@ -444,7 +516,7 @@
       background: var(--ink);
       color: var(--bg);
       font-weight: 650;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       padding: 9px 15px;
       border-radius: 20px;
       box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
@@ -463,6 +535,18 @@
       transform: translateX(-50%) translateY(-4px)
     }
 
+    /* With a sheet open, "bottom: 96px" lands in the middle of the sheet and
+       covers whatever button is there - during the import that is the one you
+       are meant to press next. Move it to the top while a sheet is up. */
+    body.locked .toast {
+      bottom: auto;
+      top: calc(12px + env(safe-area-inset-top))
+    }
+
+    body.locked .toast.show {
+      transform: translateX(-50%) translateY(4px)
+    }
+
     /* Only a toast that carries an action (Undo) takes taps; a plain one must
        not swallow touches on whatever sits under it. */
     .toast.act.show {
@@ -472,7 +556,7 @@
     .toast button {
       color: inherit;
       font-weight: 800;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       letter-spacing: .04em;
       text-transform: uppercase;
       padding: 6px 2px 6px 12px;
@@ -494,12 +578,12 @@
 
     .fieldhead .fname {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 19px;
+      font-size: var(--fs-lg);
       letter-spacing: .03em
     }
 
     .fieldhead .fmeta {
-      font-size: 12px;
+      font-size: var(--fs-xs);
       color: var(--mute)
     }
 
@@ -552,7 +636,7 @@
 
     svg.pitch .mkname {
       font-family: Inter, sans-serif;
-      font-size: 9px;
+      font-size: 10.5px;
       fill: var(--ink);
       text-anchor: middle;
       pointer-events: none;
@@ -561,7 +645,7 @@
 
     svg.pitch .cnt {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 8px;
+      font-size: 9.5px;
       font-weight: 700;
       fill: var(--on-plus);
       text-anchor: middle;
@@ -597,7 +681,7 @@
 
     .crewrow .slot {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--primary);
       width: 30px;
@@ -617,7 +701,7 @@
     }
 
     .crewrow .prog {
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       font-family: 'JetBrains Mono', monospace;
       flex: none;
@@ -631,7 +715,7 @@
       border-radius: 8px;
       min-height: 36px;
       padding: 0 12px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       background: var(--panel2)
     }
@@ -655,7 +739,7 @@
       background: var(--panel);
       border-radius: 9px;
       padding: 6px 9px;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute);
@@ -669,21 +753,21 @@
 
     .mini .m1 {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--primary)
     }
 
+    /* These wrap rather than scroll sideways. There are seven categories and
+       the strip used to show three, hiding 322px of them off the right edge
+       with no arrow or fade to say so - so Offsides and General were, for most
+       people, simply not there. Two rows of chips costs a little height and
+       makes all seven visible at once. */
     .cats {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
-      overflow-x: auto;
       padding: 4px 0 8px;
-      scrollbar-width: none
-    }
-
-    .cats::-webkit-scrollbar {
-      display: none
     }
 
     .cat {
@@ -691,17 +775,92 @@
       border: 1px solid var(--line);
       background: var(--panel);
       border-radius: 20px;
-      padding: 7px 12px;
-      font-size: 13px;
+      padding: 9px 14px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute);
     }
 
+    /* Selected is the app's primary blue, like every other selected thing.
+       This was white-on-dark, which made "selected" mean two different
+       colours depending on which screen you were looking at. */
     .cat.on {
-      background: var(--ink);
-      color: var(--bg);
-      border-color: var(--ink)
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary)
+    }
+
+    .cat .n {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-xs);
+      opacity: .85;
+      margin-left: 2px
+    }
+
+    /* ---------- rating scale ---------- */
+    .scale .nums button {
+      flex-direction: column;
+      gap: 1px;
+      padding: 7px 2px;
+      line-height: 1.15;
+    }
+
+    .scale .nums .rn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-lg);
+      font-weight: 700;
+      display: block;
+    }
+
+    .scale .nums .rw {
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      opacity: .85;
+      display: block;
+      text-align: center;
+    }
+
+    /* ---------- the finish sequence ----------
+       Copy, open the form, save. It was four buttons of equal weight in a row,
+       so the order you had to do them in was something you had to already know. */
+    ol.finish {
+      list-style: none;
+      margin: 4px 0 0;
+      padding: 0
+    }
+
+    ol.finish li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 14px
+    }
+
+    ol.finish li>div {
+      flex: 1;
+      min-width: 0
+    }
+
+    ol.finish .fn {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      margin-top: 9px;
+      border-radius: 50%;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--mute);
+      display: grid;
+      place-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-sm);
+      font-weight: 700;
+    }
+
+    ol.finish .hint {
+      margin: 6px 0 0
     }
 
     .chipgrid {
@@ -713,9 +872,10 @@
     .chip {
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 9px;
-      padding: 8px 10px;
-      font-size: 13px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       text-align: left;
       line-height: 1.25;
       display: flex;
@@ -782,7 +942,7 @@
       width: 40px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      font-size: 16px;
+      font-size: var(--fs-base);
       background: var(--panel2);
       color: var(--mute)
     }
@@ -822,7 +982,7 @@
 
     .nrow .t {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       flex: none;
       width: 48px;
@@ -832,12 +992,12 @@
     .nrow .bd {
       flex: 1;
       min-width: 0;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       line-height: 1.35
     }
 
     .nrow .bd .cn {
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       display: block
     }
@@ -875,7 +1035,7 @@
       display: grid;
       place-items: center;
       border-radius: 8px;
-      font-size: 17px
+      font-size: var(--fs-base)
     }
 
     .nrow .del:active {
@@ -888,12 +1048,12 @@
     }
 
     .ratewrap .rlabel {
-      font-size: 14px;
+      font-size: var(--fs-sm);
       font-weight: 600
     }
 
     .ratewrap .rhint {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       margin: 2px 0 7px
     }
@@ -905,7 +1065,7 @@
     }
 
     .scale .end {
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       flex: none;
       width: 26px
@@ -929,7 +1089,7 @@
       border-radius: 10px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      font-size: 15px;
+      font-size: var(--fs-md);
     }
 
     .scale .nums button[aria-pressed="true"] {
@@ -943,7 +1103,7 @@
       align-items: center;
       gap: 10px;
       margin: 10px 0;
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .switchrow input {
@@ -982,7 +1142,7 @@
 
     .charcount {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       text-align: right;
       margin-top: 4px
@@ -1014,7 +1174,7 @@
 
     .dlgbox p {
       margin: 0 0 16px;
-      font-size: 14.5px;
+      font-size: var(--fs-md);
       line-height: 1.45
     }
 
@@ -1034,12 +1194,12 @@
 
     .nowgame .g1 {
       font-weight: 650;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       line-height: 1.2
     }
 
     .nowgame .g2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.3
     }
@@ -1047,7 +1207,7 @@
     .nowgame .chev {
       margin-left: auto;
       color: var(--mute);
-      font-size: 18px;
+      font-size: var(--fs-lg);
       flex: none
     }
 
@@ -1056,7 +1216,7 @@
     .slothead {
       margin: 14px 0 6px;
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 19px;
+      font-size: var(--fs-lg);
       letter-spacing: .04em;
       color: var(--primary)
     }
@@ -1088,12 +1248,12 @@
 
     .grow .t1 {
       font-weight: 650;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       line-height: 1.25
     }
 
     .grow .t2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.35;
       white-space: nowrap;
@@ -1103,7 +1263,7 @@
 
     .grow .meter {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       text-align: right;
       flex: none;
@@ -1116,14 +1276,14 @@
 
     .iconsm {
       flex: none;
-      width: 36px;
-      height: 36px;
+      width: var(--tap);
+      height: var(--tap);
       border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel2);
       display: grid;
       place-items: center;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       color: var(--mute)
     }
 
@@ -1180,7 +1340,7 @@
 
     .sheethead h3 {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 21px;
+      font-size: var(--fs-xl);
       margin: 0;
       font-weight: 400;
       letter-spacing: .03em
@@ -1199,11 +1359,12 @@
 
     .seg button {
       flex: 1;
-      padding: 9px 0;
+      padding: 9px 4px;
+      min-height: var(--tap);
       font-weight: 600;
       background: var(--panel2);
       color: var(--mute);
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .seg button[aria-pressed="true"] {
@@ -1226,7 +1387,7 @@
     }
 
     .saved .sh b {
-      font-size: 14px
+      font-size: var(--fs-sm)
     }
 
     .saved .sh .spacer {
@@ -1237,7 +1398,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-family: Inter, sans-serif;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin: 8px 0 0
     }
@@ -1255,13 +1416,128 @@
       display: none
     }
 
+    /* ---------- import wizard ---------- */
+    .stepper {
+      display: flex;
+      list-style: none;
+      margin: 0 0 14px;
+      padding: 0;
+      gap: 6px;
+      counter-reset: none;
+    }
+
+    .stepper li {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--mute);
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      border-top: 3px solid var(--line);
+      padding-top: 7px;
+    }
+
+    .stepper li.on {
+      color: var(--ink);
+      border-top-color: var(--primary)
+    }
+
+    .stepper li.done {
+      border-top-color: var(--primary)
+    }
+
+    .stepper .sn {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--panel2);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-xs);
+    }
+
+    .stepper li.on .sn {
+      background: var(--primary);
+      color: var(--on-primary)
+    }
+
+    .stepper li.done .sn {
+      background: var(--plus);
+      color: var(--on-plus)
+    }
+
+    .stepper .sl {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    /* A <details> is the browser's own show/hide. Used here so the column
+       mapping - ten dropdowns and a spreadsheet dump - stays out of the way
+       unless it is actually needed. */
+    .disclose {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--panel);
+      padding: 0 var(--pad)
+    }
+
+    .disclose>summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 0 0 0 4px;
+      min-height: var(--tap);
+      display: flex;
+      align-items: center;
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      color: var(--mute);
+    }
+
+    .disclose>summary::-webkit-details-marker {
+      display: none
+    }
+
+    .disclose>summary::after {
+      content: '\25BE';
+      margin-left: auto;
+      transition: transform .15s
+    }
+
+    .disclose[open]>summary::after {
+      transform: rotate(180deg)
+    }
+
+    .disclose[open] {
+      padding-bottom: var(--pad)
+    }
+
+    /* Destructive actions live behind one of these. Copy, Done and the rest are
+       everyday taps; deleting a game or an evaluation of a named child is not,
+       and it used to sit at equal weight right beside them. */
+    .disclose.danger {
+      border-style: dashed;
+      background: none
+    }
+
+    .disclose.danger>summary {
+      font-size: var(--fs-xs);
+      font-weight: 600
+    }
+
     .fchip {
       flex: none;
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 9px;
-      padding: 7px 10px;
-      font-size: 12.5px;
+      border-radius: 10px;
+      padding: 9px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute)
@@ -1275,7 +1551,7 @@
 
     .fchip .n {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--plus)
     }
@@ -1288,14 +1564,14 @@
       display: flex;
       gap: 14px;
       flex-wrap: wrap;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute)
     }
 
     .cov b {
       color: var(--ink);
       font-family: 'JetBrains Mono', monospace;
-      font-size: 15px
+      font-size: var(--fs-md)
     }
 
     /* ---------- import ---------- */
@@ -1306,7 +1582,7 @@
 
     .tbl {
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       font-family: 'JetBrains Mono', monospace
     }
 
@@ -1354,20 +1630,29 @@
     }
 
     .gamerow input[type=checkbox] {
-      width: 21px;
-      height: 21px;
+      /* The box itself is drawn at 26px, but the whole row is the label, so the
+         real target is the full width of the card - see .gamerow below. */
+      width: 26px;
+      height: 26px;
       accent-color: var(--primary);
       flex: none
     }
 
+    /* Making the row a <label> means a tap anywhere on it toggles the box.
+       That turns a 26px target into a 358px one without changing the look. */
+    label.gamerow {
+      cursor: pointer;
+      min-height: var(--tap)
+    }
+
     .gamerow .g1 {
       font-weight: 650;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       line-height: 1.2
     }
 
     .gamerow .g2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.3
     }
@@ -1377,7 +1662,7 @@
       border: 1px solid var(--minus-line);
       border-radius: 10px;
       padding: 9px 11px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 8px 0
     }
 
@@ -1386,7 +1671,7 @@
       border: 1px solid var(--primary-line);
       border-radius: 10px;
       padding: 9px 11px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 8px 0
     }
 
@@ -1398,7 +1683,7 @@
       border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel2);
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       font-weight: 650;
       color: var(--ink)
     }
@@ -1414,7 +1699,7 @@
 
     details.more summary {
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       padding: 6px 0
     }
@@ -1429,24 +1714,50 @@
     }
 
     /* ---------- accounts ---------- */
-    /* a dot on the settings cog: green when signed in, orange while pending */
-    #openSettings {
-      position: relative
+    /* The avatar is the account. Signed out it shows a neutral person glyph;
+       signed in it shows the mentor's initials. The status dot rides on it
+       rather than on the settings cog, because that is where people look. */
+    .avatar {
+      flex: none;
+      width: var(--tap);
+      height: var(--tap);
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--mute);
+      display: grid;
+      place-items: center;
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      letter-spacing: .02em;
+      position: relative;
     }
 
-    #openSettings[data-acct]::after {
+    .avatar[data-acct] {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--on-primary)
+    }
+
+    .avatar[data-acct]::after {
       content: '';
       position: absolute;
-      top: 5px;
-      right: 5px;
-      width: 8px;
-      height: 8px;
+      bottom: 1px;
+      right: 1px;
+      width: 11px;
+      height: 11px;
       border-radius: 50%;
       background: var(--plus);
-      box-shadow: 0 0 0 2px var(--panel)
+      box-shadow: 0 0 0 2px var(--glass)
     }
 
-    #openSettings[data-acct="pending"]::after {
+    .avatar[data-acct="pending"] {
+      background: var(--panel2);
+      border-color: var(--minus-line);
+      color: var(--minus)
+    }
+
+    .avatar[data-acct="pending"]::after {
       background: var(--minus)
     }
 
@@ -1465,7 +1776,7 @@
       grid-template-columns: 1fr auto;
       gap: 2px 10px;
       align-items: center;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       line-height: 1.35;
       background: var(--panel);
       border: 1px solid var(--line);
@@ -1505,12 +1816,12 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 14.5px
+      font-size: var(--fs-md)
     }
 
     .refrow .rr2,
     .refrow .rr3 {
-      font-size: 12px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       margin-top: 2px
     }
@@ -1530,7 +1841,7 @@
       align-items: center;
       gap: 8px;
       margin: 7px 0;
-      font-size: 13px
+      font-size: var(--fs-sm)
     }
 
     .catrow .bar {
@@ -1552,7 +1863,7 @@
 
     .catrow .cv {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       text-align: right;
       white-space: nowrap
     }
@@ -1571,7 +1882,7 @@
 
     .bigavg {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 30px;
+      font-size: var(--fs-3xl);
       font-weight: 700;
       line-height: 1
     }
@@ -1579,7 +1890,7 @@
     .plist {
       margin: 6px 0 0;
       padding-left: 18px;
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .plist li {
@@ -1600,7 +1911,7 @@
 
     details.evald summary {
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       line-height: 1.45
     }
 
@@ -1608,7 +1919,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-family: Inter, sans-serif;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin: 8px 0 0
     }
@@ -1619,12 +1930,14 @@
 
   <header>
     <div class="brandrow">
+      <!-- Account lives here, as an avatar, the way every mainstream app does
+           it. It is the first thing in the header on every screen, signed in
+           or out, instead of being the third card inside Settings. -->
+      <button class="avatar" id="openAccount" aria-label="Account"><span id="avatarInitials">?</span></button>
       <div class="brand">SIDE<span>LINE</span></div>
       <div class="spacer"></div>
       <button class="iconbtn" id="themeToggle" title="Switch to sunlight theme"
         aria-label="Switch to sunlight theme">&#9728;&#xFE0E;</button>
-      <button class="iconbtn" id="openPicker" title="Choose a game" aria-label="Choose a game">&#9776;</button>
-      <button class="iconbtn" id="openForm" title="Open the Google Form" aria-label="Open the Google Form">&#9873;</button>
       <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
     <div class="watching idle" id="watching" aria-live="polite">
@@ -1664,12 +1977,16 @@
     </section>
   </main>
 
+  <!-- Inline SVG, not emoji. Emoji carry their own colour, so the people and
+       folder glyphs rendered blue and yellow whether or not their tab was
+       selected - and blue is the selected colour, so two tabs looked active at
+       once. These use stroke:currentColor, so the tab decides the colour. -->
   <nav aria-label="Sections">
-    <button data-tab="fields" aria-current="page"><span class="ico" aria-hidden="true">&#9917;</span>Fields</button>
-    <button data-tab="observe"><span class="ico" aria-hidden="true">&#9998;</span>Observe</button>
-    <button data-tab="score"><span class="ico" aria-hidden="true">&#9878;</span>Score</button>
-    <button data-tab="refs"><span class="ico" aria-hidden="true">&#128101;</span>Refs</button>
-    <button data-tab="saved"><span class="ico" aria-hidden="true">&#128193;</span>Saved</button>
+    <button data-tab="fields" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M12 4.5v15"/><circle cx="12" cy="12" r="3"/><path d="M2.5 8.5h3v7h-3M21.5 8.5h-3v7h3"/></svg>Fields</button>
+    <button data-tab="observe"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 3.5l4 4L8 20H4v-4z"/><path d="M14 6l4 4"/></svg>Observe</button>
+    <button data-tab="score"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 8h12"/><path d="M6 8l-3 6h6zM18 8l-3 6h6z"/><path d="M8 20h8"/></svg>Score</button>
+    <button data-tab="refs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.400 3.5 5.1"/></svg>Refs</button>
+    <button data-tab="saved"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5a2 2 0 012-2h3.2l2 2.5h7.8a2 2 0 012 2v9a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/></svg>Saved</button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
@@ -1809,6 +2126,16 @@
       return f.sub ? `${shortField(f.name)} ${f.sub}` : shortField(f.name);
     }
 
+    /* The field the way the Google Form spells it, plus the internal A/B pitch
+       letter when there is one. Rows with room use this; shortField's "2A" is
+       for chips and the minimap, where there genuinely is not room. Before,
+       one game could read "Tigers A" on the Fields tab, "2A" in the picker and
+       "Field 2A" on the Score tab - three names for one pitch. */
+    function fullPitchLabel(f) {
+      if (!f.name) return 'Field not set';
+      return f.sub ? `${f.name} ${f.sub}` : f.name;
+    }
+
     function shortField(name) {
       if (!name) return 'Field';
       const t = name.match(/^(Tigers|Titans|Broncos)/i);
@@ -1830,6 +2157,16 @@
       {id: 'general', label: 'Game management and other', short: 'General', rated: false},
     ];
     const RATED = CATS.filter(c => c.rated);
+
+    /* The scale used to be four bare numbers with "bad" at one end and "good"
+       at the other, in small grey type, so 2 and 3 meant whatever you could
+       remember they meant. A word on each button says it outright. The NUMBER
+       is still what goes on the Google Form - these words exist only here, to
+       make the number you pick a considered choice rather than a guess. They
+       are also deliberately kinder than "bad": these are written assessments of
+       young referees, many of them children, and 1 means they need support,
+       not that they are bad. */
+    const RATING_WORDS = {1: 'Needs work', 2: 'Developing', 3: 'Solid', 4: 'Excellent'};
 
     /* Quick-tap observations. pol = polarity: +1 strength, -1 work on.
        `pos` restricts a chip to one role so an AR never has to scroll past
@@ -2051,7 +2388,11 @@
       return {
         mentor: store.get('sideline:mentor') || '',
         date: todayISO(),
-        fields: [newField('')],
+        // No placeholder game. A blank one made Settings read "Games (1)" and
+        // put a ghost "Field - no division" row on Observe, while the Fields
+        // tab correctly showed its first-run card: three screens disagreeing
+        // about whether the app was empty.
+        fields: [],
         activeRefId: null,
         ui: blankUI()
       };
@@ -2071,7 +2412,7 @@
       S.ui = {...blankUI(), ...(S.ui || {})};
       if (typeof S.mentor !== 'string') S.mentor = store.get('sideline:mentor') || '';
       if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date || '')) S.date = todayISO();
-      if (!Array.isArray(S.fields) || !S.fields.length) S.fields = [newField('')];
+      if (!Array.isArray(S.fields)) S.fields = [];
       S.fields.forEach(f => {
         if (!Array.isArray(f.refs)) f.refs = [];
         f.refs.forEach(r => {
@@ -2134,9 +2475,8 @@
         : '';
       askConfirm(`Delete ${what}?${detail} Evaluations you already saved are kept.`, 'Delete', () => {
         S.fields = S.fields.filter(x => x.id !== fid);
-        if (!S.fields.length) S.fields.push(newField(''));
         if (!activePair()) S.activeRefId = null;
-        if (!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+        if (!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] ? S.fields[0].id : null;
         save();
         if (after) after(); else renderAll();
         flash('Game deleted');
@@ -2318,7 +2658,7 @@
     function gameHeadHTML(f, withTime) {
       const g = gameSummary(f);
       const when = withTime && f.time ? ' &middot; ' + esc(pretty12(f.time)) : '';
-      return `<div class="t1">${esc(pitchLabel(f) || 'Field not set')}${when}${f.done ? ' &check;' : ''}</div>
+      return `<div class="t1">${esc(fullPitchLabel(f))}${when}${f.done ? ' &check;' : ''}</div>
       <div class="t2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>`;
     }
     function gameRow(f, opts) {
@@ -2331,8 +2671,7 @@
     </button>
     <div class="meter">${g.notes ? `<b>${g.notes}</b> note${g.notes === 1 ? '' : 's'}` : 'no notes'}<br>${g.rated}/${g.total} rated</div>
     ${opts && opts.actions ? `
-      <button class="iconsm" data-done="${f.id}" title="${doneLabel}" aria-label="${doneLabel}">${f.done ? '&#8634;' : '&check;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>` : ''}
+      <button class="minibtn" data-done="${f.id}" aria-label="${doneLabel}">${f.done ? 'Reopen' : '&check; Done'}</button>` : ''}
   </div>`;
     }
 
@@ -2373,7 +2712,7 @@
       // once (hidden tabs keep their markup) and the header button owns that id.
       return `<button class="nowgame" data-openpicker="1" aria-haspopup="dialog">
     <div style="min-width:0">
-      <div class="g1">${esc(pitchLabel(f) || 'Pick a game')}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
+      <div class="g1">${esc(fullPitchLabel(f))}${f.time ? ' &middot; ' + esc(pretty12(f.time)) : ''}</div>
       <div class="g2">${esc(f.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no referees named'}</div>
     </div>
     <span class="chev">&#9662;</span>
@@ -2406,8 +2745,16 @@
       const withNotes = refs.filter(x => x.ref.notes.length);
       const fullyRated = refs.filter(x => RATED.every(c => x.ref.ratings[c.id] != null));
       // Finished games are off the list, so their referees should not nag here.
-      const unwatched = named.filter(x => !x.ref.notes.length && !x.field.done)
-        .map(x => `${fieldLabel(x.field)}${x.field.sub ? ' ' + x.field.sub : ''} ${x.ref.slot}`);
+      /* This used to print "Tigers B CR, 2A CR, 2A AR1, 2A AR2, 2B CR, ..." -
+         a wall of abbreviations you had to decode one at a time. Names are what
+         a mentor actually recognises, so lead with those. */
+      const pend = named.filter(x => !x.ref.notes.length && !x.field.done);
+      const dupe = new Map();
+      pend.forEach(x => dupe.set(x.ref.name.trim(), (dupe.get(x.ref.name.trim()) || 0) + 1));
+      const unwatched = pend.map(x => {
+        const n = x.ref.name.trim();
+        return dupe.get(n) > 1 ? `${n} (${pitchLabel(x.field)})` : n;
+      });
 
       // Every pitch at this field and kickoff, each with its own crew.
       // Two Tigers pitches means two small pitch maps, one above the other, so
@@ -2426,12 +2773,10 @@
            and acted only on the selected pitch, even with two pitches shown. */
         return `<div class="fieldblock">
       <div class="fieldhead">
-        <div class="fname">${esc(pf.sub ? shortField(pf.name) + ' ' + pf.sub : pf.name || 'Field not set')}</div>
+        <div class="fname">${esc(fullPitchLabel(pf))}</div>
         ${pf.done ? '<span class="pill">done</span>' : ''}
         <div class="spacer"></div>
         <button class="minibtn" data-done="${pf.id}">${pf.done ? 'Reopen' : '&check; Done'}</button>
-        <button class="minibtn danger" data-delgame="${pf.id}"
-          aria-label="Delete ${esc(pitchLabel(pf) || 'this game')}">Delete</button>
       </div>
       ${pitchSVG(pf)}
       <div class="crew">${crew}</div>
@@ -2450,7 +2795,7 @@
         <span><b>${fullyRated.length}</b> fully rated</span>
       </div>
       ${unwatched.length ? `<div class="hint" style="margin:8px 0 0">Not watched yet:
-        ${esc(unwatched.slice(0, 12).join(', '))}${unwatched.length > 12 ? ` +${unwatched.length - 12} more` : ''}</div>` : ''}
+        ${esc(unwatched.slice(0, 8).join(', '))}${unwatched.length > 8 ? ` and ${unwatched.length - 8} more` : ''}</div>` : ''}
     </div>
     <div class="hint" style="margin:10px 0 0">${esc(meta || 'Field not set')}${group.length > 1
           ? ` &mdash; ${group.length} pitches, one referee each` : ''}</div>
@@ -2478,6 +2823,10 @@
     function renderWatching() {
       const p = activePair();
       const box = $('#watching');
+      const tab = S.ui.tab;
+      // Only where notes can land on the wrong person.
+      box.hidden = (tab === 'refs' || tab === 'saved');
+      if (box.hidden) return;
       if (!p) {
         box.className = 'watching idle';
         box.innerHTML = `<div style="min-width:0"><div class="who">No referee selected</div>
@@ -2518,15 +2867,27 @@
     function renderObserve() {
       const p = activePair();
       if (!p) {
-        $('#observeBody').innerHTML = `<div class="empty">Pick a referee above, or tap a position on the
-      Fields tab. Notes always attach to the referee in the blue bar.</div>`;
+        /* Two different empty states. With no games at all, "pick a referee
+           above" points at nothing - the next step is the schedule. */
+        $('#observeBody').innerHTML = S.fields.length
+          ? `<div class="empty">Pick a referee above, or tap a position on the
+      Fields tab. Notes always attach to the referee in the blue bar.</div>`
+          : `<div class="card" style="margin-top:14px">
+      <h2 class="sec" style="margin-top:0">No games yet</h2>
+      <p class="hint">Import the day's schedule and every field, kickoff and referee
+        name comes in at once. Then tap a referee to start taking notes.</p>
+      <button class="btn primary" id="openImport" style="margin-top:4px">Import the schedule</button>
+      <button class="btn sm ghost" id="openSettings2" style="margin-top:8px">Add a game by hand</button>
+    </div>`;
         return;
       }
       const {field, ref} = p;
       const catRow = CATS.map(c => {
         const n = ref.notes.filter(x => x.cat === c.id).length;
-        return `<button class="cat${S.ui.cat === c.id ? ' on' : ''}" data-cat="${c.id}">
-      ${esc(c.short)}${n ? ` ${n}` : ''}</button>`;
+        return `<button class="cat${S.ui.cat === c.id ? ' on' : ''}" data-cat="${c.id}"
+      aria-pressed="${S.ui.cat === c.id}"
+      aria-label="${esc(c.label)}${n ? `, ${n} note${n === 1 ? '' : 's'}` : ''}">
+      ${esc(c.short)}${n ? `<span class="n">${n}</span>` : ''}</button>`;
       }).join('');
 
       // Role filter: a chip with pos:'AR' is hidden from a center referee
@@ -2669,11 +3030,13 @@
         if (t.better) bits.push(`${t.better} improved`);
         const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
         const nums = [1, 2, 3, 4].map(v => `<button data-rate="${c.id}|${v}"
-      aria-pressed="${ref.ratings[c.id] === v}" ${locked ? 'disabled style="opacity:.45"' : ''}>${v}</button>`).join('');
+      aria-pressed="${ref.ratings[c.id] === v}"
+      aria-label="${v} - ${esc(RATING_WORDS[v])}" ${locked ? 'disabled style="opacity:.45"' : ''}>
+      <span class="rn">${v}</span><span class="rw">${esc(RATING_WORDS[v])}</span></button>`).join('');
         return `<div class="ratewrap">
       <div class="rlabel">${esc(c.label)}</div>
       <div class="rhint">${esc(hint)}${c.id === 'offsides' ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
-      <div class="scale"><span class="end">bad</span><div class="nums">${nums}</div><span class="end r">good</span></div>
+      <div class="scale"><div class="nums">${nums}</div></div>
       ${c.id === 'offsides' ? `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
         No offside situations this game</label>` : ''}
     </div>`;
@@ -2695,21 +3058,28 @@
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <div class="rlabel" style="font-size:14px;font-weight:600">Comments</div>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn sm ghost" style="width:auto" id="rebuild">Rebuild</button>
+        <button class="btn sm ghost" style="width:auto" id="rebuild">Rewrite from notes</button>
       </div>
       <textarea id="comments" rows="7" aria-label="Comments" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
       <div class="charcount" id="charCount">${charCountText(ref.comments)}</div>
       <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
     </div>
     <div id="readyBox">${readyHTML(field, ref)}</div>
-    <button class="btn primary" id="copyAll">Copy everything in form order</button>
-    <div class="row" style="margin-top:8px">
-      <button class="btn sm" id="openForm2">Open the form</button>
-      <button class="btn sm" id="saveEval">Save this referee</button>
-    </div>
-    <div class="hint" id="saveHint" style="margin-top:6px;text-align:right" hidden></div>
-    <div class="hint" style="margin-top:10px">Copy, open the form, then paste into COMMENTS. Everything above
-      the comments is short enough to tap straight in while the copied block is on screen.</div>
+
+    <h2 class="sec">Send it in</h2>
+    <ol class="finish">
+      <li><span class="fn">1</span><div>
+        <button class="btn primary" id="copyAll">Copy everything in form order</button>
+        <div class="hint">Puts the whole block on the clipboard.</div></div></li>
+      <li><span class="fn">2</span><div>
+        <button class="btn" id="openForm2">Open the form</button>
+        <div class="hint">Paste into COMMENTS. Everything above the comments is short
+          enough to tap straight in while the copied block is on screen.</div></div></li>
+      <li><span class="fn">3</span><div>
+        <button class="btn" id="saveEval">Save this referee</button>
+        <div class="hint" id="saveHint" hidden></div>
+        <div class="hint">Keeps a copy here, for the referee's profile and your backup.</div></div></li>
+    </ol>
   `;
       paintSaveState(field, ref);
     }
@@ -2718,7 +3088,7 @@
        referee gets noticed before you are standing in the parking lot. */
     function missingFor(field, ref) {
       const out = [];
-      if (!S.mentor.trim()) out.push('your name (Settings)');
+      if (!S.mentor.trim()) out.push('your name (account button, top left)');
       if (!field.name) out.push('field');
       if (!field.time) out.push('kickoff');
       if (!field.division) out.push('division');
@@ -3085,19 +3455,55 @@
       paintAccount();
     }
 
+    /* Two letters from the mentor's name, the way every app builds a fallback
+       avatar: "Pat Delgado" -> PD, "Cher" -> CH. Falls back to the email when
+       the name has not been filled in yet. */
+    function initialsFor(name, email) {
+      const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      const e = String(email || '').trim();
+      return e ? e.slice(0, 2).toUpperCase() : '';
+    }
+
     function paintAccount() {
-      const b = $('#openSettings');
-      if (b) {
+      const av = $('#openAccount'), ini = $('#avatarInitials');
+      if (av && ini) {
         const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
-        if (on) b.setAttribute('data-acct', ACCT.status); else b.removeAttribute('data-acct');
-        const label = !on ? 'Settings'
-          : ACCT.status === 'pending' ? 'Settings (account waiting for approval)'
-            : `Settings (signed in as ${ACCT.email})`;
-        b.title = label; b.setAttribute('aria-label', label);
+        if (on) av.setAttribute('data-acct', ACCT.status); else av.removeAttribute('data-acct');
+        // textContent, so a bullet not an HTML entity: with no name to work
+        // from the avatar shows a neutral dot rather than "??".
+        const who = initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
+        ini.textContent = who || '\u25CF';
+        const label = !ACCOUNTS_ON ? 'Your name and this device'
+          : !on ? 'Account - not signed in'
+            : ACCT.status === 'pending' ? 'Account - waiting for approval'
+              : `Account - signed in as ${ACCT.email}`;
+        av.title = label; av.setAttribute('aria-label', label);
       }
       paintAcctCard(false);
       if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
+      if (!$('#sheet').hidden && sheetMode === 'account') renderAccountSheet();
       renderQuietly();
+    }
+
+    /* The account sheet: what used to be the third card inside Settings, now a
+       destination of its own that the avatar opens from any tab. */
+    function renderAccountSheet() {
+      const body = $('#sheetBody'); if (!body) return;
+      if (!ACCOUNTS_ON) {
+        body.innerHTML = `<div class="card">
+        <label class="f"><span>Your name, as it goes on the form</span>
+          <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
+        <p class="hint" style="margin:10px 0 0">Sharing between mentors is switched off in this build,
+          so everything stays on this device.</p></div>`;
+        return;
+      }
+      body.innerHTML = `<div class="card">
+      <label class="f"><span>Your name, as it goes on the form</span>
+        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
+    </div>
+    <div class="card" id="acctCard">${accountCardInner()}</div>`;
     }
 
     async function sendCode() {
@@ -3147,7 +3553,9 @@
     }
 
     function accountCardInner() {
-      const head = '<div class="rlabel" style="font-size:12.5px;color:var(--mute);margin-bottom:6px">Account</div>';
+      // No heading: this renders inside the Account sheet, which is already
+      // titled "Account". Repeating it was pure noise.
+      const head = '';
       const err = acctUI.error ? `<div class="warn">${esc(acctUI.error)}</div>` : '';
       const s = ACCT.status;
       if (s === 'signedOut') {
@@ -3327,7 +3735,7 @@
       if (!$('#dlg').hidden) return;   // never stack on another question; asked again next time
       offeredUpload = true;
       askConfirm(`Upload ${plural(n, 'saved evaluation')} from this device? Every approved mentor will be able ` +
-        `to read ${n === 1 ? 'it' : 'them'}. New saves upload automatically; you can turn this off in Settings.`,
+        `to read ${n === 1 ? 'it' : 'them'}. New saves upload automatically; you can turn this off under the account button.`,
         'Upload', () => {setUploadConsent(true); syncNow(); paintSync();},
         {tone: 'primary', noLabel: 'Not now', onNo: () => {setUploadConsent(false); paintSync();}});
     }
@@ -3399,8 +3807,8 @@
       if (!ACCOUNTS_ON) return '';
       const s = ACCT.status;
       if (s === 'signedOut') {
-        return `<div class="okbox">Signed out: these stay on this device. Sign in to share them with other mentors.
-      <button class="btn sm" id="openAccount" style="margin-top:8px">Sign in</button></div>`;
+        return `<p class="hint">Not signed in, so these stay on this device. Sharing them with other
+      mentors is under the account button, top left.</p>`;
       }
       if (s === 'pending') return '<div class="warn">Your account is waiting for approval. Saved evaluations upload once an admin approves it.</div>';
       if (uploadConsent() !== true) {
@@ -3978,16 +4386,17 @@
       <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
       <pre>${esc(r.comments)}</pre>
-      <div class="row" style="margin-top:8px">
-        <button class="btn sm" data-copysaved="${r.id}">Copy</button>
-        <button class="btn sm danger" data-dropsaved="${r.id}">Delete</button>
-      </div>
+      <button class="btn sm" data-copysaved="${r.id}" style="margin-top:8px">Copy</button>
+      <details class="disclose danger" style="margin-top:8px">
+        <summary>More</summary>
+        <button class="btn sm danger" data-dropsaved="${r.id}" style="margin-bottom:12px">Delete this evaluation</button>
+      </details>
     </div>`;
       }).join('');
 
       $('#savedBody').innerHTML = `
     <p class="hint">${sharing ? 'Kept on this device and uploaded for other approved mentors.'
-          : 'Kept on this device only. Make a backup (bottom of this page) so a lost or reset phone does not take them with it.'}</p>
+          : 'Make a backup (bottom of this page) so a lost or reset phone does not take these with it.'}</p>
     ${syncStatusHTML()}
     ${unbacked ? `<div class="warn">${unbacked} saved evaluation${unbacked === 1 ? ' is' : 's are'} not in a backup yet.
       <button class="btn sm primary" id="backupFile" style="margin-top:8px">Save a backup now</button></div>` : ''}
@@ -4022,10 +4431,12 @@
       $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
         : sheetMode === 'games' ? 'Choose a game'
           : sheetMode === 'admin' ? 'Manage mentors'
-            : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
+            : sheetMode === 'account' ? 'Account'
+              : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
       if (sheetMode === 'import') return renderImport();
       if (sheetMode === 'games') return renderPicker();
       if (sheetMode === 'admin') return renderAdmin();
+      if (sheetMode === 'account') return renderAccountSheet();
       if (sheetMode === 'profile') return renderProfile();
 
       /* Settings used to print a full editor card for every game, so a nine-game
@@ -4044,7 +4455,6 @@
         ${gameHeadHTML(f, true)}
       </button>
       <button class="iconsm" data-edit="${f.id}" aria-label="${editing === f.id ? 'Close editor' : 'Edit this game'}">${editing === f.id ? '&#9652;' : '&#9662;'}</button>
-      <button class="iconsm" data-delgame="${f.id}" title="Delete this game" aria-label="Delete this game">&times;</button>
     </div>`;
         if (editing !== f.id) return head;
 
@@ -4073,6 +4483,11 @@
       <div class="seg">${[1, 2, 3].map(n => `<button data-crew="${f.id}|${n}" aria-pressed="${f.crewSize === n}">${n}</button>`).join('')}</div>
       <div class="crew" style="margin-top:10px">${roles}</div>
       <button class="btn sm" data-done="${f.id}" style="margin-top:10px">${f.done ? 'Put back on the list' : 'Mark done'}</button>
+      <details class="disclose danger" style="margin-top:10px">
+        <summary>More</summary>
+        <button class="btn sm danger" data-delgame="${f.id}" style="margin-bottom:12px"
+          aria-label="Delete ${esc(pitchLabel(f) || 'this game')}">Delete this game</button>
+      </details>
     </div>`;
       }).join('');
 
@@ -4085,10 +4500,8 @@
 
       $('#sheetBody').innerHTML = `
     <div class="card">
-      <label class="f"><span>Mentor/Monitor name</span>
-        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
       <label class="f"><span>Date</span><input type="date" id="sessDate" value="${esc(S.date)}" /></label>
-      <button class="btn sm primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
+      <button class="btn primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
     </div>
 
     <div class="card">
@@ -4099,10 +4512,8 @@
         in the header switches in one tap.</div>
     </div>
 
-    ${ACCOUNTS_ON ? `<div class="card" id="acctCard">${accountCardInner()}</div>` : ''}
-
     <h2 class="sec">Games (${S.fields.length})</h2>
-    <p class="hint">Tap a game to edit it, or &times; to delete it.</p>
+    <p class="hint">Tap a game to edit it. Deleting one is under <b>More</b> inside it.</p>
     ${gameCards}
 
     <h2 class="sec">Add by hand</h2>
@@ -4121,125 +4532,222 @@
           ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>`;
     }
 
-    function renderImport() {
-      const src = IMP ? IMP.source : 'sheet';
-      const seg = `<div class="seg">
-    ${[['sheet', 'Google Sheet'], ['paste', 'Paste'], ['cache', 'This browser']]
-          .map(([k, l]) => `<button data-impsrc="${k}" aria-pressed="${src === k}">${l}</button>`).join('')}
-  </div>`;
+    /* ---------- the import wizard ----------
+       This used to be a single 4,600px scroll - six and a bit phone screens of
+       source picker, then a raw spreadsheet preview, then ten column dropdowns,
+       then the field filter, then 42 game checkboxes, with no sense of where
+       you were or how much was left. It is three steps now:
 
-      let sourceUI = '';
-      if (src === 'sheet') {
-        const last = store.get('sideline:sheet') || {id: '', gid: ''};
-        sourceUI = `
-      <label class="f"><span>Spreadsheet link or ID</span>
-        <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
-      <label class="f"><span>Tab gid (optional - blank uses the first tab)</span>
-        <input type="text" id="shGid" value="${esc(last.gid)}" placeholder="1490026671" /></label>
-      <button class="btn sm primary" id="doFetch" style="margin-top:10px">Fetch the tab</button>
-      <div class="hint" style="margin-top:8px">The tab has to be viewable by anyone with the link.
-        A sheet only you can open will return a login page, not data. Nothing is sent anywhere -
-        your phone fetches it directly and the ID stays in this browser.</div>`;
-      } else if (src === 'paste') {
-        sourceUI = `
-      <label class="f"><span>Paste rows from the schedule</span>
-        <textarea id="pasteBox" rows="5" placeholder="Select the cells in the sheet, copy, paste here">${esc(IMP && IMP.text || '')}</textarea></label>
-      <button class="btn sm primary" id="doParse" style="margin-top:8px">Read these rows</button>
-      <div class="hint" style="margin-top:8px">Include the header row. Tabs or commas both work.</div>`;
-      } else {
-        const found = scanBrowserCache();
-        sourceUI = found.length
-          ? found.map((c, i) => `<div class="gamerow">
-          <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
-          <div class="g2">${c.rows.length} rows</div></div>
-          <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
-          : `<div class="hint">Nothing found. This reads data other apps on the same site have
-         cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
-         because they sit on the same domain. It comes up empty inside the Android app,
-         where the origin is different.</div>`;
+         1. where the schedule is
+         2. which fields are yours
+         3. what is about to be added
+
+       Each step is one decision and fits on a screen or two. The column
+       mapping, which is the most technical part by far, is hidden entirely
+       when it maps itself correctly - which it does for any sheet with
+       ordinary headings. */
+    const IMP_STEPS = [[1, 'Schedule'], [2, 'Your fields'], [3, 'Confirm']];
+
+    function impStep() {
+      // Can't be past step 1 with nothing parsed.
+      if (!IMP || !IMP.rows || !IMP.rows.length) return 1;
+      return Math.min(Math.max(IMP.step || 1, 1), 3);
+    }
+
+    function impStepper() {
+      const cur = impStep();
+      return `<ol class="stepper" aria-label="Import steps">${IMP_STEPS.map(([n, label]) => `
+    <li class="${n === cur ? 'on' : n < cur ? 'done' : ''}" ${n === cur ? 'aria-current="step"' : ''}>
+      <span class="sn">${n < cur ? '&#10003;' : n}</span><span class="sl">${label}</span>
+    </li>`).join('')}</ol>`;
+    }
+
+    /* Which of the columns we actually need did the sheet give us? "field" and
+       at least one name column is the bar - everything else is a bonus. */
+    function mapHealth() {
+      const m = (IMP && IMP.map) || {};
+      const have = (k) => m[k] !== '' && m[k] != null;
+      const names = ['cr', 'cr2', 'ar1', 'ar2', 'crew'].filter(have);
+      const found = ['field', 'time', 'date', 'division'].filter(have);
+      return {ok: have('field') && names.length > 0, found, names,
+        label: IMP && IMP.header ? found.map(k => IMP.header[Number(m[k])]).filter(Boolean) : []};
+    }
+
+    function renderImport() {
+      const step = impStep();
+      const src = IMP ? IMP.source : 'sheet';
+      let body = '';
+
+      /* ---------- step 1: where is the schedule ---------- */
+      if (step === 1) {
+        const seg = `<div class="seg" role="group" aria-label="Where the schedule is">
+      ${[['sheet', 'Google Sheet'], ['paste', 'Paste'], ['cache', 'This browser']]
+            .map(([k, l]) => `<button data-impsrc="${k}" aria-pressed="${src === k}">${l}</button>`).join('')}
+    </div>`;
+
+        let sourceUI = '';
+        if (src === 'sheet') {
+          const last = store.get('sideline:sheet') || {id: '', gid: ''};
+          sourceUI = `
+        <label class="f"><span>Spreadsheet link or ID</span>
+          <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
+        <label class="f"><span>Tab gid (optional - blank uses the first tab)</span>
+          <input type="text" id="shGid" value="${esc(last.gid)}" placeholder="1490026671" /></label>
+        <button class="btn primary" id="doFetch" style="margin-top:12px">Fetch the tab</button>
+        <div class="hint" style="margin-top:8px">The tab has to be viewable by anyone with the link.
+          A sheet only you can open will return a login page, not data. Nothing is sent anywhere -
+          your phone fetches it directly and the ID stays in this browser.</div>`;
+        } else if (src === 'paste') {
+          sourceUI = `
+        <label class="f"><span>Paste rows from the schedule</span>
+          <textarea id="pasteBox" rows="5" placeholder="Select the cells in the sheet, copy, paste here">${esc(IMP && IMP.text || '')}</textarea></label>
+        <button class="btn primary" id="doParse" style="margin-top:10px">Read these rows</button>
+        <div class="hint" style="margin-top:8px">Include the header row. Tabs or commas both work.</div>`;
+        } else {
+          const found = scanBrowserCache();
+          sourceUI = found.length
+            ? found.map((c, i) => `<div class="gamerow">
+            <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
+            <div class="g2">${c.rows.length} rows</div></div>
+            <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
+            : `<div class="hint">Nothing found. This reads data other apps on the same site have
+           cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
+           because they sit on the same domain. It comes up empty inside the Android app,
+           where the origin is different.</div>`;
+        }
+
+        body = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>`;
+
+        // Rows are in: confirm what we read, and offer the column check only as
+        // a disclosure. Most people never need to open it.
+        if (IMP && IMP.rows && IMP.rows.length) {
+          const h = mapHealth();
+          const rows = Math.max(0, IMP.rows.length - IMP.headerRow - 1);
+          body += h.ok
+            ? `<div class="okbox" style="margin-top:12px">
+          <b>&#10003; Read ${rows} row${rows === 1 ? '' : 's'}.</b>
+          <div style="margin-top:2px">Found ${esc(h.label.join(', '))} and the referee names.</div></div>
+        ${impColumnsDetails(false)}
+        <button class="btn primary" id="impNext" style="margin-top:12px">Next: choose your fields</button>`
+            : `<div class="warn" style="margin-top:12px">Read ${rows} row${rows === 1 ? '' : 's'}, but
+          ${IMP.map.field === '' ? 'no <b>Field</b> column' : 'no <b>referee name</b> column'} was recognised.
+          Set it below and this will move on.</div>
+        ${impColumnsDetails(true)}
+        <button class="btn primary" id="impNext" style="margin-top:12px" ${h.ok ? '' : 'disabled'}>Next: choose your fields</button>`;
+        }
       }
 
-      let mapUI = '';
-      if (IMP && IMP.rows && IMP.rows.length) {
-        const opts = (sel) => ['<option value="">not in this sheet</option>']
-          .concat(IMP.header.map((h, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(h || 'column ' + (i + 1))}</option>`)).join('');
-        const preview = IMP.rows.slice(IMP.headerRow, IMP.headerRow + 4);
+      /* ---------- step 2: which fields are yours ---------- */
+      if (step === 2) {
+        const present = fieldsInImport();
+        const sel = IMP.fieldFilter;
+        const isOn = (name) => !sel || sel.includes(name);
+        const count = sel ? sel.length : present.length;
+        const sug = suggestedFields();
+
+        const chips = present.map(f => `<button class="fchip${isOn(f.name) ? ' on' : ''}"
+      data-impfield="${esc(f.name)}" aria-pressed="${isOn(f.name)}">
+      ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`).join('');
+
+        body = `<div class="card">
+      <h2 class="sec" style="margin-top:0">Which fields are you monitoring?</h2>
+      <p class="hint">Tap the ones you are watching today. Every kickoff on those fields
+        comes in, so one pitch all morning arrives as three or four games.</p>
+      ${sug && count === 0 ? `<button class="btn sm" id="fieldsSuggest" style="margin-bottom:10px">
+        Use ${esc(sug.names.map(shortField).join(', '))}</button>
+      <div class="hint" style="margin:-6px 0 10px">${esc(sug.why)}.</div>` : ''}
+      <div class="fieldstrip" style="flex-wrap:wrap;overflow:visible">${chips}</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm ghost" id="fieldsNone">Clear</button>
+        <button class="btn sm ghost" id="fieldsAll">Every field</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm ghost" id="impBack">Back</button>
+      <button class="btn primary" id="impNext" ${count ? '' : 'disabled'} style="flex:2">
+        ${count ? `Next: ${plural(rowsToGames().length, 'game')}` : 'Pick at least one field'}</button>
+    </div>`;
+      }
+
+      /* ---------- step 3: confirm ---------- */
+      if (step === 3) {
         const filtered = rowsToGames();
         if (IMP.picked === null) IMP.picked = filtered.map(g => g.key);
         const present = fieldsInImport();
         const sel = IMP.fieldFilter;
-        const fieldChips = present.map(f => {
-          const on = !sel || sel.includes(f.name);
-          return `<button class="fchip${on ? ' on' : ''}" data-impfield="${esc(f.name)}">
-        ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`;
-        }).join('');
 
-        mapUI = `
-      <div class="divider"></div>
-      <h2 class="sec">Check the columns</h2>
-      <label class="f"><span>Header row</span>
-        <select id="hdrRow">${IMP.rows.slice(0, 8).map((r, i) =>
-          `<option value="${i}"${i === IMP.headerRow ? ' selected' : ''}>Row ${i + 1}: ${esc(r.slice(0, 4).filter(Boolean).join(' | ').slice(0, 40))}</option>`).join('')}</select></label>
-      <div class="scrollx" style="margin:8px 0"><table class="tbl"><tbody>
-        ${preview.map((r, ri) => `<tr>${r.slice(0, 8).map(c =>
-            ri === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
-      </tbody></table></div>
-      <div class="map2">
-        <label class="f"><span>Field</span><select data-map="field">${opts(IMP.map.field)}</select></label>
-        <label class="f"><span>Time</span><select data-map="time">${opts(IMP.map.time)}</select></label>
-        <label class="f"><span>Date</span><select data-map="date">${opts(IMP.map.date)}</select></label>
-        <label class="f"><span>Division</span><select data-map="division">${opts(IMP.map.division)}</select></label>
-      </div>
-      <div class="map2">
-        <label class="f"><span>CR 1</span><select data-map="cr">${opts(IMP.map.cr)}</select></label>
-        <label class="f"><span>CR 2</span><select data-map="cr2">${opts(IMP.map.cr2)}</select></label>
-        <label class="f"><span>AR 1</span><select data-map="ar1">${opts(IMP.map.ar1)}</select></label>
-        <label class="f"><span>AR 2</span><select data-map="ar2">${opts(IMP.map.ar2)}</select></label>
-        <div></div>
-        <label class="f"><span>Cancelled flag</span><select data-map="cancel">${opts(IMP.map.cancel)}</select></label>
-      </div>
-      <label class="f"><span>Whole crew in one column</span><select data-map="crew">${opts(IMP.map.crew)}</select></label>
-      <div class="hint">Crew size comes from the division, not from how many names are
-        filled in. Pre-K and Kindergarten split into two pitches with one referee each;
-        1st and 2nd grade are one game with two officials.</div>
-
-      <div class="divider"></div>
-      <h2 class="sec">Which fields are you monitoring</h2>
-      <p class="hint">Every kickoff on the fields you pick comes in, so one pitch all
-        morning arrives as three or four games. ${sel ? `Filtering to ${sel.length}
-        field${sel.length === 1 ? '' : 's'}.` : 'No filter - every field in the sheet.'}</p>
-      <div class="fieldstrip" style="flex-wrap:wrap;overflow:visible">${fieldChips}</div>
-      <div class="row" style="margin:2px 0 10px">
-        <button class="btn sm ghost" id="fieldsAll">Every field</button>
-        <button class="btn sm ghost" id="fieldsBoard">Fields on my board</button>
-      </div>
-
-      <h2 class="sec">Games found (${filtered.length})</h2>
-      <div class="seg" style="margin-bottom:8px">
-        <button data-datef="session" aria-pressed="${IMP.dateFilter === 'session'}">${esc(prettyDate(S.date))} only</button>
-        <button data-datef="all" aria-pressed="${IMP.dateFilter === 'all'}">Every date</button>
-      </div>
-      ${filtered.length ? `<div class="row" style="margin-bottom:6px">
-        <button class="btn sm ghost" id="pickAll">Select all ${filtered.length}</button>
-        <button class="btn sm ghost" id="pickNone">Select none</button></div>` : ''}
-      ${filtered.length ? filtered.map(g => {
-              const on = IMP.picked.includes(g.key);
-              return `<div class="gamerow${on ? '' : ' off'}">
-          <input type="checkbox" data-pickgame="${g.key}" ${on ? 'checked' : ''} />
-          <div style="flex:1;min-width:0">
-            <div class="g1">${g.time ? esc(pretty12(g.time)) + ' &nbsp; ' : ''}${esc(g.field || g.raw.field || 'field not matched')}</div>
-            <div class="g2">${esc(g.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no officials listed'}</div>
-          </div></div>`;
-            }).join('') : '<div class="empty">No games matched. Check the column mapping above, or switch to every date.</div>'}
-      ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
-        list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
-      ${present.length && sel && sel.length < present.length ? `<div class="hint">${present.length - sel.length}
-        other field${present.length - sel.length === 1 ? '' : 's'} in this sheet are filtered out.</div>` : ''}
-      <button class="btn primary" id="doApply" style="margin-top:10px">Add ${IMP.picked.length} game${IMP.picked.length === 1 ? '' : 's'} to the board</button>`;
+        body = `<div class="seg" role="group" aria-label="Which dates" style="margin-bottom:10px">
+      <button data-datef="session" aria-pressed="${IMP.dateFilter === 'session'}">${esc(prettyDate(S.date))} only</button>
+      <button data-datef="all" aria-pressed="${IMP.dateFilter === 'all'}">Every date</button>
+    </div>
+    <h2 class="sec" style="margin-top:4px">${plural(filtered.length, 'game')} found</h2>
+    ${filtered.length ? `<div class="row" style="margin-bottom:8px">
+      <button class="btn sm ghost" id="pickAll">Select all</button>
+      <button class="btn sm ghost" id="pickNone">Select none</button></div>` : ''}
+    ${filtered.length ? filtered.map(g => {
+          const on = IMP.picked.includes(g.key);
+          return `<label class="gamerow${on ? '' : ' off'}">
+        <input type="checkbox" data-pickgame="${g.key}" ${on ? 'checked' : ''} />
+        <div style="flex:1;min-width:0">
+          <div class="g1">${g.time ? esc(pretty12(g.time)) + ' &nbsp; ' : ''}${esc(g.field || g.raw.field || 'field not matched')}</div>
+          <div class="g2">${esc(g.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no officials listed'}</div>
+        </div></label>`;
+        }).join('') : `<div class="empty">No games matched${IMP.dateFilter === 'session'
+          ? ` on ${esc(prettyDate(S.date))}. Try Every date above` : ''}.</div>`}
+    ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
+      list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
+    ${present.length && sel && sel.length < present.length ? `<div class="hint">${plural(present.length - sel.length, 'other field')}
+      in this sheet ${present.length - sel.length === 1 ? 'is' : 'are'} filtered out.</div>` : ''}
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm ghost" id="impBack">Back</button>
+      <button class="btn primary" id="doApply" ${IMP.picked.length ? '' : 'disabled'} style="flex:2">
+        Add ${plural(IMP.picked.length, 'game')}</button>
+    </div>`;
       }
 
-      $('#sheetBody').innerHTML = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>${mapUI}
-    <button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>`;
+      $('#sheetBody').innerHTML = `${impStepper()}${body}
+    <button class="btn sm ghost" id="backToSettings" style="margin-top:14px">Cancel</button>`;
+    }
+
+    /* The column mapping, kept behind a disclosure. It is the single most
+       technical thing in the app - ten dropdowns and a raw spreadsheet dump -
+       and when the headings are ordinary it gets every one of them right
+       without being asked. Open it only when it failed, or when someone
+       chooses to look. */
+    function impColumnsDetails(openIt) {
+      if (!IMP || !IMP.rows) return '';
+      const opts = (sel) => ['<option value="">not in this sheet</option>']
+        .concat(IMP.header.map((h, i) =>
+          `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(h || 'column ' + (i + 1))}</option>`)).join('');
+      const preview = IMP.rows.slice(IMP.headerRow, IMP.headerRow + 4);
+      return `<details class="disclose" ${openIt ? 'open' : ''}>
+    <summary>Columns look wrong?</summary>
+    <label class="f"><span>Header row</span>
+      <select id="hdrRow">${IMP.rows.slice(0, 8).map((r, i) =>
+        `<option value="${i}"${i === IMP.headerRow ? ' selected' : ''}>Row ${i + 1}: ${esc(r.slice(0, 4).filter(Boolean).join(' | ').slice(0, 40))}</option>`).join('')}</select></label>
+    <div class="scrollx" style="margin:8px 0"><table class="tbl"><tbody>
+      ${preview.map((r, ri) => `<tr>${r.slice(0, 8).map(c =>
+          ri === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="map2">
+      <label class="f"><span>Field</span><select data-map="field">${opts(IMP.map.field)}</select></label>
+      <label class="f"><span>Time</span><select data-map="time">${opts(IMP.map.time)}</select></label>
+      <label class="f"><span>Date</span><select data-map="date">${opts(IMP.map.date)}</select></label>
+      <label class="f"><span>Division</span><select data-map="division">${opts(IMP.map.division)}</select></label>
+    </div>
+    <div class="map2">
+      <label class="f"><span>CR 1</span><select data-map="cr">${opts(IMP.map.cr)}</select></label>
+      <label class="f"><span>CR 2</span><select data-map="cr2">${opts(IMP.map.cr2)}</select></label>
+      <label class="f"><span>AR 1</span><select data-map="ar1">${opts(IMP.map.ar1)}</select></label>
+      <label class="f"><span>AR 2</span><select data-map="ar2">${opts(IMP.map.ar2)}</select></label>
+      <div></div>
+      <label class="f"><span>Cancelled flag</span><select data-map="cancel">${opts(IMP.map.cancel)}</select></label>
+    </div>
+    <label class="f"><span>Whole crew in one column</span><select data-map="crew">${opts(IMP.map.crew)}</select></label>
+    <div class="hint">Crew size comes from the division, not from how many names are
+      filled in. Pre-K and Kindergarten split into two pitches with one referee each;
+      1st and 2nd grade are one game with two officials.</div>
+  </details>`;
     }
 
     let sheetReturnFocus = null;
@@ -4282,7 +4790,50 @@
       });
       renderAll();
       window.scrollTo({top: 0});
+      untuck();
     }
+
+    /* ---------- collapse-on-scroll header ----------
+       Scrolling down past the brand row tucks it away; any scroll up brings it
+       straight back. The 6px dead zone stops the header flickering when a
+       fingertip wobbles, and it never tucks near the top of the page. */
+    let lastY = 0, tucked = false, tuckLock = 0;
+    function untuck() {
+      tucked = false; lastY = 0; tuckLock = 0;
+      const h = document.querySelector('header'); if (h) h.classList.remove('tuck');
+    }
+    function onScroll() {
+      const h = document.querySelector('header'); if (!h) return;
+      const y = Math.max(0, window.scrollY);
+
+      /* Only tuck when there is real scrolling to do. On a short page the
+         reclaimed height is a large share of the total, which makes the
+         feedback below far worse, and there is little to gain anyway. */
+      const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (room < 220) {
+        if (tucked) {tucked = false; h.classList.remove('tuck');}
+        lastY = y; return;
+      }
+
+      /* The lock is the important part. The header sits in the flow, so tucking
+         it makes the document ~54px shorter, and the browser nudges scrollY by
+         a few pixels to compensate. That nudge arrives as a fresh scroll event
+         pointing the opposite way, which untucks, which makes the page taller
+         again - a loop that flaps the header several times a second. Ignoring
+         scroll for longer than the transition lets the layout settle first. */
+      const now = Date.now();
+      if (now < tuckLock) {lastY = y; return;}
+      if (Math.abs(y - lastY) < 12) return;
+
+      const want = y > 72 && y > lastY;
+      lastY = y;
+      if (want !== tucked) {
+        tucked = want;
+        h.classList.toggle('tuck', want);
+        tuckLock = now + 320;
+      }
+    }
+    window.addEventListener('scroll', onScroll, {passive: true});
     function renderAll() {
       renderWatching();
       if (S.ui.tab === 'fields') renderFields();
@@ -4647,10 +5198,9 @@
       if (added || updated) {
         const before = S.fields.length;
         S.fields = S.fields.filter(f => f.name || f.refs.some(r => r.name.trim() || r.notes.length));
-        if (!S.fields.length) S.fields.push(newField(''));
         pruned = before - S.fields.length;
       }
-      if (!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+      if (!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] ? S.fields[0].id : null;
 
       save(); renderAll();
       let msg = `${added} added, ${updated} updated`;
@@ -4727,7 +5277,7 @@
         ? {...auto, ...savedMap} : auto;
       IMP = {
         rows, headerRow, header, map, text: IMP ? IMP.text : '', source: IMP ? IMP.source : 'sheet',
-        dateFilter: 'session', fieldFilter: null, picked: null
+        dateFilter: 'session', fieldFilter: null, picked: null, step: 1
       };
       IMP.fieldFilter = defaultFieldFilter();
     }
@@ -4748,20 +5298,37 @@
     }
 
     /* You monitor one to three pitches, not the whole complex, and the same
-       pitch recurs all morning. So default the filter to your fields rather
-       than to everything:
+       pitch recurs all morning. So the filter starts at YOUR fields:
          1. the fields you picked last time, if they appear in this sheet
          2. otherwise whatever is already on the board
-         3. otherwise everything, for a genuinely first run
-       The date filter handles "today"; this handles "mine". */
+         3. otherwise nothing, and you pick
+       The last line used to be "otherwise everything", which meant a first-time
+       mentor opened a fourteen-field sheet with all fourteen selected and 42
+       games ticked, and had to tap thirteen of them OFF to get to the one pitch
+       they were there for. Picking things is a decision; un-picking a list
+       someone else chose for you is a chore. Empty is the safe default: the
+       screen asks which fields are yours, so it should not have answered
+       already. null still means "no filter" and is what the Every field
+       button sets - but nothing reaches that state on its own any more. */
     function defaultFieldFilter() {
       const present = fieldsInImport().map(f => f.name);
-      if (!present.length) return null;
+      if (!present.length) return [];
       const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
       if (remembered.length) return remembered;
       const onBoard = present.filter(n => S.fields.some(f => f.name === n));
       if (onBoard.length) return onBoard;
-      return null;   // null = no filter
+      return [];
+    }
+
+    /* Which fields we would have suggested, for the "you watched these last
+       time" shortcut on step 2 when nothing is selected yet. */
+    function suggestedFields() {
+      const present = fieldsInImport().map(f => f.name);
+      const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
+      if (remembered.length) return {names: remembered, why: 'the fields you picked last time'};
+      const onBoard = present.filter(n => S.fields.some(f => f.name === n));
+      if (onBoard.length) return {names: onBoard, why: 'the fields already on your board'};
+      return null;
     }
 
     /* ============================================================
@@ -4875,7 +5442,7 @@
 
       const impSrc = hit('data-impsrc');
       if (impSrc) {
-        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', fieldFilter: null, picked: null};
+        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', fieldFilter: null, picked: null, step: 1};
         IMP.source = impSrc; renderImport(); return;
       }
       const useCache = hit('data-usecache');
@@ -4896,7 +5463,9 @@
         // otherwise the first tap would read as deselecting from an empty set.
         let sel = IMP.fieldFilter ? IMP.fieldFilter.slice() : present.slice();
         sel = sel.includes(impField) ? sel.filter(n => n !== impField) : sel.concat([impField]);
-        IMP.fieldFilter = sel.length === present.length ? null : sel;
+        // Stays an explicit list even when it happens to hold every field, so
+        // "Clear" still has something to clear and the count stays honest.
+        IMP.fieldFilter = sel;
         IMP.picked = null; renderImport(); return;
       }
       const pol = hit('data-pol'); if (pol) {S.ui.pol = Number(pol); save(); renderObserve(); return;}
@@ -5031,10 +5600,7 @@
         case 'backupCopy': copyText(backupText(), 'Backup').then(ok => {if (ok) markBackedUp();}); return;
         case 'restoreFile': $('#restoreInput').click(); return;
         case 'restorePaste': restoreBackup($('#restoreText').value); return;
-        case 'openAccount':
-          openSheet('settings');
-          requestAnimationFrame(() => {const c = $('#acctCard'); if (c) c.scrollIntoView({block: 'start'});});
-          return;
+        case 'openAccount': openSheet('account'); return;
         case 'acctSend': case 'acctResend': sendCode(); return;
         case 'acctVerify': verifyCode(); return;
         case 'acctBack': Object.assign(acctUI, {step: 'email', code: '', error: '', notice: ''}); paintAcctCard(true); return;
@@ -5085,12 +5651,30 @@
         case 'fieldsAll':
           if (IMP) {IMP.fieldFilter = null; IMP.picked = null; renderImport();}
           return;
-        case 'fieldsBoard': {
+        case 'fieldsNone':
+          if (IMP) {IMP.fieldFilter = []; IMP.picked = null; renderImport();}
+          return;
+        case 'fieldsSuggest': {
           if (!IMP) return;
-          const present = fieldsInImport().map(f => f.name);
-          const onBoard = present.filter(n => S.fields.some(f => f.name === n));
-          if (!onBoard.length) {flash('No fields from this sheet are on the board yet'); return;}
-          IMP.fieldFilter = onBoard; IMP.picked = null; renderImport(); return;
+          const sug = suggestedFields();
+          if (!sug) return;
+          IMP.fieldFilter = sug.names.slice(); IMP.picked = null; renderImport(); return;
+        }
+        case 'impNext': {
+          if (!IMP) return;
+          const to = Math.min(impStep() + 1, 3);
+          // Entering step 3 fresh should tick everything the filter let through;
+          // coming back to it should keep whatever was already unticked.
+          if (to === 3 && IMP.picked === null) IMP.picked = rowsToGames().map(g => g.key);
+          IMP.step = to; renderImport();
+          const sh = $('#sheet'); if (sh) sh.scrollTop = 0;
+          return;
+        }
+        case 'impBack': {
+          if (!IMP) return;
+          IMP.step = Math.max(impStep() - 1, 1); renderImport();
+          const sh = $('#sheet'); if (sh) sh.scrollTop = 0;
+          return;
         }
         case 'pickAll':
           if (IMP) {IMP.picked = rowsToGames().map(g => g.key); renderImport();}
@@ -5150,7 +5734,10 @@
       }
       if (t.id === 'noteText') {S.ui.draftText = t.value; save(); return;}
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
-      if (t.hasAttribute && t.hasAttribute('data-mentor')) {S.mentor = t.value; save(); return;}
+      if (t.hasAttribute && t.hasAttribute('data-mentor')) {
+        // Repaint the avatar as they type, so the initials appear straight away.
+        S.mentor = t.value; save(); paintAccount(); return;
+      }
       if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
       if (t.id === 'acctCode') {acctUI.code = t.value; return;}
       if (t.id === 'refSearch') {REFS_UI.q = t.value; $('#refsList').innerHTML = refsListHTML(); return;}
