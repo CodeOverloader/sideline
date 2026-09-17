@@ -203,7 +203,27 @@
     .brandrow {
       display: flex;
       align-items: center;
-      gap: 10px
+      gap: 10px;
+      /* Collapses on scroll - see header.tuck below. */
+      max-height: 56px;
+      overflow: hidden;
+      transition: max-height .18s ease, opacity .18s ease, margin .18s ease;
+    }
+
+    /* Scrolling down tucks the brand row away and leaves only the "now
+       watching" bar stuck to the top; scrolling up brings it back. This is the
+       same thing Twitter, Instagram and Reddit do, and it matters more here
+       than on any of them: the header was eating a third of the screen before
+       the first note chip, on the one screen you use while a game is running.
+       The watching bar itself never hides - it is the attribution safeguard. */
+    header.tuck .brandrow {
+      max-height: 0;
+      opacity: 0;
+      margin-top: -4px;
+    }
+
+    header.tuck .watching {
+      margin-top: 4px
     }
 
     .brand {
@@ -722,16 +742,16 @@
       color: var(--primary)
     }
 
+    /* These wrap rather than scroll sideways. There are seven categories and
+       the strip used to show three, hiding 322px of them off the right edge
+       with no arrow or fade to say so - so Offsides and General were, for most
+       people, simply not there. Two rows of chips costs a little height and
+       makes all seven visible at once. */
     .cats {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
-      overflow-x: auto;
       padding: 4px 0 8px;
-      scrollbar-width: none
-    }
-
-    .cats::-webkit-scrollbar {
-      display: none
     }
 
     .cat {
@@ -739,17 +759,28 @@
       border: 1px solid var(--line);
       background: var(--panel);
       border-radius: 20px;
-      padding: 7px 12px;
-      font-size: var(--fs-sm);
+      padding: 9px 14px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute);
     }
 
+    /* Selected is the app's primary blue, like every other selected thing.
+       This was white-on-dark, which made "selected" mean two different
+       colours depending on which screen you were looking at. */
     .cat.on {
-      background: var(--ink);
-      color: var(--bg);
-      border-color: var(--ink)
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary)
+    }
+
+    .cat .n {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-xs);
+      opacity: .85;
+      margin-left: 2px
     }
 
     .chipgrid {
@@ -2617,8 +2648,10 @@
       const {field, ref} = p;
       const catRow = CATS.map(c => {
         const n = ref.notes.filter(x => x.cat === c.id).length;
-        return `<button class="cat${S.ui.cat === c.id ? ' on' : ''}" data-cat="${c.id}">
-      ${esc(c.short)}${n ? ` ${n}` : ''}</button>`;
+        return `<button class="cat${S.ui.cat === c.id ? ' on' : ''}" data-cat="${c.id}"
+      aria-pressed="${S.ui.cat === c.id}"
+      aria-label="${esc(c.label)}${n ? `, ${n} note${n === 1 ? '' : 's'}` : ''}">
+      ${esc(c.short)}${n ? `<span class="n">${n}</span>` : ''}</button>`;
       }).join('');
 
       // Role filter: a chip with pos:'AR' is hidden from a center referee
@@ -4410,7 +4443,50 @@
       });
       renderAll();
       window.scrollTo({top: 0});
+      untuck();
     }
+
+    /* ---------- collapse-on-scroll header ----------
+       Scrolling down past the brand row tucks it away; any scroll up brings it
+       straight back. The 6px dead zone stops the header flickering when a
+       fingertip wobbles, and it never tucks near the top of the page. */
+    let lastY = 0, tucked = false, tuckLock = 0;
+    function untuck() {
+      tucked = false; lastY = 0; tuckLock = 0;
+      const h = document.querySelector('header'); if (h) h.classList.remove('tuck');
+    }
+    function onScroll() {
+      const h = document.querySelector('header'); if (!h) return;
+      const y = Math.max(0, window.scrollY);
+
+      /* Only tuck when there is real scrolling to do. On a short page the
+         reclaimed height is a large share of the total, which makes the
+         feedback below far worse, and there is little to gain anyway. */
+      const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (room < 220) {
+        if (tucked) {tucked = false; h.classList.remove('tuck');}
+        lastY = y; return;
+      }
+
+      /* The lock is the important part. The header sits in the flow, so tucking
+         it makes the document ~54px shorter, and the browser nudges scrollY by
+         a few pixels to compensate. That nudge arrives as a fresh scroll event
+         pointing the opposite way, which untucks, which makes the page taller
+         again - a loop that flaps the header several times a second. Ignoring
+         scroll for longer than the transition lets the layout settle first. */
+      const now = Date.now();
+      if (now < tuckLock) {lastY = y; return;}
+      if (Math.abs(y - lastY) < 12) return;
+
+      const want = y > 72 && y > lastY;
+      lastY = y;
+      if (want !== tucked) {
+        tucked = want;
+        h.classList.toggle('tuck', want);
+        tuckLock = now + 320;
+      }
+    }
+    window.addEventListener('scroll', onScroll, {passive: true});
     function renderAll() {
       renderWatching();
       if (S.ui.tab === 'fields') renderFields();
