@@ -78,6 +78,35 @@
       --marker-ring: #e9eef3;
       --r: 12px;
       --pad: 14px;
+
+      /* ---------- TYPE SCALE ----------
+         Sizes are in rem, not px, on purpose. 1rem = whatever the phone's
+         browser has been told a "normal" letter is, so a mentor who has set
+         their phone to Large text gets larger text HERE too. Fixed px ignores
+         that setting entirely, which is exactly backwards for this audience.
+         Seven steps, and nothing below --fs-xs: a design "scale" just means a
+         short list of allowed sizes, so the app never drifts into 11.5px. */
+      --fs-xs: 0.8125rem;
+      /* 13px - the floor. Captions, counts, pills. */
+      --fs-sm: 0.875rem;
+      /* 14px - secondary text, hints */
+      --fs-md: 0.9375rem;
+      /* 15px - dense UI labels */
+      --fs-base: 1rem;
+      /* 16px - body. Also the iOS no-zoom floor for inputs. */
+      --fs-lg: 1.125rem;
+      /* 18px - card titles */
+      --fs-xl: 1.25rem;
+      /* 20px - section headings */
+      --fs-2xl: 1.625rem;
+      /* 26px - brand */
+      --fs-3xl: 1.875rem;
+      /* 30px - display */
+
+      /* Minimum comfortable touch target. Apple asks for 44px, Material for
+         48. Everything you can tap is held to this, because the app is used
+         one-handed, outdoors, often by someone wearing reading glasses. */
+      --tap: 44px;
     }
 
     /* SUNLIGHT theme. A dark screen washes out in direct sun, which is exactly
@@ -125,8 +154,8 @@
       background: var(--bg);
       color: var(--ink);
       font-family: Inter, system-ui, -apple-system, sans-serif;
-      font-size: 15px;
-      line-height: 1.45;
+      font-size: var(--fs-base);
+      line-height: 1.5;
       max-width: 600px;
       margin: 0 auto;
       padding-bottom: calc(84px + env(safe-area-inset-bottom));
@@ -179,7 +208,7 @@
 
     .brand {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 26px;
+      font-size: var(--fs-2xl);
       letter-spacing: .06em;
       line-height: 1
     }
@@ -193,14 +222,14 @@
     }
 
     .iconbtn {
-      width: 38px;
-      height: 38px;
+      width: var(--tap);
+      height: var(--tap);
       border-radius: 10px;
       border: 1px solid var(--line);
       background: var(--panel);
       display: grid;
       place-items: center;
-      font-size: 17px;
+      font-size: var(--fs-base);
     }
 
     /* the "now watching" bar: the single most important element in the app.
@@ -219,7 +248,7 @@
 
     .watching .who {
       font-weight: 650;
-      font-size: 15px;
+      font-size: var(--fs-md);
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
@@ -227,14 +256,14 @@
     }
 
     .watching .sub {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.2
     }
 
     .watching .rolechip {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       background: var(--primary);
       color: var(--on-primary);
@@ -245,7 +274,7 @@
     .watching .clk {
       margin-left: auto;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       color: var(--primary);
       white-space: nowrap;
@@ -287,12 +316,12 @@
       align-items: center;
       gap: 3px;
       color: var(--mute);
-      font-size: 11px;
+      font-size: var(--fs-xs);
       font-weight: 600;
     }
 
     nav button .ico {
-      font-size: 19px;
+      font-size: var(--fs-lg);
       line-height: 1
     }
 
@@ -319,7 +348,7 @@
 
     h2.sec {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 20px;
+      font-size: var(--fs-xl);
       letter-spacing: .04em;
       margin: 18px 0 4px;
       font-weight: 400
@@ -327,7 +356,7 @@
 
     .hint {
       color: var(--mute);
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 2px 0 10px
     }
 
@@ -338,7 +367,7 @@
 
     label.f>span {
       display: block;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin-bottom: 4px
     }
@@ -354,10 +383,12 @@
       background: var(--panel2);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 10px 11px;
+      padding: 11px;
+      min-height: var(--tap);
       /* iOS Safari zooms the whole page into any input under 16px and does
-         not zoom back out, which throws the layout off mid-game. */
-      font-size: 16px;
+         not zoom back out, which throws the layout off mid-game. --fs-base is
+         1rem, so this stays at or above 16px however the phone is set. */
+      font-size: var(--fs-base);
     }
 
     textarea {
@@ -379,7 +410,8 @@
       background: var(--panel2);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 11px 13px;
+      padding: 12px 14px;
+      min-height: var(--tap);
       font-weight: 600;
       text-align: center;
       display: block;
@@ -407,15 +439,18 @@
     }
 
     .btn.sm {
-      padding: 8px 10px;
-      font-size: 13px;
+      /* "sm" is about visual weight, not about being hard to hit: the text and
+         padding are smaller, but min-height keeps the target at --tap. */
+      padding: 8px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-sm);
       font-weight: 600
     }
 
     .pill {
       display: inline-block;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       padding: 2px 6px;
       border-radius: 5px;
       background: var(--panel2);
@@ -430,7 +465,7 @@
 
     .empty {
       color: var(--mute);
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       text-align: center;
       padding: 22px 10px
     }
@@ -444,7 +479,7 @@
       background: var(--ink);
       color: var(--bg);
       font-weight: 650;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       padding: 9px 15px;
       border-radius: 20px;
       box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
@@ -472,7 +507,7 @@
     .toast button {
       color: inherit;
       font-weight: 800;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       letter-spacing: .04em;
       text-transform: uppercase;
       padding: 6px 2px 6px 12px;
@@ -494,12 +529,12 @@
 
     .fieldhead .fname {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 19px;
+      font-size: var(--fs-lg);
       letter-spacing: .03em
     }
 
     .fieldhead .fmeta {
-      font-size: 12px;
+      font-size: var(--fs-xs);
       color: var(--mute)
     }
 
@@ -552,7 +587,7 @@
 
     svg.pitch .mkname {
       font-family: Inter, sans-serif;
-      font-size: 9px;
+      font-size: 10.5px;
       fill: var(--ink);
       text-anchor: middle;
       pointer-events: none;
@@ -561,7 +596,7 @@
 
     svg.pitch .cnt {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 8px;
+      font-size: 9.5px;
       font-weight: 700;
       fill: var(--on-plus);
       text-anchor: middle;
@@ -597,7 +632,7 @@
 
     .crewrow .slot {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--primary);
       width: 30px;
@@ -617,7 +652,7 @@
     }
 
     .crewrow .prog {
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       font-family: 'JetBrains Mono', monospace;
       flex: none;
@@ -631,7 +666,7 @@
       border-radius: 8px;
       min-height: 36px;
       padding: 0 12px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       font-weight: 700;
       background: var(--panel2)
     }
@@ -655,7 +690,7 @@
       background: var(--panel);
       border-radius: 9px;
       padding: 6px 9px;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute);
@@ -669,7 +704,7 @@
 
     .mini .m1 {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--primary)
     }
@@ -692,7 +727,7 @@
       background: var(--panel);
       border-radius: 20px;
       padding: 7px 12px;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute);
@@ -713,9 +748,10 @@
     .chip {
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 9px;
-      padding: 8px 10px;
-      font-size: 13px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       text-align: left;
       line-height: 1.25;
       display: flex;
@@ -782,7 +818,7 @@
       width: 40px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      font-size: 16px;
+      font-size: var(--fs-base);
       background: var(--panel2);
       color: var(--mute)
     }
@@ -822,7 +858,7 @@
 
     .nrow .t {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       flex: none;
       width: 48px;
@@ -832,12 +868,12 @@
     .nrow .bd {
       flex: 1;
       min-width: 0;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       line-height: 1.35
     }
 
     .nrow .bd .cn {
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       display: block
     }
@@ -875,7 +911,7 @@
       display: grid;
       place-items: center;
       border-radius: 8px;
-      font-size: 17px
+      font-size: var(--fs-base)
     }
 
     .nrow .del:active {
@@ -888,12 +924,12 @@
     }
 
     .ratewrap .rlabel {
-      font-size: 14px;
+      font-size: var(--fs-sm);
       font-weight: 600
     }
 
     .ratewrap .rhint {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       margin: 2px 0 7px
     }
@@ -905,7 +941,7 @@
     }
 
     .scale .end {
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       flex: none;
       width: 26px
@@ -929,7 +965,7 @@
       border-radius: 10px;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
-      font-size: 15px;
+      font-size: var(--fs-md);
     }
 
     .scale .nums button[aria-pressed="true"] {
@@ -943,7 +979,7 @@
       align-items: center;
       gap: 10px;
       margin: 10px 0;
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .switchrow input {
@@ -982,7 +1018,7 @@
 
     .charcount {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       text-align: right;
       margin-top: 4px
@@ -1014,7 +1050,7 @@
 
     .dlgbox p {
       margin: 0 0 16px;
-      font-size: 14.5px;
+      font-size: var(--fs-md);
       line-height: 1.45
     }
 
@@ -1034,12 +1070,12 @@
 
     .nowgame .g1 {
       font-weight: 650;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       line-height: 1.2
     }
 
     .nowgame .g2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.3
     }
@@ -1047,7 +1083,7 @@
     .nowgame .chev {
       margin-left: auto;
       color: var(--mute);
-      font-size: 18px;
+      font-size: var(--fs-lg);
       flex: none
     }
 
@@ -1056,7 +1092,7 @@
     .slothead {
       margin: 14px 0 6px;
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 19px;
+      font-size: var(--fs-lg);
       letter-spacing: .04em;
       color: var(--primary)
     }
@@ -1088,12 +1124,12 @@
 
     .grow .t1 {
       font-weight: 650;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       line-height: 1.25
     }
 
     .grow .t2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.35;
       white-space: nowrap;
@@ -1103,7 +1139,7 @@
 
     .grow .meter {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       text-align: right;
       flex: none;
@@ -1116,14 +1152,14 @@
 
     .iconsm {
       flex: none;
-      width: 36px;
-      height: 36px;
+      width: var(--tap);
+      height: var(--tap);
       border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel2);
       display: grid;
       place-items: center;
-      font-size: 14px;
+      font-size: var(--fs-sm);
       color: var(--mute)
     }
 
@@ -1180,7 +1216,7 @@
 
     .sheethead h3 {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: 21px;
+      font-size: var(--fs-xl);
       margin: 0;
       font-weight: 400;
       letter-spacing: .03em
@@ -1199,11 +1235,12 @@
 
     .seg button {
       flex: 1;
-      padding: 9px 0;
+      padding: 9px 4px;
+      min-height: var(--tap);
       font-weight: 600;
       background: var(--panel2);
       color: var(--mute);
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .seg button[aria-pressed="true"] {
@@ -1226,7 +1263,7 @@
     }
 
     .saved .sh b {
-      font-size: 14px
+      font-size: var(--fs-sm)
     }
 
     .saved .sh .spacer {
@@ -1237,7 +1274,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-family: Inter, sans-serif;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin: 8px 0 0
     }
@@ -1259,9 +1296,10 @@
       flex: none;
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 9px;
-      padding: 7px 10px;
-      font-size: 12.5px;
+      border-radius: 10px;
+      padding: 9px 12px;
+      min-height: var(--tap);
+      font-size: var(--fs-md);
       font-weight: 600;
       white-space: nowrap;
       color: var(--mute)
@@ -1275,7 +1313,7 @@
 
     .fchip .n {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5px;
+      font-size: var(--fs-xs);
       font-weight: 700;
       color: var(--plus)
     }
@@ -1288,14 +1326,14 @@
       display: flex;
       gap: 14px;
       flex-wrap: wrap;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute)
     }
 
     .cov b {
       color: var(--ink);
       font-family: 'JetBrains Mono', monospace;
-      font-size: 15px
+      font-size: var(--fs-md)
     }
 
     /* ---------- import ---------- */
@@ -1306,7 +1344,7 @@
 
     .tbl {
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       font-family: 'JetBrains Mono', monospace
     }
 
@@ -1354,20 +1392,29 @@
     }
 
     .gamerow input[type=checkbox] {
-      width: 21px;
-      height: 21px;
+      /* The box itself is drawn at 26px, but the whole row is the label, so the
+         real target is the full width of the card - see .gamerow below. */
+      width: 26px;
+      height: 26px;
       accent-color: var(--primary);
       flex: none
     }
 
+    /* Making the row a <label> means a tap anywhere on it toggles the box.
+       That turns a 26px target into a 358px one without changing the look. */
+    label.gamerow {
+      cursor: pointer;
+      min-height: var(--tap)
+    }
+
     .gamerow .g1 {
       font-weight: 650;
-      font-size: 13.5px;
+      font-size: var(--fs-sm);
       line-height: 1.2
     }
 
     .gamerow .g2 {
-      font-size: 11.5px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       line-height: 1.3
     }
@@ -1377,7 +1424,7 @@
       border: 1px solid var(--minus-line);
       border-radius: 10px;
       padding: 9px 11px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 8px 0
     }
 
@@ -1386,7 +1433,7 @@
       border: 1px solid var(--primary-line);
       border-radius: 10px;
       padding: 9px 11px;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       margin: 8px 0
     }
 
@@ -1398,7 +1445,7 @@
       border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel2);
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       font-weight: 650;
       color: var(--ink)
     }
@@ -1414,7 +1461,7 @@
 
     details.more summary {
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       padding: 6px 0
     }
@@ -1465,7 +1512,7 @@
       grid-template-columns: 1fr auto;
       gap: 2px 10px;
       align-items: center;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       line-height: 1.35;
       background: var(--panel);
       border: 1px solid var(--line);
@@ -1505,12 +1552,12 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 14.5px
+      font-size: var(--fs-md)
     }
 
     .refrow .rr2,
     .refrow .rr3 {
-      font-size: 12px;
+      font-size: var(--fs-xs);
       color: var(--mute);
       margin-top: 2px
     }
@@ -1530,7 +1577,7 @@
       align-items: center;
       gap: 8px;
       margin: 7px 0;
-      font-size: 13px
+      font-size: var(--fs-sm)
     }
 
     .catrow .bar {
@@ -1552,7 +1599,7 @@
 
     .catrow .cv {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       text-align: right;
       white-space: nowrap
     }
@@ -1571,7 +1618,7 @@
 
     .bigavg {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 30px;
+      font-size: var(--fs-3xl);
       font-weight: 700;
       line-height: 1
     }
@@ -1579,7 +1626,7 @@
     .plist {
       margin: 6px 0 0;
       padding-left: 18px;
-      font-size: 13.5px
+      font-size: var(--fs-sm)
     }
 
     .plist li {
@@ -1600,7 +1647,7 @@
 
     details.evald summary {
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       line-height: 1.45
     }
 
@@ -1608,7 +1655,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       font-family: Inter, sans-serif;
-      font-size: 12.5px;
+      font-size: var(--fs-sm);
       color: var(--mute);
       margin: 8px 0 0
     }
