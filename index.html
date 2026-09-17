@@ -1476,24 +1476,50 @@
     }
 
     /* ---------- accounts ---------- */
-    /* a dot on the settings cog: green when signed in, orange while pending */
-    #openSettings {
-      position: relative
+    /* The avatar is the account. Signed out it shows a neutral person glyph;
+       signed in it shows the mentor's initials. The status dot rides on it
+       rather than on the settings cog, because that is where people look. */
+    .avatar {
+      flex: none;
+      width: var(--tap);
+      height: var(--tap);
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--mute);
+      display: grid;
+      place-items: center;
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      letter-spacing: .02em;
+      position: relative;
     }
 
-    #openSettings[data-acct]::after {
+    .avatar[data-acct] {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--on-primary)
+    }
+
+    .avatar[data-acct]::after {
       content: '';
       position: absolute;
-      top: 5px;
-      right: 5px;
-      width: 8px;
-      height: 8px;
+      bottom: 1px;
+      right: 1px;
+      width: 11px;
+      height: 11px;
       border-radius: 50%;
       background: var(--plus);
-      box-shadow: 0 0 0 2px var(--panel)
+      box-shadow: 0 0 0 2px var(--glass)
     }
 
-    #openSettings[data-acct="pending"]::after {
+    .avatar[data-acct="pending"] {
+      background: var(--panel2);
+      border-color: var(--minus-line);
+      color: var(--minus)
+    }
+
+    .avatar[data-acct="pending"]::after {
       background: var(--minus)
     }
 
@@ -1666,12 +1692,14 @@
 
   <header>
     <div class="brandrow">
+      <!-- Account lives here, as an avatar, the way every mainstream app does
+           it. It is the first thing in the header on every screen, signed in
+           or out, instead of being the third card inside Settings. -->
+      <button class="avatar" id="openAccount" aria-label="Account"><span id="avatarInitials">?</span></button>
       <div class="brand">SIDE<span>LINE</span></div>
       <div class="spacer"></div>
       <button class="iconbtn" id="themeToggle" title="Switch to sunlight theme"
         aria-label="Switch to sunlight theme">&#9728;&#xFE0E;</button>
-      <button class="iconbtn" id="openPicker" title="Choose a game" aria-label="Choose a game">&#9776;</button>
-      <button class="iconbtn" id="openForm" title="Open the Google Form" aria-label="Open the Google Form">&#9873;</button>
       <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
     <div class="watching idle" id="watching" aria-live="polite">
@@ -3132,19 +3160,55 @@
       paintAccount();
     }
 
+    /* Two letters from the mentor's name, the way every app builds a fallback
+       avatar: "Pat Delgado" -> PD, "Cher" -> CH. Falls back to the email when
+       the name has not been filled in yet. */
+    function initialsFor(name, email) {
+      const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      const e = String(email || '').trim();
+      return e ? e.slice(0, 2).toUpperCase() : '';
+    }
+
     function paintAccount() {
-      const b = $('#openSettings');
-      if (b) {
+      const av = $('#openAccount'), ini = $('#avatarInitials');
+      if (av && ini) {
         const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
-        if (on) b.setAttribute('data-acct', ACCT.status); else b.removeAttribute('data-acct');
-        const label = !on ? 'Settings'
-          : ACCT.status === 'pending' ? 'Settings (account waiting for approval)'
-            : `Settings (signed in as ${ACCT.email})`;
-        b.title = label; b.setAttribute('aria-label', label);
+        if (on) av.setAttribute('data-acct', ACCT.status); else av.removeAttribute('data-acct');
+        // textContent, so a bullet not an HTML entity: with no name to work
+        // from the avatar shows a neutral dot rather than "??".
+        const who = initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
+        ini.textContent = who || '\u25CF';
+        const label = !ACCOUNTS_ON ? 'Your name and this device'
+          : !on ? 'Account - not signed in'
+            : ACCT.status === 'pending' ? 'Account - waiting for approval'
+              : `Account - signed in as ${ACCT.email}`;
+        av.title = label; av.setAttribute('aria-label', label);
       }
       paintAcctCard(false);
       if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
+      if (!$('#sheet').hidden && sheetMode === 'account') renderAccountSheet();
       renderQuietly();
+    }
+
+    /* The account sheet: what used to be the third card inside Settings, now a
+       destination of its own that the avatar opens from any tab. */
+    function renderAccountSheet() {
+      const body = $('#sheetBody'); if (!body) return;
+      if (!ACCOUNTS_ON) {
+        body.innerHTML = `<div class="card">
+        <label class="f"><span>Your name, as it goes on the form</span>
+          <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
+        <p class="hint" style="margin:10px 0 0">Sharing between mentors is switched off in this build,
+          so everything stays on this device.</p></div>`;
+        return;
+      }
+      body.innerHTML = `<div class="card">
+      <label class="f"><span>Your name, as it goes on the form</span>
+        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
+    </div>
+    <div class="card" id="acctCard">${accountCardInner()}</div>`;
     }
 
     async function sendCode() {
@@ -3194,7 +3258,9 @@
     }
 
     function accountCardInner() {
-      const head = '<div class="rlabel" style="font-size:12.5px;color:var(--mute);margin-bottom:6px">Account</div>';
+      // No heading: this renders inside the Account sheet, which is already
+      // titled "Account". Repeating it was pure noise.
+      const head = '';
       const err = acctUI.error ? `<div class="warn">${esc(acctUI.error)}</div>` : '';
       const s = ACCT.status;
       if (s === 'signedOut') {
@@ -4069,10 +4135,12 @@
       $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
         : sheetMode === 'games' ? 'Choose a game'
           : sheetMode === 'admin' ? 'Manage mentors'
-            : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
+            : sheetMode === 'account' ? 'Account'
+              : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
       if (sheetMode === 'import') return renderImport();
       if (sheetMode === 'games') return renderPicker();
       if (sheetMode === 'admin') return renderAdmin();
+      if (sheetMode === 'account') return renderAccountSheet();
       if (sheetMode === 'profile') return renderProfile();
 
       /* Settings used to print a full editor card for every game, so a nine-game
@@ -4132,10 +4200,8 @@
 
       $('#sheetBody').innerHTML = `
     <div class="card">
-      <label class="f"><span>Mentor/Monitor name</span>
-        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
       <label class="f"><span>Date</span><input type="date" id="sessDate" value="${esc(S.date)}" /></label>
-      <button class="btn sm primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
+      <button class="btn primary" id="openImport2" style="margin-top:12px">Import the day's schedule</button>
     </div>
 
     <div class="card">
@@ -4145,8 +4211,6 @@
       <div class="hint" style="margin:8px 0 0">Sunlight is far easier to read outdoors. The &#9728;&#xFE0E; button
         in the header switches in one tap.</div>
     </div>
-
-    ${ACCOUNTS_ON ? `<div class="card" id="acctCard">${accountCardInner()}</div>` : ''}
 
     <h2 class="sec">Games (${S.fields.length})</h2>
     <p class="hint">Tap a game to edit it, or &times; to delete it.</p>
@@ -5078,10 +5142,7 @@
         case 'backupCopy': copyText(backupText(), 'Backup').then(ok => {if (ok) markBackedUp();}); return;
         case 'restoreFile': $('#restoreInput').click(); return;
         case 'restorePaste': restoreBackup($('#restoreText').value); return;
-        case 'openAccount':
-          openSheet('settings');
-          requestAnimationFrame(() => {const c = $('#acctCard'); if (c) c.scrollIntoView({block: 'start'});});
-          return;
+        case 'openAccount': openSheet('account'); return;
         case 'acctSend': case 'acctResend': sendCode(); return;
         case 'acctVerify': verifyCode(); return;
         case 'acctBack': Object.assign(acctUI, {step: 'email', code: '', error: '', notice: ''}); paintAcctCard(true); return;
@@ -5197,7 +5258,10 @@
       }
       if (t.id === 'noteText') {S.ui.draftText = t.value; save(); return;}
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
-      if (t.hasAttribute && t.hasAttribute('data-mentor')) {S.mentor = t.value; save(); return;}
+      if (t.hasAttribute && t.hasAttribute('data-mentor')) {
+        // Repaint the avatar as they type, so the initials appear straight away.
+        S.mentor = t.value; save(); paintAccount(); return;
+      }
       if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
       if (t.id === 'acctCode') {acctUI.code = t.value; return;}
       if (t.id === 'refSearch') {REFS_UI.q = t.value; $('#refsList').innerHTML = refsListHTML(); return;}
