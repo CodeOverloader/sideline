@@ -55,7 +55,7 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
    - Never put a **secret** key (`sb_secret_…`) or the legacy **service_role** key in this repository or the app. They bypass every rule. The app refuses to start accounts if it sees a secret key.
    - Don't use the legacy **anon** key either. Supabase is retiring it by the end of 2026.
 
-8. **Make yourself admin.** Sign in once from the app (Settings → Account), then run this in the SQL Editor:
+8. **Make yourself admin.** Sign in once from the app (the account button, top left), then run this in the SQL Editor:
 
    ```sql
    update public.mentors
@@ -63,7 +63,7 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
    where email = 'you@example.com';
    ```
 
-   From then on you approve other mentors from the app: Settings → Account → Manage mentors.
+   From then on you approve other mentors from the app: account button → Manage mentors.
 
 9. **Keep the project awake.** Supabase pauses free projects after a period without activity, and a Saturday-only app can hit that. Check the current policy on Supabase's pricing page, then either use a paid plan or set up a scheduled request that keeps the project active.
 

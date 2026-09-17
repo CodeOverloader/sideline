@@ -3088,7 +3088,7 @@
        referee gets noticed before you are standing in the parking lot. */
     function missingFor(field, ref) {
       const out = [];
-      if (!S.mentor.trim()) out.push('your name (Settings)');
+      if (!S.mentor.trim()) out.push('your name (account button, top left)');
       if (!field.name) out.push('field');
       if (!field.time) out.push('kickoff');
       if (!field.division) out.push('division');
@@ -3735,7 +3735,7 @@
       if (!$('#dlg').hidden) return;   // never stack on another question; asked again next time
       offeredUpload = true;
       askConfirm(`Upload ${plural(n, 'saved evaluation')} from this device? Every approved mentor will be able ` +
-        `to read ${n === 1 ? 'it' : 'them'}. New saves upload automatically; you can turn this off in Settings.`,
+        `to read ${n === 1 ? 'it' : 'them'}. New saves upload automatically; you can turn this off under the account button.`,
         'Upload', () => {setUploadConsent(true); syncNow(); paintSync();},
         {tone: 'primary', noLabel: 'Not now', onNo: () => {setUploadConsent(false); paintSync();}});
     }
