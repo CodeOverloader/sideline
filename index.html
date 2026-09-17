@@ -531,6 +531,18 @@
       transform: translateX(-50%) translateY(-4px)
     }
 
+    /* With a sheet open, "bottom: 96px" lands in the middle of the sheet and
+       covers whatever button is there - during the import that is the one you
+       are meant to press next. Move it to the top while a sheet is up. */
+    body.locked .toast {
+      bottom: auto;
+      top: calc(12px + env(safe-area-inset-top))
+    }
+
+    body.locked .toast.show {
+      transform: translateX(-50%) translateY(4px)
+    }
+
     /* Only a toast that carries an action (Undo) takes taps; a plain one must
        not swallow touches on whatever sits under it. */
     .toast.act.show {
@@ -1334,6 +1346,107 @@
 
     .fieldstrip::-webkit-scrollbar {
       display: none
+    }
+
+    /* ---------- import wizard ---------- */
+    .stepper {
+      display: flex;
+      list-style: none;
+      margin: 0 0 14px;
+      padding: 0;
+      gap: 6px;
+      counter-reset: none;
+    }
+
+    .stepper li {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--mute);
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      border-top: 3px solid var(--line);
+      padding-top: 7px;
+    }
+
+    .stepper li.on {
+      color: var(--ink);
+      border-top-color: var(--primary)
+    }
+
+    .stepper li.done {
+      border-top-color: var(--primary)
+    }
+
+    .stepper .sn {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--panel2);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-xs);
+    }
+
+    .stepper li.on .sn {
+      background: var(--primary);
+      color: var(--on-primary)
+    }
+
+    .stepper li.done .sn {
+      background: var(--plus);
+      color: var(--on-plus)
+    }
+
+    .stepper .sl {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    /* A <details> is the browser's own show/hide. Used here so the column
+       mapping - ten dropdowns and a spreadsheet dump - stays out of the way
+       unless it is actually needed. */
+    .disclose {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--panel);
+      padding: 0 var(--pad)
+    }
+
+    .disclose>summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 0 0 0 4px;
+      min-height: var(--tap);
+      display: flex;
+      align-items: center;
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      color: var(--mute);
+    }
+
+    .disclose>summary::-webkit-details-marker {
+      display: none
+    }
+
+    .disclose>summary::after {
+      content: '\25BE';
+      margin-left: auto;
+      transition: transform .15s
+    }
+
+    .disclose[open]>summary::after {
+      transform: rotate(180deg)
+    }
+
+    .disclose[open] {
+      padding-bottom: var(--pad)
     }
 
     .fchip {
@@ -4295,125 +4408,222 @@
           ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>`;
     }
 
-    function renderImport() {
-      const src = IMP ? IMP.source : 'sheet';
-      const seg = `<div class="seg">
-    ${[['sheet', 'Google Sheet'], ['paste', 'Paste'], ['cache', 'This browser']]
-          .map(([k, l]) => `<button data-impsrc="${k}" aria-pressed="${src === k}">${l}</button>`).join('')}
-  </div>`;
+    /* ---------- the import wizard ----------
+       This used to be a single 4,600px scroll - six and a bit phone screens of
+       source picker, then a raw spreadsheet preview, then ten column dropdowns,
+       then the field filter, then 42 game checkboxes, with no sense of where
+       you were or how much was left. It is three steps now:
 
-      let sourceUI = '';
-      if (src === 'sheet') {
-        const last = store.get('sideline:sheet') || {id: '', gid: ''};
-        sourceUI = `
-      <label class="f"><span>Spreadsheet link or ID</span>
-        <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
-      <label class="f"><span>Tab gid (optional - blank uses the first tab)</span>
-        <input type="text" id="shGid" value="${esc(last.gid)}" placeholder="1490026671" /></label>
-      <button class="btn sm primary" id="doFetch" style="margin-top:10px">Fetch the tab</button>
-      <div class="hint" style="margin-top:8px">The tab has to be viewable by anyone with the link.
-        A sheet only you can open will return a login page, not data. Nothing is sent anywhere -
-        your phone fetches it directly and the ID stays in this browser.</div>`;
-      } else if (src === 'paste') {
-        sourceUI = `
-      <label class="f"><span>Paste rows from the schedule</span>
-        <textarea id="pasteBox" rows="5" placeholder="Select the cells in the sheet, copy, paste here">${esc(IMP && IMP.text || '')}</textarea></label>
-      <button class="btn sm primary" id="doParse" style="margin-top:8px">Read these rows</button>
-      <div class="hint" style="margin-top:8px">Include the header row. Tabs or commas both work.</div>`;
-      } else {
-        const found = scanBrowserCache();
-        sourceUI = found.length
-          ? found.map((c, i) => `<div class="gamerow">
-          <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
-          <div class="g2">${c.rows.length} rows</div></div>
-          <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
-          : `<div class="hint">Nothing found. This reads data other apps on the same site have
-         cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
-         because they sit on the same domain. It comes up empty inside the Android app,
-         where the origin is different.</div>`;
+         1. where the schedule is
+         2. which fields are yours
+         3. what is about to be added
+
+       Each step is one decision and fits on a screen or two. The column
+       mapping, which is the most technical part by far, is hidden entirely
+       when it maps itself correctly - which it does for any sheet with
+       ordinary headings. */
+    const IMP_STEPS = [[1, 'Schedule'], [2, 'Your fields'], [3, 'Confirm']];
+
+    function impStep() {
+      // Can't be past step 1 with nothing parsed.
+      if (!IMP || !IMP.rows || !IMP.rows.length) return 1;
+      return Math.min(Math.max(IMP.step || 1, 1), 3);
+    }
+
+    function impStepper() {
+      const cur = impStep();
+      return `<ol class="stepper" aria-label="Import steps">${IMP_STEPS.map(([n, label]) => `
+    <li class="${n === cur ? 'on' : n < cur ? 'done' : ''}" ${n === cur ? 'aria-current="step"' : ''}>
+      <span class="sn">${n < cur ? '&#10003;' : n}</span><span class="sl">${label}</span>
+    </li>`).join('')}</ol>`;
+    }
+
+    /* Which of the columns we actually need did the sheet give us? "field" and
+       at least one name column is the bar - everything else is a bonus. */
+    function mapHealth() {
+      const m = (IMP && IMP.map) || {};
+      const have = (k) => m[k] !== '' && m[k] != null;
+      const names = ['cr', 'cr2', 'ar1', 'ar2', 'crew'].filter(have);
+      const found = ['field', 'time', 'date', 'division'].filter(have);
+      return {ok: have('field') && names.length > 0, found, names,
+        label: IMP && IMP.header ? found.map(k => IMP.header[Number(m[k])]).filter(Boolean) : []};
+    }
+
+    function renderImport() {
+      const step = impStep();
+      const src = IMP ? IMP.source : 'sheet';
+      let body = '';
+
+      /* ---------- step 1: where is the schedule ---------- */
+      if (step === 1) {
+        const seg = `<div class="seg" role="group" aria-label="Where the schedule is">
+      ${[['sheet', 'Google Sheet'], ['paste', 'Paste'], ['cache', 'This browser']]
+            .map(([k, l]) => `<button data-impsrc="${k}" aria-pressed="${src === k}">${l}</button>`).join('')}
+    </div>`;
+
+        let sourceUI = '';
+        if (src === 'sheet') {
+          const last = store.get('sideline:sheet') || {id: '', gid: ''};
+          sourceUI = `
+        <label class="f"><span>Spreadsheet link or ID</span>
+          <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
+        <label class="f"><span>Tab gid (optional - blank uses the first tab)</span>
+          <input type="text" id="shGid" value="${esc(last.gid)}" placeholder="1490026671" /></label>
+        <button class="btn primary" id="doFetch" style="margin-top:12px">Fetch the tab</button>
+        <div class="hint" style="margin-top:8px">The tab has to be viewable by anyone with the link.
+          A sheet only you can open will return a login page, not data. Nothing is sent anywhere -
+          your phone fetches it directly and the ID stays in this browser.</div>`;
+        } else if (src === 'paste') {
+          sourceUI = `
+        <label class="f"><span>Paste rows from the schedule</span>
+          <textarea id="pasteBox" rows="5" placeholder="Select the cells in the sheet, copy, paste here">${esc(IMP && IMP.text || '')}</textarea></label>
+        <button class="btn primary" id="doParse" style="margin-top:10px">Read these rows</button>
+        <div class="hint" style="margin-top:8px">Include the header row. Tabs or commas both work.</div>`;
+        } else {
+          const found = scanBrowserCache();
+          sourceUI = found.length
+            ? found.map((c, i) => `<div class="gamerow">
+            <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
+            <div class="g2">${c.rows.length} rows</div></div>
+            <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
+            : `<div class="hint">Nothing found. This reads data other apps on the same site have
+           cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
+           because they sit on the same domain. It comes up empty inside the Android app,
+           where the origin is different.</div>`;
+        }
+
+        body = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>`;
+
+        // Rows are in: confirm what we read, and offer the column check only as
+        // a disclosure. Most people never need to open it.
+        if (IMP && IMP.rows && IMP.rows.length) {
+          const h = mapHealth();
+          const rows = Math.max(0, IMP.rows.length - IMP.headerRow - 1);
+          body += h.ok
+            ? `<div class="okbox" style="margin-top:12px">
+          <b>&#10003; Read ${rows} row${rows === 1 ? '' : 's'}.</b>
+          <div style="margin-top:2px">Found ${esc(h.label.join(', '))} and the referee names.</div></div>
+        ${impColumnsDetails(false)}
+        <button class="btn primary" id="impNext" style="margin-top:12px">Next: choose your fields</button>`
+            : `<div class="warn" style="margin-top:12px">Read ${rows} row${rows === 1 ? '' : 's'}, but
+          ${IMP.map.field === '' ? 'no <b>Field</b> column' : 'no <b>referee name</b> column'} was recognised.
+          Set it below and this will move on.</div>
+        ${impColumnsDetails(true)}
+        <button class="btn primary" id="impNext" style="margin-top:12px" ${h.ok ? '' : 'disabled'}>Next: choose your fields</button>`;
+        }
       }
 
-      let mapUI = '';
-      if (IMP && IMP.rows && IMP.rows.length) {
-        const opts = (sel) => ['<option value="">not in this sheet</option>']
-          .concat(IMP.header.map((h, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(h || 'column ' + (i + 1))}</option>`)).join('');
-        const preview = IMP.rows.slice(IMP.headerRow, IMP.headerRow + 4);
+      /* ---------- step 2: which fields are yours ---------- */
+      if (step === 2) {
+        const present = fieldsInImport();
+        const sel = IMP.fieldFilter;
+        const isOn = (name) => !sel || sel.includes(name);
+        const count = sel ? sel.length : present.length;
+        const sug = suggestedFields();
+
+        const chips = present.map(f => `<button class="fchip${isOn(f.name) ? ' on' : ''}"
+      data-impfield="${esc(f.name)}" aria-pressed="${isOn(f.name)}">
+      ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`).join('');
+
+        body = `<div class="card">
+      <h2 class="sec" style="margin-top:0">Which fields are you monitoring?</h2>
+      <p class="hint">Tap the ones you are watching today. Every kickoff on those fields
+        comes in, so one pitch all morning arrives as three or four games.</p>
+      ${sug && count === 0 ? `<button class="btn sm" id="fieldsSuggest" style="margin-bottom:10px">
+        Use ${esc(sug.names.map(shortField).join(', '))}</button>
+      <div class="hint" style="margin:-6px 0 10px">${esc(sug.why)}.</div>` : ''}
+      <div class="fieldstrip" style="flex-wrap:wrap;overflow:visible">${chips}</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm ghost" id="fieldsNone">Clear</button>
+        <button class="btn sm ghost" id="fieldsAll">Every field</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm ghost" id="impBack">Back</button>
+      <button class="btn primary" id="impNext" ${count ? '' : 'disabled'} style="flex:2">
+        ${count ? `Next: ${plural(rowsToGames().length, 'game')}` : 'Pick at least one field'}</button>
+    </div>`;
+      }
+
+      /* ---------- step 3: confirm ---------- */
+      if (step === 3) {
         const filtered = rowsToGames();
         if (IMP.picked === null) IMP.picked = filtered.map(g => g.key);
         const present = fieldsInImport();
         const sel = IMP.fieldFilter;
-        const fieldChips = present.map(f => {
-          const on = !sel || sel.includes(f.name);
-          return `<button class="fchip${on ? ' on' : ''}" data-impfield="${esc(f.name)}">
-        ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`;
-        }).join('');
 
-        mapUI = `
-      <div class="divider"></div>
-      <h2 class="sec">Check the columns</h2>
-      <label class="f"><span>Header row</span>
-        <select id="hdrRow">${IMP.rows.slice(0, 8).map((r, i) =>
-          `<option value="${i}"${i === IMP.headerRow ? ' selected' : ''}>Row ${i + 1}: ${esc(r.slice(0, 4).filter(Boolean).join(' | ').slice(0, 40))}</option>`).join('')}</select></label>
-      <div class="scrollx" style="margin:8px 0"><table class="tbl"><tbody>
-        ${preview.map((r, ri) => `<tr>${r.slice(0, 8).map(c =>
-            ri === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
-      </tbody></table></div>
-      <div class="map2">
-        <label class="f"><span>Field</span><select data-map="field">${opts(IMP.map.field)}</select></label>
-        <label class="f"><span>Time</span><select data-map="time">${opts(IMP.map.time)}</select></label>
-        <label class="f"><span>Date</span><select data-map="date">${opts(IMP.map.date)}</select></label>
-        <label class="f"><span>Division</span><select data-map="division">${opts(IMP.map.division)}</select></label>
-      </div>
-      <div class="map2">
-        <label class="f"><span>CR 1</span><select data-map="cr">${opts(IMP.map.cr)}</select></label>
-        <label class="f"><span>CR 2</span><select data-map="cr2">${opts(IMP.map.cr2)}</select></label>
-        <label class="f"><span>AR 1</span><select data-map="ar1">${opts(IMP.map.ar1)}</select></label>
-        <label class="f"><span>AR 2</span><select data-map="ar2">${opts(IMP.map.ar2)}</select></label>
-        <div></div>
-        <label class="f"><span>Cancelled flag</span><select data-map="cancel">${opts(IMP.map.cancel)}</select></label>
-      </div>
-      <label class="f"><span>Whole crew in one column</span><select data-map="crew">${opts(IMP.map.crew)}</select></label>
-      <div class="hint">Crew size comes from the division, not from how many names are
-        filled in. Pre-K and Kindergarten split into two pitches with one referee each;
-        1st and 2nd grade are one game with two officials.</div>
-
-      <div class="divider"></div>
-      <h2 class="sec">Which fields are you monitoring</h2>
-      <p class="hint">Every kickoff on the fields you pick comes in, so one pitch all
-        morning arrives as three or four games. ${sel ? `Filtering to ${sel.length}
-        field${sel.length === 1 ? '' : 's'}.` : 'No filter - every field in the sheet.'}</p>
-      <div class="fieldstrip" style="flex-wrap:wrap;overflow:visible">${fieldChips}</div>
-      <div class="row" style="margin:2px 0 10px">
-        <button class="btn sm ghost" id="fieldsAll">Every field</button>
-        <button class="btn sm ghost" id="fieldsBoard">Fields on my board</button>
-      </div>
-
-      <h2 class="sec">Games found (${filtered.length})</h2>
-      <div class="seg" style="margin-bottom:8px">
-        <button data-datef="session" aria-pressed="${IMP.dateFilter === 'session'}">${esc(prettyDate(S.date))} only</button>
-        <button data-datef="all" aria-pressed="${IMP.dateFilter === 'all'}">Every date</button>
-      </div>
-      ${filtered.length ? `<div class="row" style="margin-bottom:6px">
-        <button class="btn sm ghost" id="pickAll">Select all ${filtered.length}</button>
-        <button class="btn sm ghost" id="pickNone">Select none</button></div>` : ''}
-      ${filtered.length ? filtered.map(g => {
-              const on = IMP.picked.includes(g.key);
-              return `<div class="gamerow${on ? '' : ' off'}">
-          <input type="checkbox" data-pickgame="${g.key}" ${on ? 'checked' : ''} />
-          <div style="flex:1;min-width:0">
-            <div class="g1">${g.time ? esc(pretty12(g.time)) + ' &nbsp; ' : ''}${esc(g.field || g.raw.field || 'field not matched')}</div>
-            <div class="g2">${esc(g.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no officials listed'}</div>
-          </div></div>`;
-            }).join('') : '<div class="empty">No games matched. Check the column mapping above, or switch to every date.</div>'}
-      ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
-        list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
-      ${present.length && sel && sel.length < present.length ? `<div class="hint">${present.length - sel.length}
-        other field${present.length - sel.length === 1 ? '' : 's'} in this sheet are filtered out.</div>` : ''}
-      <button class="btn primary" id="doApply" style="margin-top:10px">Add ${IMP.picked.length} game${IMP.picked.length === 1 ? '' : 's'} to the board</button>`;
+        body = `<div class="seg" role="group" aria-label="Which dates" style="margin-bottom:10px">
+      <button data-datef="session" aria-pressed="${IMP.dateFilter === 'session'}">${esc(prettyDate(S.date))} only</button>
+      <button data-datef="all" aria-pressed="${IMP.dateFilter === 'all'}">Every date</button>
+    </div>
+    <h2 class="sec" style="margin-top:4px">${plural(filtered.length, 'game')} found</h2>
+    ${filtered.length ? `<div class="row" style="margin-bottom:8px">
+      <button class="btn sm ghost" id="pickAll">Select all</button>
+      <button class="btn sm ghost" id="pickNone">Select none</button></div>` : ''}
+    ${filtered.length ? filtered.map(g => {
+          const on = IMP.picked.includes(g.key);
+          return `<label class="gamerow${on ? '' : ' off'}">
+        <input type="checkbox" data-pickgame="${g.key}" ${on ? 'checked' : ''} />
+        <div style="flex:1;min-width:0">
+          <div class="g1">${g.time ? esc(pretty12(g.time)) + ' &nbsp; ' : ''}${esc(g.field || g.raw.field || 'field not matched')}</div>
+          <div class="g2">${esc(g.division || 'no division')} &mdash; ${g.names.length ? esc(g.names.join(', ')) : 'no officials listed'}</div>
+        </div></label>`;
+        }).join('') : `<div class="empty">No games matched${IMP.dateFilter === 'session'
+          ? ` on ${esc(prettyDate(S.date))}. Try Every date above` : ''}.</div>`}
+    ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
+      list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
+    ${present.length && sel && sel.length < present.length ? `<div class="hint">${plural(present.length - sel.length, 'other field')}
+      in this sheet ${present.length - sel.length === 1 ? 'is' : 'are'} filtered out.</div>` : ''}
+    <div class="row" style="margin-top:12px">
+      <button class="btn sm ghost" id="impBack">Back</button>
+      <button class="btn primary" id="doApply" ${IMP.picked.length ? '' : 'disabled'} style="flex:2">
+        Add ${plural(IMP.picked.length, 'game')}</button>
+    </div>`;
       }
 
-      $('#sheetBody').innerHTML = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>${mapUI}
-    <button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>`;
+      $('#sheetBody').innerHTML = `${impStepper()}${body}
+    <button class="btn sm ghost" id="backToSettings" style="margin-top:14px">Cancel</button>`;
+    }
+
+    /* The column mapping, kept behind a disclosure. It is the single most
+       technical thing in the app - ten dropdowns and a raw spreadsheet dump -
+       and when the headings are ordinary it gets every one of them right
+       without being asked. Open it only when it failed, or when someone
+       chooses to look. */
+    function impColumnsDetails(openIt) {
+      if (!IMP || !IMP.rows) return '';
+      const opts = (sel) => ['<option value="">not in this sheet</option>']
+        .concat(IMP.header.map((h, i) =>
+          `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(h || 'column ' + (i + 1))}</option>`)).join('');
+      const preview = IMP.rows.slice(IMP.headerRow, IMP.headerRow + 4);
+      return `<details class="disclose" ${openIt ? 'open' : ''}>
+    <summary>Columns look wrong?</summary>
+    <label class="f"><span>Header row</span>
+      <select id="hdrRow">${IMP.rows.slice(0, 8).map((r, i) =>
+        `<option value="${i}"${i === IMP.headerRow ? ' selected' : ''}>Row ${i + 1}: ${esc(r.slice(0, 4).filter(Boolean).join(' | ').slice(0, 40))}</option>`).join('')}</select></label>
+    <div class="scrollx" style="margin:8px 0"><table class="tbl"><tbody>
+      ${preview.map((r, ri) => `<tr>${r.slice(0, 8).map(c =>
+          ri === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="map2">
+      <label class="f"><span>Field</span><select data-map="field">${opts(IMP.map.field)}</select></label>
+      <label class="f"><span>Time</span><select data-map="time">${opts(IMP.map.time)}</select></label>
+      <label class="f"><span>Date</span><select data-map="date">${opts(IMP.map.date)}</select></label>
+      <label class="f"><span>Division</span><select data-map="division">${opts(IMP.map.division)}</select></label>
+    </div>
+    <div class="map2">
+      <label class="f"><span>CR 1</span><select data-map="cr">${opts(IMP.map.cr)}</select></label>
+      <label class="f"><span>CR 2</span><select data-map="cr2">${opts(IMP.map.cr2)}</select></label>
+      <label class="f"><span>AR 1</span><select data-map="ar1">${opts(IMP.map.ar1)}</select></label>
+      <label class="f"><span>AR 2</span><select data-map="ar2">${opts(IMP.map.ar2)}</select></label>
+      <div></div>
+      <label class="f"><span>Cancelled flag</span><select data-map="cancel">${opts(IMP.map.cancel)}</select></label>
+    </div>
+    <label class="f"><span>Whole crew in one column</span><select data-map="crew">${opts(IMP.map.crew)}</select></label>
+    <div class="hint">Crew size comes from the division, not from how many names are
+      filled in. Pre-K and Kindergarten split into two pitches with one referee each;
+      1st and 2nd grade are one game with two officials.</div>
+  </details>`;
     }
 
     let sheetReturnFocus = null;
@@ -4943,7 +5153,7 @@
         ? {...auto, ...savedMap} : auto;
       IMP = {
         rows, headerRow, header, map, text: IMP ? IMP.text : '', source: IMP ? IMP.source : 'sheet',
-        dateFilter: 'session', fieldFilter: null, picked: null
+        dateFilter: 'session', fieldFilter: null, picked: null, step: 1
       };
       IMP.fieldFilter = defaultFieldFilter();
     }
@@ -4964,20 +5174,37 @@
     }
 
     /* You monitor one to three pitches, not the whole complex, and the same
-       pitch recurs all morning. So default the filter to your fields rather
-       than to everything:
+       pitch recurs all morning. So the filter starts at YOUR fields:
          1. the fields you picked last time, if they appear in this sheet
          2. otherwise whatever is already on the board
-         3. otherwise everything, for a genuinely first run
-       The date filter handles "today"; this handles "mine". */
+         3. otherwise nothing, and you pick
+       The last line used to be "otherwise everything", which meant a first-time
+       mentor opened a fourteen-field sheet with all fourteen selected and 42
+       games ticked, and had to tap thirteen of them OFF to get to the one pitch
+       they were there for. Picking things is a decision; un-picking a list
+       someone else chose for you is a chore. Empty is the safe default: the
+       screen asks which fields are yours, so it should not have answered
+       already. null still means "no filter" and is what the Every field
+       button sets - but nothing reaches that state on its own any more. */
     function defaultFieldFilter() {
       const present = fieldsInImport().map(f => f.name);
-      if (!present.length) return null;
+      if (!present.length) return [];
       const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
       if (remembered.length) return remembered;
       const onBoard = present.filter(n => S.fields.some(f => f.name === n));
       if (onBoard.length) return onBoard;
-      return null;   // null = no filter
+      return [];
+    }
+
+    /* Which fields we would have suggested, for the "you watched these last
+       time" shortcut on step 2 when nothing is selected yet. */
+    function suggestedFields() {
+      const present = fieldsInImport().map(f => f.name);
+      const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
+      if (remembered.length) return {names: remembered, why: 'the fields you picked last time'};
+      const onBoard = present.filter(n => S.fields.some(f => f.name === n));
+      if (onBoard.length) return {names: onBoard, why: 'the fields already on your board'};
+      return null;
     }
 
     /* ============================================================
@@ -5091,7 +5318,7 @@
 
       const impSrc = hit('data-impsrc');
       if (impSrc) {
-        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', fieldFilter: null, picked: null};
+        if (!IMP) IMP = {rows: null, header: [], map: {}, text: '', source: impSrc, dateFilter: 'session', fieldFilter: null, picked: null, step: 1};
         IMP.source = impSrc; renderImport(); return;
       }
       const useCache = hit('data-usecache');
@@ -5112,7 +5339,9 @@
         // otherwise the first tap would read as deselecting from an empty set.
         let sel = IMP.fieldFilter ? IMP.fieldFilter.slice() : present.slice();
         sel = sel.includes(impField) ? sel.filter(n => n !== impField) : sel.concat([impField]);
-        IMP.fieldFilter = sel.length === present.length ? null : sel;
+        // Stays an explicit list even when it happens to hold every field, so
+        // "Clear" still has something to clear and the count stays honest.
+        IMP.fieldFilter = sel;
         IMP.picked = null; renderImport(); return;
       }
       const pol = hit('data-pol'); if (pol) {S.ui.pol = Number(pol); save(); renderObserve(); return;}
@@ -5298,12 +5527,30 @@
         case 'fieldsAll':
           if (IMP) {IMP.fieldFilter = null; IMP.picked = null; renderImport();}
           return;
-        case 'fieldsBoard': {
+        case 'fieldsNone':
+          if (IMP) {IMP.fieldFilter = []; IMP.picked = null; renderImport();}
+          return;
+        case 'fieldsSuggest': {
           if (!IMP) return;
-          const present = fieldsInImport().map(f => f.name);
-          const onBoard = present.filter(n => S.fields.some(f => f.name === n));
-          if (!onBoard.length) {flash('No fields from this sheet are on the board yet'); return;}
-          IMP.fieldFilter = onBoard; IMP.picked = null; renderImport(); return;
+          const sug = suggestedFields();
+          if (!sug) return;
+          IMP.fieldFilter = sug.names.slice(); IMP.picked = null; renderImport(); return;
+        }
+        case 'impNext': {
+          if (!IMP) return;
+          const to = Math.min(impStep() + 1, 3);
+          // Entering step 3 fresh should tick everything the filter let through;
+          // coming back to it should keep whatever was already unticked.
+          if (to === 3 && IMP.picked === null) IMP.picked = rowsToGames().map(g => g.key);
+          IMP.step = to; renderImport();
+          const sh = $('#sheet'); if (sh) sh.scrollTop = 0;
+          return;
+        }
+        case 'impBack': {
+          if (!IMP) return;
+          IMP.step = Math.max(impStep() - 1, 1); renderImport();
+          const sh = $('#sheet'); if (sh) sh.scrollTop = 0;
+          return;
         }
         case 'pickAll':
           if (IMP) {IMP.picked = rowsToGames().map(g => g.key); renderImport();}
