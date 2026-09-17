@@ -2174,7 +2174,11 @@
       return {
         mentor: store.get('sideline:mentor') || '',
         date: todayISO(),
-        fields: [newField('')],
+        // No placeholder game. A blank one made Settings read "Games (1)" and
+        // put a ghost "Field - no division" row on Observe, while the Fields
+        // tab correctly showed its first-run card: three screens disagreeing
+        // about whether the app was empty.
+        fields: [],
         activeRefId: null,
         ui: blankUI()
       };
@@ -2194,7 +2198,7 @@
       S.ui = {...blankUI(), ...(S.ui || {})};
       if (typeof S.mentor !== 'string') S.mentor = store.get('sideline:mentor') || '';
       if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date || '')) S.date = todayISO();
-      if (!Array.isArray(S.fields) || !S.fields.length) S.fields = [newField('')];
+      if (!Array.isArray(S.fields)) S.fields = [];
       S.fields.forEach(f => {
         if (!Array.isArray(f.refs)) f.refs = [];
         f.refs.forEach(r => {
@@ -2257,9 +2261,8 @@
         : '';
       askConfirm(`Delete ${what}?${detail} Evaluations you already saved are kept.`, 'Delete', () => {
         S.fields = S.fields.filter(x => x.id !== fid);
-        if (!S.fields.length) S.fields.push(newField(''));
         if (!activePair()) S.activeRefId = null;
-        if (!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+        if (!S.fields.some(x => x.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] ? S.fields[0].id : null;
         save();
         if (after) after(); else renderAll();
         flash('Game deleted');
@@ -2641,8 +2644,18 @@
     function renderObserve() {
       const p = activePair();
       if (!p) {
-        $('#observeBody').innerHTML = `<div class="empty">Pick a referee above, or tap a position on the
-      Fields tab. Notes always attach to the referee in the blue bar.</div>`;
+        /* Two different empty states. With no games at all, "pick a referee
+           above" points at nothing - the next step is the schedule. */
+        $('#observeBody').innerHTML = S.fields.length
+          ? `<div class="empty">Pick a referee above, or tap a position on the
+      Fields tab. Notes always attach to the referee in the blue bar.</div>`
+          : `<div class="card" style="margin-top:14px">
+      <h2 class="sec" style="margin-top:0">No games yet</h2>
+      <p class="hint">Import the day's schedule and every field, kickoff and referee
+        name comes in at once. Then tap a referee to start taking notes.</p>
+      <button class="btn primary" id="openImport" style="margin-top:4px">Import the schedule</button>
+      <button class="btn sm ghost" id="openSettings2" style="margin-top:8px">Add a game by hand</button>
+    </div>`;
         return;
       }
       const {field, ref} = p;
@@ -4851,10 +4864,9 @@
       if (added || updated) {
         const before = S.fields.length;
         S.fields = S.fields.filter(f => f.name || f.refs.some(r => r.name.trim() || r.notes.length));
-        if (!S.fields.length) S.fields.push(newField(''));
         pruned = before - S.fields.length;
       }
-      if (!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0].id;
+      if (!S.fields.some(f => f.id === S.ui.fieldId)) S.ui.fieldId = S.fields[0] ? S.fields[0].id : null;
 
       save(); renderAll();
       let msg = `${added} added, ${updated} updated`;
