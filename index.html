@@ -795,6 +795,70 @@
       margin-left: 2px
     }
 
+    /* ---------- rating scale ---------- */
+    .scale .nums button {
+      flex-direction: column;
+      gap: 1px;
+      padding: 7px 2px;
+      line-height: 1.15;
+    }
+
+    .scale .nums .rn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-lg);
+      font-weight: 700;
+      display: block;
+    }
+
+    .scale .nums .rw {
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      opacity: .85;
+      display: block;
+      text-align: center;
+    }
+
+    /* ---------- the finish sequence ----------
+       Copy, open the form, save. It was four buttons of equal weight in a row,
+       so the order you had to do them in was something you had to already know. */
+    ol.finish {
+      list-style: none;
+      margin: 4px 0 0;
+      padding: 0
+    }
+
+    ol.finish li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 14px
+    }
+
+    ol.finish li>div {
+      flex: 1;
+      min-width: 0
+    }
+
+    ol.finish .fn {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      margin-top: 9px;
+      border-radius: 50%;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--mute);
+      display: grid;
+      place-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-sm);
+      font-weight: 700;
+    }
+
+    ol.finish .hint {
+      margin: 6px 0 0
+    }
+
     .chipgrid {
       display: flex;
       flex-wrap: wrap;
@@ -2080,6 +2144,16 @@
     ];
     const RATED = CATS.filter(c => c.rated);
 
+    /* The scale used to be four bare numbers with "bad" at one end and "good"
+       at the other, in small grey type, so 2 and 3 meant whatever you could
+       remember they meant. A word on each button says it outright. The NUMBER
+       is still what goes on the Google Form - these words exist only here, to
+       make the number you pick a considered choice rather than a guess. They
+       are also deliberately kinder than "bad": these are written assessments of
+       young referees, many of them children, and 1 means they need support,
+       not that they are bad. */
+    const RATING_WORDS = {1: 'Needs work', 2: 'Developing', 3: 'Solid', 4: 'Excellent'};
+
     /* Quick-tap observations. pol = polarity: +1 strength, -1 work on.
        `pos` restricts a chip to one role so an AR never has to scroll past
        eight center-referee chips to reach the flag ones. */
@@ -2930,11 +3004,13 @@
         if (t.better) bits.push(`${t.better} improved`);
         const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
         const nums = [1, 2, 3, 4].map(v => `<button data-rate="${c.id}|${v}"
-      aria-pressed="${ref.ratings[c.id] === v}" ${locked ? 'disabled style="opacity:.45"' : ''}>${v}</button>`).join('');
+      aria-pressed="${ref.ratings[c.id] === v}"
+      aria-label="${v} - ${esc(RATING_WORDS[v])}" ${locked ? 'disabled style="opacity:.45"' : ''}>
+      <span class="rn">${v}</span><span class="rw">${esc(RATING_WORDS[v])}</span></button>`).join('');
         return `<div class="ratewrap">
       <div class="rlabel">${esc(c.label)}</div>
       <div class="rhint">${esc(hint)}${c.id === 'offsides' ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
-      <div class="scale"><span class="end">bad</span><div class="nums">${nums}</div><span class="end r">good</span></div>
+      <div class="scale"><div class="nums">${nums}</div></div>
       ${c.id === 'offsides' ? `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
         No offside situations this game</label>` : ''}
     </div>`;
@@ -2956,21 +3032,28 @@
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <div class="rlabel" style="font-size:14px;font-weight:600">Comments</div>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn sm ghost" style="width:auto" id="rebuild">Rebuild</button>
+        <button class="btn sm ghost" style="width:auto" id="rebuild">Rewrite from notes</button>
       </div>
       <textarea id="comments" rows="7" aria-label="Comments" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
       <div class="charcount" id="charCount">${charCountText(ref.comments)}</div>
       <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
     </div>
     <div id="readyBox">${readyHTML(field, ref)}</div>
-    <button class="btn primary" id="copyAll">Copy everything in form order</button>
-    <div class="row" style="margin-top:8px">
-      <button class="btn sm" id="openForm2">Open the form</button>
-      <button class="btn sm" id="saveEval">Save this referee</button>
-    </div>
-    <div class="hint" id="saveHint" style="margin-top:6px;text-align:right" hidden></div>
-    <div class="hint" style="margin-top:10px">Copy, open the form, then paste into COMMENTS. Everything above
-      the comments is short enough to tap straight in while the copied block is on screen.</div>
+
+    <h2 class="sec">Send it in</h2>
+    <ol class="finish">
+      <li><span class="fn">1</span><div>
+        <button class="btn primary" id="copyAll">Copy everything in form order</button>
+        <div class="hint">Puts the whole block on the clipboard.</div></div></li>
+      <li><span class="fn">2</span><div>
+        <button class="btn" id="openForm2">Open the form</button>
+        <div class="hint">Paste into COMMENTS. Everything above the comments is short
+          enough to tap straight in while the copied block is on screen.</div></div></li>
+      <li><span class="fn">3</span><div>
+        <button class="btn" id="saveEval">Save this referee</button>
+        <div class="hint" id="saveHint" hidden></div>
+        <div class="hint">Keeps a copy here, for the referee's profile and your backup.</div></div></li>
+    </ol>
   `;
       paintSaveState(field, ref);
     }
