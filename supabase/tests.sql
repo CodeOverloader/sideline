@@ -1,7 +1,7 @@
 -- ============================================================
 -- Sideline access-rule tests
 -- ------------------------------------------------------------
--- Run in the Supabase SQL editor AFTER the migration in
+-- Run in the Supabase SQL editor AFTER every migration in
 -- supabase/migrations has been applied. Not a migration itself: it
 -- lives outside that folder so the GitHub integration never runs it.
 --
@@ -75,6 +75,24 @@ update public.mentors set role = 'admin'  where id = '5d1e0000-0000-4000-8000-00
 update public.mentors set role = 'mentor' where id in ('5d1e0000-0000-4000-8000-00000000000b',
                                                        '5d1e0000-0000-4000-8000-00000000000c');
 
+-- ---------- name keys (as the owner: clients cannot call name_key) ----------
+
+do $$ begin
+  -- Names in any script get a key, and different people stay different.
+  assert public.name_key('张伟') = '张伟', 'FAIL: a Chinese name has no key';
+  assert public.name_key('Иван Петров') = public.name_key('  ИВАН   петров '),
+    'FAIL: a Cyrillic name does not match itself in other capitals';
+  assert public.name_key('Олег Zedtest') <> public.name_key('Иван Zedtest'),
+    'FAIL: two referees who share a Latin surname got the same key';
+  assert public.name_key('ΓΙΏΡΓΟΣ') = public.name_key('Γιώργος'),
+    'FAIL: a Greek name does not match itself in capitals';
+  -- All-Latin names keep the key they had before names in other scripts counted.
+  assert public.name_key('Zoë O’Brien-Łukasz') = 'zoe o brien lukasz', 'FAIL: a Latin name changed key';
+  assert public.name_key('Testref, Zed') = 'zed testref', 'FAIL: "Last, First" no longer flips';
+  assert public.name_key('Ｇａｖｉｎ') = 'gavin', 'FAIL: full-width letters are not folded';
+  assert public.name_key(' — ? ') = '', 'FAIL: punctuation alone should have no key';
+end $$;
+
 -- ---------- mentor 1: save, re-save ----------
 
 reset role;
@@ -111,8 +129,18 @@ begin
 
   perform pg_temp.expect_error($q$ select public.save_evaluations('{"not":"an array"}') $q$,
     '22023', 'a non-array payload');
-  perform pg_temp.expect_error($q$ select public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-x', '  '))) $q$,
-    '22023', 'a blank referee name');
+
+  -- One refused item is reported and skipped; the rest of the batch saves.
+  assert (select out_error from public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-x', '  ')))) is not null,
+    'FAIL: a blank referee name was not reported';
+  assert not exists (select 1 from public.evaluations where client_id = 'zz-test-x'),
+    'FAIL: a blank referee name was saved';
+  select count(*) filter (where out_error is null) into n
+  from public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-test-x2', '—'), pg_temp.item('zz-test-8', 'Zed Batchmate')));
+  assert n = 1 and exists (select 1 from public.evaluations where client_id = 'zz-test-8'),
+    'FAIL: one refused evaluation stopped the rest of the batch';
+  delete from public.evaluations where client_id = 'zz-test-8';
 end $$;
 
 -- ---------- mentor 2: shared reads, no writes to others ----------

@@ -9,6 +9,7 @@ Everything needed to take notes works offline and without an account. Mentor acc
 | File | What it is |
 | --- | --- |
 | `index.html` | The whole app: markup, styles and script in one file. |
+| `admin/index.html` | The admin console for the assignor and league leadership, also one file. |
 | `sw.js` | Service worker that keeps the app working with no signal. |
 | `manifest.json`, `icon.svg` | Install-to-home-screen metadata. |
 | `supabase/migrations/` | Database tables, access rules and functions for accounts. |
@@ -23,6 +24,10 @@ python -m http.server 8765
 ```
 
 With `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` left empty in `index.html`, the app runs exactly as it always has, with no account features.
+
+## Hosting
+
+The app is served from `https://sideline.codeoverload.dev/` (see `CNAME`), and the old `codeoverloader.github.io/sideline/` address redirects there. It must be opened over **https**: over plain http a browser gives it no service worker (so nothing works without signal) and no clipboard, and its saved data lives in a separate store from the https site's. If the domain is proxied through Cloudflare, switch on **SSL/TLS → Edge Certificates → Always Use HTTPS**. Until then, the app moves itself from http to https when that http copy holds no Sideline data.
 
 ## Setting up mentor accounts (Supabase)
 
@@ -42,15 +47,15 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
    The app asks for the code rather than using a link because, on an iPhone, email links open in Safari instead of the installed app.
 
-4. **Set the site URL.** Under **Authentication → URL Configuration**, set it to `https://codeoverloader.github.io/sideline/`.
+4. **Set the site URL.** Under **Authentication → URL Configuration**, set it to `https://sideline.codeoverload.dev/`.
 
 5. **Create the database.** Either way below works, and running both is harmless:
    - **Through GitHub (recommended once the repo is linked).** Under **Project Settings → Integrations → GitHub**, check that the Supabase directory points at the folder containing `supabase/`, and switch on **Deploy to production** for `main`. From then on, every file in `supabase/migrations/` is applied when it is merged into `main`. Future schema changes arrive the same way, as new migration files.
-   - **By hand.** Open **SQL Editor**, paste the file from `supabase/migrations/`, and run it.
+   - **By hand.** Open **SQL Editor**, then paste and run each file in `supabase/migrations/`, oldest first (the file names start with their date). Each one is safe to run again.
 
 6. **Check the access rules.** In a new SQL Editor tab, paste `supabase/tests.sql` and run it. The final result should read `ALL SIDELINE ACCESS TESTS PASSED`. The script cleans up after itself.
 
-7. **Connect the app.** Open **Settings → API Keys** (or the **Connect** button). Copy the **Project URL** into `SUPABASE_URL` and the **publishable** key (`sb_publishable_…`) into `SUPABASE_PUBLISHABLE_KEY` in `index.html`, then deploy.
+7. **Connect the app.** Open **Settings → API Keys** (or the **Connect** button). Copy the **Project URL** into `SUPABASE_URL` and the **publishable** key (`sb_publishable_…`) into `SUPABASE_PUBLISHABLE_KEY` in `index.html`, and the same two values into `admin/index.html`, then deploy.
    - The publishable key is designed to be public. The access rules protect the data, not the key.
    - Never put a **secret** key (`sb_secret_…`) or the legacy **service_role** key in this repository or the app. They bypass every rule. The app refuses to start accounts if it sees a secret key.
    - Don't use the legacy **anon** key either. Supabase is retiring it by the end of 2026.
@@ -63,7 +68,7 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
    where email = 'you@example.com';
    ```
 
-   From then on you approve other mentors from the app: account button → Manage mentors.
+   From then on you approve other mentors, and make other leaders admins, in the [admin console](#the-admin-console).
 
 9. **Keep the project awake.** Supabase pauses free projects after a period without activity, and a Saturday-only app can hit that. Check the current policy on Supabase's pricing page, then either use a paid plan or set up a scheduled request that keeps the project active.
 
@@ -76,16 +81,34 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 | Not signed in | Everything on the device: notes, ratings, saved evaluations, backups. Nothing is uploaded. |
 | Pending | Nothing on the server. New sign-ups wait here until an admin approves them. |
 | Mentor | Upload their own saved evaluations, read every approved mentor's evaluations, see referee profiles. |
-| Admin | Everything a mentor can do, plus approve or remove mentors, merge duplicate referee names, and delete a referee's records on request. |
+| Admin | Everything a mentor can do in the app, plus the admin console: approve or remove mentors, make other admins, merge duplicate referee names, delete a referee's records on request, and league reports. |
 
 Only *saved* evaluations are uploaded. Games and notes you are still working on stay on the phone.
 
+Admin is for league leadership, such as the assignor, not for mentors. The app itself looks the same for an admin as for a mentor, apart from a link to the console on the Account sheet.
+
+## The admin console
+
+`https://sideline.codeoverload.dev/admin/` is a separate page for admins, laid out for a computer and usable on a phone. It shares the app's sign-in, so an admin signed in to either one in a browser is signed in to both there. Anyone who is not an admin sees a note pointing them back to the app. The page hides nothing that matters: the database's access rules decide what every account can read and change, whichever page asks.
+
+One filter row (dates, division, position) applies to every page:
+
+| Page | What it is for |
+| --- | --- |
+| Overview | Totals against the previous period, evaluations over time, league average by skill, who needs the most support, who mentors recommend moving up, the most common things to work on, and who has gone longest without an evaluation. |
+| Referees | Every referee with their averages per skill, sortable and searchable, with a CSV export. Selecting one opens their full profile, trend, notes and evaluations. |
+| Evaluations | Every evaluation, newest first, with ratings, notes and comments, and a CSV export in the same columns as the app's own. |
+| Mentors | Approving or rejecting sign-ups, each mentor's activity and the average rating they give, and changing who is an admin. |
+| Clean-up | Names that may be one referee typed two ways, to merge, and where to handle a deletion request. |
+
+The console keeps no copy of the league's data in the browser; it reads it fresh each time.
+
 ### Handling a deletion request
 
-Open the referee's profile as an admin and choose **Delete all records**. This removes every evaluation of that referee, including under merged spellings of the name. You can also run it from the SQL Editor:
+In the admin console, open the referee (from **Referees**, or **Clean-up → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. You can also run it from the SQL Editor:
 
 ```sql
 select public.delete_referee_records('<referee id>');
 ```
 
-Removing a mentor's account keeps their evaluations, attributed by the name they entered on the form. If **Remove** in the app fails, delete the user under **Authentication → Users** instead.
+Removing a mentor's account keeps their evaluations, attributed by the name they entered on the form. In the admin console, **Revoke** their access, then **Reject** them from the waiting list. If that fails, delete the user under **Authentication → Users** instead.

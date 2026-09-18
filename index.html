@@ -15,6 +15,20 @@
   <meta name="apple-mobile-web-app-title" content="Sideline" />
 
   <script>
+    /* The custom domain also answers on plain http, and GitHub Pages sends the
+       old codeoverloader.github.io address there. Over http there is no service
+       worker (so nothing works without signal), no clipboard API, and a storage
+       box separate from the https site's. Move to https - unless this http copy
+       already holds Sideline data, which a move would strand; that stays put so
+       it can be backed up first. */
+    (function () {
+      if (location.protocol !== 'http:' || location.hostname !== 'sideline.codeoverload.dev') return;
+      try {
+        if (localStorage.getItem('sideline:session') || localStorage.getItem('sideline:history')) return;
+      } catch (e) { }
+      location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+    })();
+
     /* Set the theme before first paint, so someone using the sunlight theme
        never sees a flash of the dark UI. The full theme logic (and the toggle)
        lives in the main script; this only has to agree with it. */
@@ -473,6 +487,11 @@
     .btn:disabled {
       opacity: .45;
       cursor: default
+    }
+
+    a.btn {
+      color: inherit;
+      text-decoration: none
     }
 
     .btn.sm {
@@ -2034,7 +2053,9 @@
        Both values are PUBLIC by design: the database's access rules protect
        the data, not this key. Use the "publishable" key (sb_publishable_...).
        NEVER put a secret key (sb_secret_...) or the legacy service_role key
-       here: those bypass every access rule. Setup steps: README.md. */
+       here: those bypass every access rule. Setup steps: README.md.
+       The admin console (admin/index.html) carries the same values; change
+       both together. */
     const SUPABASE_URL = 'https://kgilrxcboicdxjbxldgw.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_VuoFX_hWHaODI-BBWa0uiQ_Uduxp-TQ';
     const ACCOUNTS_ON = !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY) && !/^sb_secret_/.test(SUPABASE_PUBLISHABLE_KEY);
@@ -2258,7 +2279,7 @@
        STORAGE
        ------------------------------------------------------------
        localStorage is the browser's simple key/value box on disk,
-       scoped to one origin (codeoverloader.github.io) and one browser.
+       scoped to one origin (https://sideline.codeoverload.dev) and one browser.
        It survives closing the app, which is what we need: you should be
        able to lock your phone between games without losing a session.
     
@@ -2285,6 +2306,10 @@
     };
 
     const uid = () => Math.random().toString(36).slice(2, 9);
+    /* Ids are written into HTML attributes unescaped (data-pick="..."), so one
+       read back from a backup file has to be the plain kind uid() makes. A
+       crafted file could otherwise inject markup into the page. */
+    const safeId = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : uid());
     const $ = (s) => document.querySelector(s);
     const esc = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2410,14 +2435,28 @@
     function normalize() {
       if (!S || typeof S !== 'object') S = blankSession();
       S.ui = {...blankUI(), ...(S.ui || {})};
+      // Also restored from backup files. An unknown tab hid every tab, and the
+      // category is written into the page unescaped (data-chip).
+      const ui0 = blankUI();
+      if (!['fields', 'observe', 'score', 'refs', 'saved'].includes(S.ui.tab)) S.ui.tab = ui0.tab;
+      if (!CATS.some(c => c.id === S.ui.cat)) S.ui.cat = ui0.cat;
+      if (![1, -1, 2].includes(S.ui.pol)) S.ui.pol = ui0.pol;
+      if (typeof S.ui.draftText !== 'string') S.ui.draftText = '';
       if (typeof S.mentor !== 'string') S.mentor = store.get('sideline:mentor') || '';
       if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date || '')) S.date = todayISO();
       if (!Array.isArray(S.fields)) S.fields = [];
+      S.fields = S.fields.filter(f => f && typeof f === 'object');
       S.fields.forEach(f => {
+        f.id = safeId(f.id);
+        ['name', 'sub', 'division', 'time'].forEach(k => {if (typeof f[k] !== 'string') f[k] = '';});
         if (!Array.isArray(f.refs)) f.refs = [];
+        f.refs = f.refs.filter(r => r && typeof r === 'object');
         f.refs.forEach(r => {
+          r.id = safeId(r.id);
           r.ratings = {...Object.fromEntries(RATED.map(c => [c.id, null])), ...(r.ratings || {})};
           if (!Array.isArray(r.notes)) r.notes = [];
+          r.notes = r.notes.filter(n => n && typeof n === 'object');
+          r.notes.forEach(n => {n.id = safeId(n.id);});
           if (typeof r.name !== 'string') r.name = '';
           if (typeof r.comments !== 'string') r.comments = '';
         });
@@ -2436,17 +2475,26 @@
     if (S.date !== todayISO() && !sessionHasData()) S.date = todayISO();
 
     let saveTimer = null;
+    function writeState() {
+      clearTimeout(saveTimer); saveTimer = null;
+      store.set('sideline:session', S);
+      store.set('sideline:history', HIST);
+      if (S.mentor) store.set('sideline:mentor', S.mentor);
+    }
     function save() {
       // Debounce: typing a name fires an input event per keystroke, and
       // JSON.stringify + a disk write on every one is wasteful. Collapse
       // bursts into a single write 250ms after you stop.
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        store.set('sideline:session', S);
-        store.set('sideline:history', HIST);
-        if (S.mentor) store.set('sideline:mentor', S.mentor);
-      }, 250);
+      saveTimer = setTimeout(writeState, 250);
     }
+    /* A phone freezes or closes the app as soon as it leaves the screen, and a
+       write still waiting out the debounce went with it: a chip tapped just
+       before locking the phone was gone next time. Leaving the screen writes
+       immediately. */
+    function flushSave() {if (saveTimer) writeState();}
+    window.addEventListener('pagehide', flushSave);
+    document.addEventListener('visibilitychange', () => {if (document.visibilityState === 'hidden') flushSave();});
 
     /* Adds one pitch, reusing a blank placeholder if there is one. */
     function addFieldEntry(name, sub, crewSize) {
@@ -2526,6 +2574,9 @@
 
     function setCrewSize(fid, n) {
       const f = S.fields.find(x => x.id === fid); if (!f) return;
+      // Tapping the size already chosen used to rebuild the crew anyway, which
+      // turned a dual-referee pair (CR + CR) back into CR + AR.
+      if (n === f.refs.length) return;
       const doomed = f.refs.slice(n).filter(r => r.notes.length || r.name.trim());
       if (doomed.length) {
         askConfirm(`Dropping to ${n} official${n === 1 ? '' : 's'} removes ${doomed.length} referee(s) with data on them.`,
@@ -3270,7 +3321,8 @@
         flash('That is not a Sideline backup'); return;
       }
       const have = new Set(HIST.map(h => h.id));
-      const fresh = data.history.filter(h => h && h.id && h.ratings && typeof h.ratings === 'object' && !have.has(h.id));
+      const fresh = data.history.filter(h => h && h.id && h.ratings && typeof h.ratings === 'object' && !have.has(h.id))
+        .map(h => ({...h, id: safeId(h.id)}));
       const games = data.session.fields.filter(f => f && f.name).length;
       const when = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'an unknown date';
       const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -3313,7 +3365,7 @@
          signedOut  configured, but nobody is signed in on this device
          pending    signed in, waiting for an admin to approve
          mentor     approved
-         admin      approved, and can approve others
+         admin      approved, and can use the admin console (admin/)
        It is cached so the right UI shows offline. The server enforces every
        rule regardless of what this cache claims.
        ============================================================ */
@@ -3324,7 +3376,6 @@
     let sb = null, sbLoading = null, acctStarted = false, mentorLoading = null;
 
     const isApproved = () => ACCT.status === 'mentor' || ACCT.status === 'admin';
-    const isAdmin = () => ACCT.status === 'admin';
     const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
     /* The library is only fetched when accounts are configured, so the
@@ -3398,16 +3449,30 @@
       });
     }
 
+    /* Whether supabase-js still holds a login on this device. */
+    function storedLogin() {
+      try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
+    }
+
     async function handleSession(event, session) {
       if (!session) {
-        // A stored login that could not be refreshed because the phone is
-        // offline still counts. Only an explicit sign-out, or the server
-        // rejecting the login, ends it.
-        if (event !== 'SIGNED_OUT' && ACCT.status !== 'signedOut' && !navigator.onLine) return;
+        // A stored login that could not be refreshed for want of a connection
+        // still counts. supabase-js reports "no session" then but keeps the
+        // login, and navigator.onLine is no guide: it says true on one bar or
+        // on a Wi-Fi with no internet behind it. Signing out there also deleted
+        // the league cache the mentor was relying on at the field. When the
+        // server really refuses the login, supabase-js deletes it and says
+        // SIGNED_OUT, so only that - or no stored login at all - ends it.
+        if (event !== 'SIGNED_OUT' && ACCT.status !== 'signedOut' && storedLogin()) {
+          acctUI.offline = true; paintAcctCard(false);
+          return;
+        }
         if (ACCT.status !== 'signedOut') setAcct({status: 'signedOut'});
         return;
       }
-      if (event === 'TOKEN_REFRESHED' && ACCT.id === session.user.id) return;
+      // A refresh that finally got through after a spell without signal is the
+      // moment to catch up: re-check approval, upload, pull.
+      if (event === 'TOKEN_REFRESHED' && ACCT.id === session.user.id && !acctUI.offline) return;
       if (ACCT.id !== session.user.id) {
         clearLeague();
         setAcct({status: 'pending', id: session.user.id, email: session.user.email || ''});
@@ -3466,24 +3531,28 @@
       return e ? e.slice(0, 2).toUpperCase() : '';
     }
 
+    function paintAvatar() {
+      const av = $('header #openAccount'), ini = $('#avatarInitials');
+      if (!av || !ini) return;
+      const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
+      if (on) av.setAttribute('data-acct', ACCT.status); else av.removeAttribute('data-acct');
+      // textContent, so a bullet not an HTML entity: with no name to work
+      // from the avatar shows a neutral dot rather than "??".
+      const who = initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
+      ini.textContent = who || '\u25CF';
+      const label = !ACCOUNTS_ON ? 'Your name and this device'
+        : !on ? 'Account - not signed in'
+          : ACCT.status === 'pending' ? 'Account - waiting for approval'
+            : `Account - signed in as ${ACCT.email}`;
+      av.title = label; av.setAttribute('aria-label', label);
+    }
+
+    /* Only the account card is repainted inside an open Account sheet, never
+       the whole sheet: rebuilding it took the name field out from under the
+       keyboard after every letter typed. */
     function paintAccount() {
-      const av = $('#openAccount'), ini = $('#avatarInitials');
-      if (av && ini) {
-        const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
-        if (on) av.setAttribute('data-acct', ACCT.status); else av.removeAttribute('data-acct');
-        // textContent, so a bullet not an HTML entity: with no name to work
-        // from the avatar shows a neutral dot rather than "??".
-        const who = initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
-        ini.textContent = who || '\u25CF';
-        const label = !ACCOUNTS_ON ? 'Your name and this device'
-          : !on ? 'Account - not signed in'
-            : ACCT.status === 'pending' ? 'Account - waiting for approval'
-              : `Account - signed in as ${ACCT.email}`;
-        av.title = label; av.setAttribute('aria-label', label);
-      }
+      paintAvatar();
       paintAcctCard(false);
-      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
-      if (!$('#sheet').hidden && sheetMode === 'account') renderAccountSheet();
       renderQuietly();
     }
 
@@ -3588,7 +3657,9 @@
         : `<label class="switchrow"><input type="checkbox" id="acctUpload" ${uploadConsent() === true ? 'checked' : ''} />
           Upload my saved evaluations</label>
         <div class="hint" style="margin:0 0 8px">${esc(syncSummaryText())}</div>
-        ${s === 'admin' ? '<button class="btn sm" id="openAdmin">Manage mentors</button>' : ''}`;
+        ${s === 'admin' ? `<a class="btn sm" href="admin/" target="_blank" rel="noopener">Open the admin console</a>
+        <div class="hint" style="margin:6px 0 0">Approving mentors, league reports and referee clean-up are there,
+          best on a computer.</div>` : ''}`;
       return `${head}
         <div class="acctline"><b>${esc(ACCT.email)}</b><span class="pill">${role}</span>
           ${acctUI.offline ? '<span class="pill">offline</span>' : ''}</div>
@@ -3603,69 +3674,10 @@
       box.innerHTML = accountCardInner();
     }
 
-    /* ---------- admin: approving mentors ---------- */
-    const ADMIN = {list: null, loading: false, error: ''};
-    async function loadMentors() {
-      const c = sbc(); if (!c || !isAdmin()) return;
-      ADMIN.loading = true; ADMIN.error = '';
-      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
-      try {
-        const {data, error} = await c.from('mentors')
-          .select('id,email,display_name,role,created_at,approved_at').order('created_at', {ascending: true});
-        if (error) throw error;
-        ADMIN.list = data || [];
-      } catch (e) {
-        ADMIN.error = friendly(e);
-      }
-      ADMIN.loading = false;
-      if (!$('#sheet').hidden && sheetMode === 'admin') renderAdmin();
-    }
-    async function adminCall(fn, args, doneMsg) {
-      const c = sbc(); if (!c) return;
-      try {
-        const {error} = await c.rpc(fn, args);
-        if (error) throw error;
-        flash(doneMsg);
-      } catch (e) {
-        flash(friendly(e));
-      }
-      loadMentors();
-    }
-    function renderAdmin() {
-      const back = '<button class="btn sm ghost" id="backToSettings" style="margin-top:12px">Back to settings</button>';
-      if (!isAdmin()) {$('#sheetBody').innerHTML = `<div class="empty">Only admins can manage mentors.</div>${back}`; return;}
-      const list = ADMIN.list || [];
-      const pending = list.filter(m => m.role === 'pending');
-      const approved = list.filter(m => m.role !== 'pending');
-      // The title is the name when there is one; the email then moves to the
-      // second line instead of printing twice.
-      const row = (m, actions) => `<div class="gamerow">
-      <div style="flex:1;min-width:0">
-        <div class="g1" style="overflow-wrap:anywhere">${esc(m.display_name || m.email)}${m.id === ACCT.id ? ' <span class="pill">you</span>' : ''}</div>
-        <div class="g2" style="overflow-wrap:anywhere">${m.display_name ? esc(m.email) + ' &middot; ' : ''}${m.role === 'pending'
-          ? 'asked ' + esc(ago(Date.parse(m.created_at))) : m.role === 'admin' ? 'Admin' : 'Mentor'}</div>
-      </div>${actions}</div>`;
-      const pendingRows = pending.map(m => row(m, `
-        <button class="minibtn" data-approve="${esc(m.id)}">Approve</button>
-        <button class="minibtn danger" data-reject="${esc(m.id)}">Reject</button>`)).join('');
-      const approvedRows = approved.map(m => row(m, m.id === ACCT.id ? '' : `
-        <button class="minibtn" data-role-set="${esc(m.id)}|${m.role === 'admin' ? 'mentor' : 'admin'}">
-          ${m.role === 'admin' ? 'Make mentor' : 'Make admin'}</button>
-        <button class="minibtn danger" data-revoke="${esc(m.id)}">Revoke</button>`)).join('');
-      $('#sheetBody').innerHTML = `
-    <p class="hint">Approved mentors upload their saved evaluations and can read everyone's. New sign-ups wait
-      here and see nothing until you approve them.</p>
-    ${ADMIN.error ? `<div class="warn">${esc(ADMIN.error)}</div>` : ''}
-    ${ADMIN.loading && !ADMIN.list ? '<div class="empty">Loading&hellip;</div>' : ''}
-    <h2 class="sec">Waiting for approval (${pending.length})</h2>
-    ${pendingRows || '<div class="hint">Nobody is waiting.</div>'}
-    <h2 class="sec">Mentors (${approved.length})</h2>
-    ${approvedRows || '<div class="hint">No approved mentors yet.</div>'}
-    <div class="row" style="margin-top:12px">
-      <button class="btn sm" id="adminReload">Refresh</button>
-      <button class="btn sm ghost" id="backToSettings">Back to settings</button>
-    </div>`;
-    }
+    /* Admin work - approving mentors, merging referees, deletion requests and
+       league reports - lives in the admin console (admin/), not here. This
+       app stays the same for an admin as for any mentor, apart from the link
+       to the console on the Account sheet. */
 
     /* ============================================================
        UPLOADING SAVED EVALUATIONS
@@ -3677,7 +3689,7 @@
        The server matches on the record's own id, so repeats and restored
        backups update in place instead of duplicating.
        ============================================================ */
-    const SYNC = {running: null, error: '', retryTimer: null, backoff: 0, lastOk: store.get('sideline:lastSync') || 0};
+    const SYNC = {running: null, again: false, error: '', retryTimer: null, backoff: 0, lastOk: store.get('sideline:lastSync') || 0};
 
     function uploadConsent() {
       const m = store.get('sideline:uploadConsent') || {};
@@ -3688,11 +3700,25 @@
       m[ACCT.id] = v;
       store.set('sideline:uploadConsent', m);
     }
-    const needsUpload = (r) => !!(r.referee && r.referee.trim()) && (!r.syncedAt || r.syncedBy !== ACCT.id);
+    const unsynced = (r) => !!(r.referee && r.referee.trim()) && (!r.syncedAt || r.syncedBy !== ACCT.id);
+    /* Why a record cannot go up as saved, or '' if it can. The server's reason
+       is kept against the version it refused, so that version is not resent on
+       every sync; saving the evaluation again makes a new version to try. */
+    function uploadProblem(r) {
+      if (!unsynced(r)) return '';
+      if (!nameKey(r.referee)) return 'The referee name needs at least one letter or number.';
+      const e = r.uploadError;
+      return e && e.by === ACCT.id && e.savedAt === r.savedAt ? String(e.msg || 'Refused by the server.') : '';
+    }
+    const needsUpload = (r) => unsynced(r) && !uploadProblem(r);
     const pendingDeletes = () => (store.get('sideline:pendingDeletes') || []).filter(d => d && d.id && d.by);
 
+    /* slice() counts UTF-16 units. Cutting between the two halves of an emoji
+       leaves half a character, and the database refuses the whole upload. */
+    const clip = (s, n) => (s.length > n && /[\ud800-\udbff]/.test(s[n - 1]) ? s.slice(0, n - 1) : s.slice(0, n));
+
     function toPayload(r) {
-      const cut = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+      const cut = (v, n) => clip(String(v == null ? '' : v).trim(), n);
       const out = {
         client_id: r.id,
         referee_name: cut(r.referee, 120),
@@ -3704,9 +3730,9 @@
         division: cut(r.division, 40),
         position: r.position === 'AR' ? 'AR' : 'CR',
         move_up: r.moveUp === 'Yes' || r.moveUp === 'No' ? r.moveUp : '',
-        comments: String(r.comments || '').slice(0, 20000),
+        comments: clip(String(r.comments || ''), 20000),
         notes: (r.notes || []).slice(0, 500).map(n => ({
-          cat: n.cat, pol: n.pol, text: String(n.text || '').slice(0, 500), at: n.at || 0
+          cat: n.cat, pol: n.pol, text: clip(String(n.text || ''), 500), at: n.at || 0
         })),
         saved_at: new Date(r.savedAt || Date.now()).toISOString()
       };
@@ -3742,9 +3768,16 @@
 
     function syncNow() {
       const c = sbc();
-      if (!c || !isApproved() || uploadConsent() !== true) return Promise.resolve();
-      if (SYNC.running) return SYNC.running;
+      if (!c || !isApproved()) return Promise.resolve();
+      // Deleting is not uploading: an evaluation deleted after uploading was
+      // switched off still has to leave the server, as the delete dialog says.
+      if (uploadConsent() !== true && !pendingDeletes().some(d => d.by === ACCT.id)) return Promise.resolve();
+      // A save or delete made while a pass is running missed that pass's list,
+      // so ask for one more pass when it ends instead of waiting for the next
+      // time the app comes to the front.
+      if (SYNC.running) {SYNC.again = true; return SYNC.running;}
       clearTimeout(SYNC.retryTimer);
+      SYNC.again = false;
       let resaved = false;
       // Started on the next tick, never inline: with nothing to send, the body
       // finishes without awaiting, and its `finally` (which clears
@@ -3760,7 +3793,7 @@
             if (error) throw error;
             store.set('sideline:pendingDeletes', pendingDeletes().filter(d => !(d.by === me && ids.includes(d.id))));
           }
-          const todo = HIST.filter(needsUpload);
+          const todo = uploadConsent() === true ? HIST.filter(needsUpload) : [];
           for (let i = 0; i < todo.length; i += 50) {
             const batch = todo.slice(i, i + 50);
             const sent = new Map(batch.map(r => [r.id, r.savedAt]));
@@ -3771,6 +3804,9 @@
               if (!r) return;
               // Saved again while this batch was on its way: the newer version goes next pass.
               if (r.savedAt !== sent.get(r.id)) {resaved = true; return;}
+              // The server refused this one and saved the rest of the batch.
+              if (row.out_error) {r.uploadError = {msg: row.out_error, savedAt: r.savedAt, by: me}; return;}
+              delete r.uploadError;
               r.syncedAt = Date.now(); r.syncedBy = me; r.serverRefereeId = row.out_referee_id;
             });
             histChanged(); save();
@@ -3784,7 +3820,7 @@
           if (navigator.onLine) SYNC.retryTimer = setTimeout(syncNow, SYNC.backoff);
         } finally {
           SYNC.running = null;
-          if (resaved && !SYNC.error) setTimeout(syncNow, 500);
+          if ((resaved || SYNC.again) && !SYNC.error) setTimeout(syncNow, 500);
           paintSync();
         }
       });
@@ -3796,11 +3832,14 @@
       paintAcctCard(false);
       if (S.ui.tab === 'saved') renderQuietly();
     }
+    const refusedCount = () => HIST.filter(uploadProblem).length;
+    const refusedText = (n) => `${plural(n, 'saved evaluation')} could not be uploaded; the reason is on the Saved tab.`;
     function syncSummaryText() {
       if (uploadConsent() !== true) return 'Uploading is off on this device.';
-      const waiting = HIST.filter(needsUpload).length;
+      const waiting = HIST.filter(needsUpload).length, refused = refusedCount();
       if (SYNC.running) return 'Uploading…';
       if (waiting) return `${plural(waiting, 'saved evaluation')} waiting to upload.${SYNC.error ? ' ' + SYNC.error : ''}`;
+      if (refused) return refusedText(refused);
       return 'All saved evaluations are uploaded.';
     }
     function syncStatusHTML() {
@@ -3815,12 +3854,18 @@
         return `<div class="warn">Uploading is off on this device, so other mentors cannot see these.
       <button class="btn sm" id="uploadOn" style="margin-top:8px">Upload my saved evaluations</button></div>`;
       }
-      const waiting = HIST.filter(needsUpload).length;
-      if (SYNC.running) return `<div class="okbox">Uploading ${plural(waiting, 'saved evaluation')}&hellip;</div>`;
+      const waiting = HIST.filter(needsUpload).length, refused = refusedCount();
+      if (SYNC.running) {
+        return `<div class="okbox">Uploading${waiting ? ' ' + plural(waiting, 'saved evaluation') : ''}&hellip;</div>`;
+      }
       if (waiting) {
         return `<div class="warn">${plural(waiting, 'saved evaluation')} waiting to upload${navigator.onLine ? '' : ' (offline)'}.
       ${SYNC.error ? esc(SYNC.error) : ''}
       <button class="btn sm" id="syncRetry" style="margin-top:8px">Upload now</button></div>`;
+      }
+      if (refused) {
+        return `<div class="warn">${plural(refused, 'saved evaluation')} could not be uploaded. The reason is
+      shown on each one below.</div>`;
       }
       return `<div class="okbox">&#9729;&#xFE0E; All saved evaluations are uploaded${SYNC.lastOk
         ? ` (checked ${esc(sinceText(SYNC.lastOk))})` : ''}.</div>`;
@@ -3852,13 +3897,27 @@
       function open() {
         if (!dbp) {
           dbp = new Promise((resolve) => {
+            let settled = false;
+            const finish = (db) => {if (!settled) {settled = true; clearTimeout(timer); resolve(db);}};
+            // An open that never answers - queued behind another tab's delete or
+            // upgrade, or WebKit's stalled first open - would hang every read,
+            // write and league pull queued behind it for the rest of the session.
+            // Give up after a few seconds and try again on the next operation.
+            const timer = setTimeout(() => {dbp = null; finish(null);}, 4000);
             try {
               const req = indexedDB.open('sideline', 1);
               req.onupgradeneeded = () => req.result.createObjectStore('kv');
-              req.onsuccess = () => resolve(req.result);
-              req.onerror = () => resolve(null);
-              req.onblocked = () => resolve(null);
-            } catch (e) {resolve(null);}
+              req.onsuccess = () => {
+                const db = req.result;
+                // Let go when another tab needs to upgrade or delete the
+                // database, instead of blocking it (and every open after it).
+                db.onversionchange = () => {db.close(); dbp = null;};
+                if (settled) {dbp = Promise.resolve(db); return;}   // late, but usable from now on
+                finish(db);
+              };
+              req.onerror = () => finish(null);
+              req.onblocked = () => finish(null);
+            } catch (e) {finish(null);}
           });
         }
         return dbp;
@@ -3888,26 +3947,34 @@
 
     const leagueBlank = () => ({account: '', evals: new Map(), referees: new Map(), cursor: '', delCursor: '', pulledAt: 0, fullAt: 0});
     let LEAGUE = leagueBlank();
-    let leagueLoaded = false, pulling = null, pullError = '';
+    let leagueLoading = null, pulling = null, pullError = '';
 
-    async function loadLeagueCache() {
-      if (leagueLoaded) return;
-      leagueLoaded = true;
-      const v = await idb.get('league');
-      if (!v || v.account !== ACCT.id || !isApproved()) return;
-      LEAGUE = {
-        ...v,
-        evals: new Map((v.evals || []).map(r => [r.serverId, r])),
-        referees: new Map((v.referees || []).map(x => [x.id, x]))
-      };
-      invalidateProfiles();
+    /* Every caller shares the one read in flight, so a pull waits for it
+       instead of racing it - a slow read landing after the pull used to put
+       the older copy back over the newer one. Nothing read (no cache yet, or
+       storage did not answer) leaves the door open to try again. */
+    function loadLeagueCache() {
+      if (!leagueLoading) {
+        leagueLoading = idb.get('league').then(v => {
+          if (!v) {leagueLoading = null; return;}
+          if (v.account !== ACCT.id || !isApproved()) return;
+          if (LEAGUE.account === v.account && LEAGUE.pulledAt >= (v.pulledAt || 0)) return;
+          LEAGUE = {
+            ...v,
+            evals: new Map((v.evals || []).map(r => [r.serverId, r])),
+            referees: new Map((v.referees || []).map(x => [x.id, x]))
+          };
+          invalidateProfiles();
+        });
+      }
+      return leagueLoading;
     }
     function persistLeague() {
       idb.set('league', {...LEAGUE, evals: [...LEAGUE.evals.values()], referees: [...LEAGUE.referees.values()]});
     }
     function clearLeague() {
       LEAGUE = leagueBlank();
-      leagueLoaded = false; pullError = '';
+      leagueLoading = null; pullError = '';
       invalidateProfiles();
       idb.del('league');
     }
@@ -3941,10 +4008,18 @@
       };
     }
 
+    let pullNext = null;
     function pullLeague(mode) {
       const c = sbc();
       if (!c || !isApproved()) return Promise.resolve();
-      if (pulling) return pulling;
+      if (pulling) {
+        // A forced pull asked for mid-pull wants what changed after that pull
+        // began - the upload or merge that just finished - so it runs next
+        // rather than sharing the answer of a pull that started too early.
+        if (!mode) return pulling;
+        if (!pullNext) pullNext = pulling.then(() => {pullNext = null; return pullLeague(mode);});
+        return pullNext;
+      }
       if (!mode && Date.now() - LEAGUE.pulledAt < 2 * 60000) return Promise.resolve();
       // Next tick, for the same reason as syncNow().
       pulling = Promise.resolve().then(async () => {
@@ -3952,16 +4027,20 @@
           await loadLeagueCache();
           const me = ACCT.id;
           const full = mode === 'full' || LEAGUE.account !== me || !LEAGUE.fullAt || Date.now() - LEAGUE.fullAt > 864e5;
-          const overlap = (iso) => new Date(Date.parse(iso) - 5 * 60000).toISOString();
+          // Five minutes before the cursor, or '' (fetch from the start) if this
+          // browser cannot read the server's timestamp: Invalid Date would throw
+          // in toISOString and fail every incremental pull.
+          const overlap = (iso) => {const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t - 5 * 60000).toISOString() : '';};
+          const since = full ? '' : overlap(LEAGUE.cursor), delSince = full ? '' : overlap(LEAGUE.delCursor);
           const refs = await pageAll(() => c.from('referees').select('id,display_name,name_key,merged_into').order('id'));
           const rows = await pageAll(() => {
             let q = c.from('evaluations').select(EVAL_COLS).order('updated_at').order('id');
-            if (!full && LEAGUE.cursor) q = q.gt('updated_at', overlap(LEAGUE.cursor));
+            if (since) q = q.gt('updated_at', since);
             return q;
           });
           const dels = await pageAll(() => {
             let q = c.from('evaluation_deletions').select('evaluation_id,deleted_at').order('deleted_at').order('evaluation_id');
-            if (!full && LEAGUE.delCursor) q = q.gt('deleted_at', overlap(LEAGUE.delCursor));
+            if (delSince) q = q.gt('deleted_at', delSince);
             return q;
           });
           if (ACCT.id !== me || !isApproved()) return;   // signed out or demoted mid-pull
@@ -3978,7 +4057,8 @@
             pulledAt: Date.now(),
             fullAt: full ? Date.now() : LEAGUE.fullAt
           };
-          leagueLoaded = true; pullError = '';
+          // What is in memory is now newer than anything a cache read could bring.
+          leagueLoading = leagueLoading || Promise.resolve(); pullError = '';
           persistLeague(); invalidateProfiles();
         } catch (e) {
           pullError = friendly(e);
@@ -4002,12 +4082,31 @@
        The app never scores anyone: every number here is an average of
        ratings mentors gave, shown with the count behind it.
        ============================================================ */
-    // Mirrors public.name_key() in supabase/migrations - keep the two in step.
+    /* Mirrors public.name_key() in supabase/migrations - keep the two in step.
+       Letters and digits of every script count; only punctuation, symbols and
+       spaces separate words. It used to keep a-z and 0-9 alone, so "张伟" and
+       "Иван Петров" both came out empty and shared one profile.
+       Accents come off Latin and Greek letters only, as unaccent() does: in
+       Cyrillic "й" and "и" are different letters. NAME_FOLD covers what
+       unaccent() rewrites that NFKD cannot take apart. The app only ever
+       compares these keys with each other (profileIndex keys the server's
+       referees by display name), so a rare letter the two spell differently
+       costs nothing worse than a profile that joins up once it is uploaded. */
+    const NAME_FOLD = {
+      'ß': 'ss', 'ø': 'o', 'æ': 'ae', 'œ': 'oe', 'ł': 'l', 'đ': 'd', 'ð': 'd', 'þ': 'th',
+      'ı': 'i', 'ħ': 'h', 'ŧ': 't', 'ŋ': 'n', 'ς': 'σ', '×': ' ', '÷': ' '
+    };
+    const NAME_SEP = /[^a-z0-9\u00c0-\u1fff\u2c00-\u2dff\u2e80-\u2fff\u3040-\ud7ff\uf900-\ufdff\ufe70-\ufefe\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\uff66-\uffef\u{10000}-\u{1efff}\u{20000}-\u{10ffff}]+/gu;
     function nameKey(n) {
       let s = String(n || '');
       const m = s.match(/^([^,]+),([^,]+)$/);
       if (m) s = m[2].trim() + ' ' + m[1].trim();
-      return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      return s.normalize('NFKD').toLowerCase()
+        .replace(/[ßøæœłđðþıħŧŋς×÷]/g, c => NAME_FOLD[c])
+        .replace(/[\u02b9-\u02bd\u02c6\u02c8\u02cb\u02d0]/g, ' ')              // modifier apostrophes: Kaʻiulani
+        .replace(/([a-z\u00e0-\u024f\u0370-\u03ff])[\u0300-\u036f]+/g, '$1')   // é -> e, ώ -> ω
+        .replace(/\u0435\u0308/g, '\u0435')                                   // ё -> е
+        .normalize('NFC').replace(NAME_SEP, ' ').trim();
     }
     /* "Ref, Alice" / "alice  REF" -> "Alice Ref". Words already in mixed case
        ("McDonald") are left alone. */
@@ -4038,8 +4137,11 @@
 
     function profileIndex() {
       if (profileCache) return profileCache;
-      const keyToRef = new Map();   // name_key -> surviving referee id
-      LEAGUE.referees.forEach(x => keyToRef.set(x.name_key, canonicalRef(x.id)));
+      // nameKey() of each server spelling -> surviving referee id. Keyed by this
+      // app's own nameKey, not the server's name_key, so matching a local copy to
+      // its referee never depends on the two functions agreeing letter for letter.
+      const keyToRef = new Map();
+      LEAGUE.referees.forEach(x => {const k = nameKey(x.display_name); if (k) keyToRef.set(k, canonicalRef(x.id));});
 
       // One record per (mentor, evaluation). A local copy that is newer than
       // the league's (edited, not re-uploaded yet) wins.
@@ -4056,7 +4158,9 @@
       const groups = new Map();
       recs.forEach(r => {
         const refId = r.refereeId && LEAGUE.referees.has(r.refereeId) ? canonicalRef(r.refereeId) : keyToRef.get(nameKey(r.referee));
-        const key = refId ? 'r:' + refId : 'k:' + nameKey(r.referee);
+        // A name with no letters or digits ("?") has no key; it stands alone
+        // rather than pooling with every other such name.
+        const key = refId ? 'r:' + refId : 'k:' + (nameKey(r.referee) || '#' + r.id);
         if (!groups.has(key)) groups.set(key, {key, refereeId: refId || '', records: []});
         groups.get(key).records.push(r);
       });
@@ -4291,24 +4395,6 @@
     </details>`;
       }).join('');
 
-      let admin = '';
-      if (isAdmin() && g.refereeId) {
-        const others = [...LEAGUE.referees.values()]
-          .filter(x => !x.merged_into && x.id !== g.refereeId)
-          .sort((a, b) => a.display_name.localeCompare(b.display_name));
-        admin = `<h2 class="sec">Admin</h2>
-    <div class="card">
-      <label class="f" style="margin-top:0"><span>Another spelling of this referee</span>
-        <select id="mergeFrom"><option value="">Choose a referee to merge in</option>
-          ${others.map(x => `<option value="${esc(x.id)}">${esc(x.display_name)}</option>`).join('')}</select></label>
-      <button class="btn sm" id="doMerge" style="margin-top:8px">Merge into ${esc(g.name)}</button>
-      <div class="divider"></div>
-      <button class="btn sm danger" id="deleteRefRecords">Delete all uploaded records</button>
-      <p class="hint" style="margin-bottom:0">For deletion requests: removes every uploaded evaluation of this referee,
-        from every mentor. Copies saved on mentors' own devices are not touched.</p>
-    </div>`;
-      }
-
       $('#sheetBody').innerHTML = `
     <p class="hint" style="margin-top:0">${plural(p.count, 'evaluation')} &middot; ${plural(p.mentors, 'mentor')}
       &middot; last seen ${esc(prettyDate(p.lastSeen) || '–')}<br>${esc(scopeText())}</p>
@@ -4325,45 +4411,7 @@
     </div>
     ${sections.join('')}
     <h2 class="sec">Evaluations</h2>
-    ${evals}
-    ${admin}`;
-    }
-
-    function mergeIntoProfile() {
-      const g = currentProfile(), sel = $('#mergeFrom');
-      if (!g || !g.refereeId || !sel || !sel.value) {flash('Choose a referee to merge in'); return;}
-      const fromId = sel.value, into = g.refereeId;
-      const from = LEAGUE.referees.get(fromId);
-      askConfirm(`Merge "${from ? from.display_name : 'that referee'}" into "${g.name}"? Their evaluations become ` +
-        'one profile, and later saves under that spelling land here too.', 'Merge', async () => {
-          try {
-            const {error} = await sbc().rpc('merge_referees', {p_from: fromId, p_into: into});
-            if (error) throw error;
-            await pullLeague('full');
-            profileKey = 'r:' + into;
-            renderSheet();
-            flash('Merged');
-          } catch (e) {
-            flash(friendly(e));
-          }
-        }, {tone: 'primary'});
-    }
-    function deleteProfileRecords() {
-      const g = currentProfile();
-      if (!g || !g.refereeId) return;
-      const id = g.refereeId, name = g.name;
-      askConfirm(`Delete every uploaded evaluation of ${name}, from every mentor? This cannot be undone.`,
-        'Delete all', async () => {
-          try {
-            const {data, error} = await sbc().rpc('delete_referee_records', {p_referee: id});
-            if (error) throw error;
-            await pullLeague('full');
-            flash(`${plural(Number(data) || 0, 'evaluation')} deleted`);
-            renderSheet();
-          } catch (e) {
-            flash(friendly(e));
-          }
-        });
+    ${evals}`;
     }
 
     function renderSaved() {
@@ -4374,7 +4422,8 @@
         // Labelled scores. The old "3 2 4 - 1 2" string needed the form open
         // beside it to know which number was which.
         const scores = RATED.map(c => `<span class="pill">${esc(c.short)} ${esc(r.ratings[c.id] ?? '-')}</span>`).join('');
-        const cloud = !sharing ? '' : needsUpload(r) ? '<span class="pill low">not uploaded</span>'
+        const problem = sharing ? uploadProblem(r) : '';
+        const cloud = !sharing ? '' : (problem || needsUpload(r)) ? '<span class="pill low">not uploaded</span>'
           : '<span class="pill">&#9729;&#xFE0E; uploaded</span>';
         return `<div class="saved">
       <div class="sh">
@@ -4385,6 +4434,7 @@
       </div>
       <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
+      ${problem ? `<div class="warn" style="margin-top:8px">Not uploaded: ${esc(problem)}</div>` : ''}
       <pre>${esc(r.comments)}</pre>
       <button class="btn sm" data-copysaved="${r.id}" style="margin-top:8px">Copy</button>
       <details class="disclose danger" style="margin-top:8px">
@@ -4430,12 +4480,10 @@
     function renderSheet() {
       $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
         : sheetMode === 'games' ? 'Choose a game'
-          : sheetMode === 'admin' ? 'Manage mentors'
-            : sheetMode === 'account' ? 'Account'
-              : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
+          : sheetMode === 'account' ? 'Account'
+            : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
       if (sheetMode === 'import') return renderImport();
       if (sheetMode === 'games') return renderPicker();
-      if (sheetMode === 'admin') return renderAdmin();
       if (sheetMode === 'account') return renderAccountSheet();
       if (sheetMode === 'profile') return renderProfile();
 
@@ -4610,10 +4658,10 @@
             <div style="flex:1;min-width:0"><div class="g1">${esc(c.key)}</div>
             <div class="g2">${c.rows.length} rows</div></div>
             <button class="btn sm" style="width:auto" data-usecache="${i}">Use</button></div>`).join('')
-            : `<div class="hint">Nothing found. This reads data other apps on the same site have
-           cached - Whistle at codeoverloader.github.io/whistle/ shares storage with Sideline
-           because they sit on the same domain. It comes up empty inside the Android app,
-           where the origin is different.</div>`;
+            : `<div class="hint">Nothing found. This reads a schedule that another app on this same
+           web address has saved in this browser. Whistle is at a different address
+           (codeoverloader.github.io), so its schedule cannot be read from here: use Google Sheet
+           or Paste instead.</div>`;
         }
 
         body = `${seg}<div class="card" style="margin-top:10px">${sourceUI}</div>`;
@@ -5007,6 +5055,8 @@
       // Field 2A"; the evaluation form's dropdown says "Tigers - Field 1" and
       // "Field 2A". Normalise the venue prefix and the parenthetical first.
       raw = raw.replace(/^legacy\s*park\s*/i, '').trim();
+      // "F2A" is "Field 2A". Nothing in FIELDS contains "f2a", so it never matched.
+      raw = raw.replace(/^f(?=\d)/i, 'Field ');
       const paren = raw.match(/^field\s*1\s*\((tigers|titans|broncos)\)$/i);
       if (paren) {
         const nm = paren[1][0].toUpperCase() + paren[1].slice(1).toLowerCase();
@@ -5035,10 +5085,15 @@
       return DIVISIONS.find(d => k(d) === key) || DIVISIONS.find(d => key.includes(k(d))) || v;
     }
 
-    /* -> "HH:MM" for the time input. Accepts 6:30 PM, 18:30, 6:30p, 630. */
+    /* -> "HH:MM" for the time input. Accepts 6:30 PM, 18:30, 6:30p, 630, 930a, 8.
+       Three passes, most specific first: a separator anywhere, then digits run
+       together (the last two are the minutes - one pattern for both read "630"
+       as hour 63 and dropped it), then a bare hour. */
     function normTime(v) {
       if (!v) return '';
-      const m = String(v).match(/(\d{1,2})\s*[:.]?\s*(\d{2})?\s*(a|p)?/i);
+      const t = String(v).trim();
+      const m = t.match(/(\d{1,2})\s*[:.]\s*(\d{2})\s*(a|p)?/i) || t.match(/(?:^|\D)(\d{1,2})(\d{2})(?!\d)\s*(a|p)?/i)
+        || t.match(/(\d{1,2})()\s*(a|p)?/i);
       if (!m) return '';
       let h = Number(m[1]); const mi = m[2] ? Number(m[2]) : 0;
       const ap = (m[3] || '').toLowerCase();
@@ -5067,9 +5122,11 @@
       return '';
     }
 
+    /* A cell that holds a placeholder instead of a referee. */
+    const NO_REF = /^(tbd|tba|open|none|n\/a|-+|\?+)$/i;
     function splitCrew(v) {
       return String(v || '').split(/[\/,;&]|\s{2,}|\band\b/i)
-        .map(x => x.trim()).filter(x => x && !/^(tbd|tba|open|none|n\/a)$/i.test(x));
+        .map(x => x.trim()).filter(x => x && !NO_REF.test(x));
     }
 
     /* rows -> games. One row is one game; its officials become a crew. */
@@ -5081,12 +5138,18 @@
       rows.slice(headerRow + 1).forEach((r, i) => {
         if (!r.some(c => c)) return;
         if (map.cancel !== '' && /^(true|yes|y|1|cancelled|canceled)$/i.test(col(r, 'cancel').trim())) return;
-        let names = [];
+        let names = [], seats = null;
         if (map.crew !== '') names = splitCrew(col(r, 'crew'));
-        else['cr', 'cr2', 'ar1', 'ar2'].forEach(k => {
-          const n = col(r, k).trim();
-          if (n && !/^(tbd|tba|open|none|n\/a)$/i.test(n)) names.push(n);
-        });
+        else {
+          // Remember which column each name came from. With the center's cell
+          // TBD, "first name is the center" made AR 1 the CR, and the form
+          // went in with the wrong position.
+          seats = {CR: [], AR: []};
+          [['cr', 'CR'], ['cr2', 'CR'], ['ar1', 'AR'], ['ar2', 'AR']].forEach(([k, role]) => {
+            const n = col(r, k).trim();
+            if (n && !NO_REF.test(n)) {names.push(n); seats[role].push(n);}
+          });
+        }
         const parsed = normFieldFull(col(r, 'field'));
         const field = parsed.name;
         const date = normDate(col(r, 'date'));
@@ -5094,7 +5157,7 @@
         out.push({
           key: 'g' + i, date, time: normTime(col(r, 'time')), field, sub: parsed.sub,
           division: normDiv(col(r, 'division')), rule: divisionRule(col(r, 'division')),
-          names,
+          names, seats,
           raw: {field: col(r, 'field'), date: col(r, 'date')}
         });
       });
@@ -5104,6 +5167,18 @@
         if (IMP.fieldFilter && !IMP.fieldFilter.includes(g.field || g.raw.field || '(no field)')) return false;
         return true;
       });
+    }
+
+    /* Names from the CR columns go to center slots and names from the AR
+       columns to assistant slots, each in column order. A TBD leaves its slot
+       empty instead of pulling the next name across. Names with no slot of
+       their own role (a second CR on a three-person crew, an AR on a dual
+       one) fill whatever slots are still empty. */
+    function seatOrder(roles, seats) {
+      const left = {CR: seats.CR.slice(), AR: seats.AR.slice()};
+      const out = roles.map(role => left[role].shift() || '');
+      const rest = left.CR.concat(left.AR);
+      return out.map(n => n || rest.shift() || '');
     }
 
     /* Write the chosen games into the session.
@@ -5155,15 +5230,18 @@
 
             // Split fields take one name each, in CR order; everyone else takes
             // the whole crew. Crew size comes from the rules doc, so a slot exists
-            // even when the sheet left that referee blank.
+            // even when the sheet left that referee blank. With no rule, an AR
+            // column in use means a three-person crew.
             const mine = perRow > 1 ? g.names.slice(k, k + 1) : g.names;
-            const want = Math.min(Math.max(crew || mine.length || 3, 1), 3);
+            const guess = !rule && g.seats && g.seats.AR.length ? 3 : 0;
+            const want = Math.min(Math.max(crew || guess || mine.length || 3, 1), 3);
             /* Roles come from the division, not from whatever the slot used to be.
                A 2-official crew in 1st/2nd grade is DUAL REFEREE - both are centers
                and both submit as CR. Reusing an existing slot without resetting its
                role left an AR behind and mislabelled the second official. */
+            const dual = crew === 2 || (!rule && g.seats && g.seats.CR.length === 2 && !g.seats.AR.length);
             const roles = want === 1 ? ['CR']
-              : want === 2 ? (crew === 2 ? ['CR', 'CR'] : ['CR', 'AR'])
+              : want === 2 ? (dual ? ['CR', 'CR'] : ['CR', 'AR'])
                 : ['CR', 'AR', 'AR'];
             for (let i = 0; i < want; i++) {
               if (!f.refs[i]) f.refs.push(newRef('CR', roles[i]));
@@ -5171,8 +5249,9 @@
             }
             // Keep any extra slot that already carries notes; drop empty leftovers.
             f.refs = f.refs.filter((r, i) => i < want || r.notes.length);
-            mine.slice(0, f.refs.length).forEach((nm, i) => {
-              const r = f.refs[i]; if (!r) return;
+            const order = perRow === 1 && g.seats ? seatOrder(roles, g.seats) : mine;
+            order.slice(0, f.refs.length).forEach((nm, i) => {
+              const r = f.refs[i]; if (!r || !nm) return;
               if (r.notes.length && r.name.trim() && r.name.trim() !== nm) {protectedRefs++; return;}
               r.name = nm;
             });
@@ -5230,12 +5309,12 @@
     }
 
     /* ---------- source 2: whatever is already in this browser ----------
-       Whistle lives at codeoverloader.github.io/whistle/ and Sideline at
-       /sideline/. localStorage is scoped to the ORIGIN, not the path, so
-       they share one storage area and Sideline can read Whistle's cached
-       schedule directly. Worth knowing: this only works on GitHub Pages.
-       Inside the APK the origin is sideline.local, a different box
-       entirely, so this source will come up empty there. */
+       localStorage is scoped to the ORIGIN, not the path. While Sideline
+       lived at codeoverloader.github.io/sideline/ it shared one storage area
+       with Whistle at /whistle/ and could read Whistle's cached schedule
+       directly. On its own domain (sideline.codeoverload.dev) it no longer
+       does, so this only finds schedules cached by something served from
+       that same domain. */
     function scanBrowserCache() {
       const found = [];
       try {
@@ -5543,32 +5622,6 @@
 
       const prof = hit('data-profile'); if (prof) {openProfile(prof); return;}
       const refSort = hit('data-refsort'); if (refSort) {REFS_UI.sort = refSort; renderRefs(); return;}
-      const approve = hit('data-approve');
-      if (approve) {adminCall('set_mentor_role', {p_mentor: approve, p_role: 'mentor'}, 'Approved'); return;}
-      const reject = hit('data-reject');
-      if (reject) {
-        askConfirm('Reject this sign-up and delete the account? They can ask again later.', 'Reject',
-          () => adminCall('remove_mentor', {p_mentor: reject}, 'Sign-up removed'));
-        return;
-      }
-      const roleSet = hit('data-role-set');
-      if (roleSet) {
-        const [mid, role] = roleSet.split('|');
-        const go = () => adminCall('set_mentor_role', {p_mentor: mid, p_role: role},
-          role === 'admin' ? 'Now an admin' : 'Now a mentor');
-        if (role === 'admin') {
-          askConfirm('Make this mentor an admin? Admins can approve and remove mentors, merge referees and ' +
-            'delete records.', 'Make admin', go, {tone: 'primary'});
-        } else go();
-        return;
-      }
-      const revoke = hit('data-revoke');
-      if (revoke) {
-        askConfirm('Revoke access? They can no longer upload or read shared evaluations until approved again. ' +
-          'Evaluations they already uploaded stay.', 'Revoke',
-          () => adminCall('set_mentor_role', {p_mentor: revoke, p_role: 'pending'}, 'Access revoked'));
-        return;
-      }
 
       /* Resolve to the BUTTON, not the exact node under the finger. Switching on
          e.target.id meant a tap on text inside a button - the game bar is almost
@@ -5609,16 +5662,12 @@
             : acctUI.offline ? 'No connection' : 'Still waiting for approval'));
           return;
         case 'acctSignOut': signOut(); return;
-        case 'openAdmin': sheetMode = 'admin'; renderSheet(); loadMentors(); $('#sheet').scrollTop = 0; return;
-        case 'adminReload': loadMentors(); return;
         case 'uploadOn': setUploadConsent(true); syncNow(); renderSaved(); return;
         case 'syncRetry': SYNC.backoff = 0; syncNow(); return;
         case 'refsRefresh':
           pullLeague('force').then(() => flash(pullError || 'Profiles updated'));
           renderRefs();
           return;
-        case 'doMerge': mergeIntoProfile(); return;
-        case 'deleteRefRecords': deleteProfileRecords(); return;
         case 'doFetch': {
           const id = $('#shId').value, gid = $('#shGid').value;
           if (!id.trim()) {flash('Paste the link or ID first'); return;}
@@ -5736,7 +5785,8 @@
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
       if (t.hasAttribute && t.hasAttribute('data-mentor')) {
         // Repaint the avatar as they type, so the initials appear straight away.
-        S.mentor = t.value; save(); paintAccount(); return;
+        // Only the avatar: anything more rebuilt the field being typed in.
+        S.mentor = t.value; save(); paintAvatar(); return;
       }
       if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
       if (t.id === 'acctCode') {acctUI.code = t.value; return;}
