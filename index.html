@@ -2424,8 +2424,26 @@
     }
 
     let S = store.get('sideline:session') || blankSession();
+    /* A saved evaluation as the rest of the app expects it. Records from a
+       backup file are only checked for a ratings object, and a number where a
+       date or name belongs threw in the Saved list and the CSV, while a bad
+       savedAt threw in toISOString and stopped every upload, not just its own. */
+    function tidyRecord(h) {
+      const r = {...h, id: safeId(h.id)};
+      ['mentor', 'date', 'field', 'sub', 'time', 'division', 'referee', 'comments']
+        .forEach(k => {if (typeof r[k] !== 'string') r[k] = r[k] == null ? '' : String(r[k]);});
+      if (r.position !== 'AR') r.position = 'CR';
+      if (r.moveUp !== 'Yes' && r.moveUp !== 'No') r.moveUp = null;
+      const rt = r.ratings && typeof r.ratings === 'object' ? r.ratings : {};
+      r.ratings = Object.fromEntries(RATED.map(c => [c.id, [1, 2, 3, 4].includes(rt[c.id]) ? rt[c.id] : null]));
+      r.notes = Array.isArray(r.notes) ? r.notes.filter(n => n && typeof n === 'object') : [];
+      const t = Number(r.savedAt);
+      r.savedAt = Number.isFinite(t) && t > 0 && t < 8.64e15 ? t : Date.now();
+      return r;
+    }
     let HIST = store.get('sideline:history') || [];
     if (!Array.isArray(HIST)) HIST = [];
+    HIST = HIST.filter(h => h && typeof h === 'object').map(tidyRecord);
 
     /* Migration guard: if a stored session predates a field added later,
        fill the gap rather than crash on undefined. Cheap insurance for an
@@ -3140,7 +3158,10 @@
     function missingFor(field, ref) {
       const out = [];
       if (!S.mentor.trim()) out.push('your name (account button, top left)');
+      // A name the import could not match is kept as the sheet wrote it, but
+      // the form's Field question only takes one of its own choices.
       if (!field.name) out.push('field');
+      else if (!FIELDS.includes(field.name)) out.push('a field from the form\'s list (Settings)');
       if (!field.time) out.push('kickoff');
       if (!field.division) out.push('division');
       if (!ref.name.trim()) out.push('referee name');
@@ -3242,11 +3263,15 @@
     }
 
     function csvCell(v) {
-      const s = String(v == null ? '' : v);
+      let s = String(v == null ? '' : v);
+      // A cell that starts like a formula gets a leading ' so Excel and Sheets
+      // show it as text instead of running it ("=HYPERLINK(...)" in a comment,
+      // or in a restored backup). The admin console's export does the same.
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
       // RFC 4180: wrap in quotes if the value contains a comma, quote or
       // newline, and double any internal quotes. Comments will contain
       // semicolons and sometimes commas, so this is not optional.
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     }
     function exportCSV() {
       if (!HIST.length) {flash('Nothing saved yet'); return;}
@@ -3322,7 +3347,7 @@
       }
       const have = new Set(HIST.map(h => h.id));
       const fresh = data.history.filter(h => h && h.id && h.ratings && typeof h.ratings === 'object' && !have.has(h.id))
-        .map(h => ({...h, id: safeId(h.id)}));
+        .map(tidyRecord);
       const games = data.session.fields.filter(f => f && f.name).length;
       const when = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'an unknown date';
       const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -4742,7 +4767,7 @@
         </div></label>`;
         }).join('') : `<div class="empty">No games matched${IMP.dateFilter === 'session'
           ? ` on ${esc(prettyDate(S.date))}. Try Every date above` : ''}.</div>`}
-    ${filtered.some(g => !g.field) ? `<div class="warn">Some rows did not match a field on the form's
+    ${filtered.some(g => !FIELDS.includes(g.field)) ? `<div class="warn">Some rows did not match a field on the form's
       list. They will import with whatever the sheet said, and you can fix the field in Settings.</div>` : ''}
     ${present.length && sel && sel.length < present.length ? `<div class="hint">${plural(present.length - sel.length, 'other field')}
       in this sheet ${present.length - sel.length === 1 ? 'is' : 'are'} filtered out.</div>` : ''}
@@ -5044,19 +5069,29 @@
       if (!v) return {name: '', sub: ''};
       const k = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, '');
       const match = (key) => {
-        let hit = FIELDS.find(f => k(f) === key);
-        if (hit) return hit;
-        hit = FIELDS.find(f => k(f).includes(key) && key.length >= 2);
-        if (hit) return hit;
-        return FIELDS.find(f => key.includes(k(f)));
+        if (!key) return undefined;
+        const exact = FIELDS.find(f => k(f) === key || k(f) === 'field' + key);   // also "4", "11a"
+        if (exact) return exact;
+        if (key.length < 2) return undefined;
+        // A partial match counts only when it is the only one, and never by
+        // splitting a number ("2a" ends both "field2a" and "field12a"). The first
+        // hit used to win, so "Field 3" came in as 3A and "Field 1" as Tigers:
+        // a wrong field on the form with nothing to say so. Unmatched, the
+        // import warns and the field is picked in Settings.
+        const one = (list) => (list.length === 1 ? list[0] : undefined);
+        const splitsNumber = (x, i) => /\d/.test(key[0]) && /\d/.test(x[i - 1] || '');
+        return one(FIELDS.filter(f => {const x = k(f); return x.endsWith(key) && !splitsNumber(x, x.length - key.length);}))
+          || one(FIELDS.filter(f => k(f).includes(key)))
+          || FIELDS.filter(f => key.includes(k(f))).sort((a, b) => k(b).length - k(a).length)[0];
       };
       let raw = String(v).trim();
       // The master sheet writes "Legacy Park Field 1 (Tigers)" and "Legacy Park
       // Field 2A"; the evaluation form's dropdown says "Tigers - Field 1" and
       // "Field 2A". Normalise the venue prefix and the parenthetical first.
       raw = raw.replace(/^legacy\s*park\s*/i, '').trim();
-      // "F2A" is "Field 2A". Nothing in FIELDS contains "f2a", so it never matched.
-      raw = raw.replace(/^f(?=\d)/i, 'Field ');
+      // "F2A" and "Fld 5" are "Field 2A" and "Field 5". Nothing in FIELDS
+      // contains "f2a", so they never matched.
+      raw = raw.replace(/^(?:f|fld\.?)\s*(?=\d)/i, 'Field ');
       const paren = raw.match(/^field\s*1\s*\((tigers|titans|broncos)\)$/i);
       if (paren) {
         const nm = paren[1][0].toUpperCase() + paren[1].slice(1).toLowerCase();
@@ -5211,12 +5246,16 @@
         const perRow = rule ? rule.pitches : 1;
         const crew = rule ? rule.crew : 0;
         const multi = perRow > 1 || rows.length > 1 || rows.some(r => r.sub);
-        let auto = 0;
+        // Rows the sheet did not letter take the first letters no row claims.
+        // Counting rows instead gave "Tigers 2" plus a plain "Tigers" the same
+        // B, and the second game overwrote the first one's referees.
+        const named = new Set(rows.map(r => r.sub).filter(Boolean)), used = new Set();
+        const nextFree = () => SUBS.find(s => !named.has(s) && !used.has(s)) || '';
 
         rows.forEach(g => {
           for (let k = 0; k < perRow; k++) {
-            const sub = multi ? (perRow > 1 ? SUBS[k] : (g.sub || SUBS[auto])) : '';
-            if (perRow === 1) auto++;
+            const sub = multi ? (perRow > 1 ? SUBS[k] : (g.sub || nextFree())) : '';
+            used.add(sub);
 
             let f = S.fields.find(x => x.name === g.field && (x.sub || '') === sub &&
               (!x.time || !g.time || x.time === g.time));

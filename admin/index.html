@@ -1478,7 +1478,7 @@
     }
     /* Accent- and case-blind text for searching and for spotting near-duplicate
        names. Not the server's name_key: nothing here is sent to the database. */
-    const fold = (s) => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    const fold = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
     const store = {
@@ -1615,7 +1615,22 @@
       c.auth.onAuthStateChange((event, session) => setTimeout(() => onSession(event, session), 0));
     }
 
+    /* Whether supabase-js still holds a login in this browser. It reports
+       "no session" both when there is none and when a stored login could not
+       be refreshed for want of a connection; only the first is a sign-out. */
+    function storedLogin() {
+      try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
+    }
+
     async function onSession(event, session) {
+      if (!session && event !== 'SIGNED_OUT' && storedLogin()) {
+        // supabase-js retries on its own (and holds a failed try for a minute),
+        // so this page comes back by itself once the connection does.
+        ST.auth = 'error'; ST.authError = 'No connection, so the sign-in could not be checked. This page reconnects ' +
+          'by itself when the internet is back, or try again in a minute.';
+        render();
+        return;
+      }
       if (!session) {
         ST.me = null; DATA = null; ST.drawer = '';
         ST.auth = 'signedOut';
@@ -1748,7 +1763,9 @@
       const c = sbc(); if (!c) return;
       let session = null;
       try {({data: {session}} = await c.auth.getSession());} catch (e) {ST.error = friendly(e); render(); return;}
-      if (!session) {onSession('SIGNED_OUT', null); return;}
+      // Not 'SIGNED_OUT': a refresh that could not reach the server keeps the
+      // stored login, and onSession tells the two apart.
+      if (!session) {onSession('NO_SESSION', null); return;}
       await checkRole(session.user);   // an admin demoted elsewhere loses the console here
       if (ST.auth === 'admin') await loadAll();
     }
