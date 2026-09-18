@@ -1422,7 +1422,7 @@
     const DIVISIONS = ['PK', 'Kindergarten', '1st', '2nd', '3rd', '4th', '5th', '6th', 'Middle School', 'High School', 'Adult'];
     const POL = {1: ['+', 'p1', 'Strength'], '-1': ['−', 'm1', 'To work on'], 2: ['↑', 'up', 'Improved after being told']};
     const EVAL_COLS = 'id,mentor_id,referee_id,referee_name,mentor_name,eval_date,field,pitch,kickoff,' +
-      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at';
+      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at,client_id';
     const LOW = 2;   // an average at or below this is flagged, as in the mentor app
 
     /* ============================================================
@@ -1746,6 +1746,9 @@
           division: row.division || '', position: row.position || '',
           ratings: Object.fromEntries(RATED.map(c => [c.id, typeof row[c.id] === 'number' ? row[c.id] : null])),
           moveUp: row.move_up || '', comments: row.comments || '',
+          // Imported from the form's responses (see the Import page). Read from the id
+          // rather than the source column, so this works before that migration runs.
+          fromForm: /^form:/.test(row.client_id || ''),
           notes: Array.isArray(row.notes) ? row.notes.filter(n => n && typeof n === 'object') : [],
           savedAt: Date.parse(row.saved_at) || 0
         }));
@@ -2135,8 +2138,10 @@
       ['evaluations', 'Evaluations', '<path d="M8 4h8v3H8z"/><path d="M8 5.5H5.5v15h13v-15H16"/><path d="M8.5 12h7M8.5 16h5"/>'],
       ['mentors', 'Mentors', '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'],
       ['cleanup', 'Clean-up', '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>'],
+      ['import', 'Import', '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/>'],
     ];
-    const TITLES = {overview: 'Overview', referees: 'Referees', evaluations: 'Evaluations', mentors: 'Mentors and admins', cleanup: 'Clean-up'};
+    const TITLES = {overview: 'Overview', referees: 'Referees', evaluations: 'Evaluations', mentors: 'Mentors and admins', cleanup: 'Clean-up',
+      import: 'Import form responses'};
     const viewFromHash = () => {const v = location.hash.replace(/^#\/?/, ''); return TITLES[v] ? v : 'overview';};
     ST.view = viewFromHash();
 
@@ -2249,7 +2254,7 @@
       }
       const err = ST.error ? `<div class="warn">Could not refresh: ${esc(ST.error)}. Showing what was loaded ${esc(agoTs(DATA.at))}.</div>` : '';
       v.innerHTML = err + ({overview: viewOverview, referees: viewReferees, evaluations: viewEvaluations,
-        mentors: viewMentors, cleanup: viewCleanup}[ST.view])();
+        mentors: viewMentors, cleanup: viewCleanup, import: viewImport}[ST.view])();
       v.classList.toggle('busy', ST.loading);
       drawCharts();
     }
@@ -2494,7 +2499,8 @@
       return `<div class="evalbody">
         <div class="scores">${RATED.map(c => `<span class="pill">${esc(c.short)} ${e.ratings[c.id] ?? '–'}</span>`).join('')}
           <span class="pill">Move up: ${esc(e.moveUp || '–')}</span></div>
-        <div class="muted" style="font-size:var(--fs-xs)">${esc([e.field + (e.sub ? ' ' + e.sub : ''), pretty12(e.time), e.division, e.position].filter(Boolean).join(' · '))}</div>
+        <div class="muted" style="font-size:var(--fs-xs)">${esc([e.field + (e.sub ? ' ' + e.sub : ''), pretty12(e.time), e.division, e.position,
+          e.fromForm ? 'imported from the form' : ''].filter(Boolean).join(' · '))}</div>
         ${notes ? `<ul class="plist" style="list-style:none;padding-left:0">${notes}</ul>` : ''}
         ${e.comments ? `<div class="comments">${esc(e.comments)}</div>` : ''}
       </div>`;
@@ -2747,6 +2753,246 @@
     }
 
     /* ============================================================
+       IMPORT FORM RESPONSES
+       ------------------------------------------------------------
+       Some mentors only fill in the Google Form. Its responses sheet is
+       fetched here and brought into the database, so those evaluations count
+       in the profiles too. The server decides what each row is - new, edited
+       on the form since the last import, already imported, or already
+       uploaded from the app (skipped: the app's copy has the notes) - first
+       as a preview that saves nothing, then for real. The rules live in
+       supabase/migrations/20260918140000_form_import.sql.
+       ============================================================ */
+    const IMPF = {link: store.get('sideline:adminFormSheet') || '', busy: '', error: '', items: null, status: null,
+      result: null, showAll: false};
+
+    // How the form's questions head the responses sheet, typos and all
+    // ("Postion Referee was in"), after lower-casing and dropping punctuation.
+    const FORM_COLS = [
+      ['timestamp', /^timestamp$/], ['mentor', /^mentor/], ['date', /^date$/], ['field', /^field$/],
+      ['time', /^time$/], ['division', /^division/], ['referee', /^referee being mentored|^referee( name)?$/],
+      ['position', /^posi?tion/], ['appearance', /appearance/], ['workrate', /workrate/], ['commands', /commands/],
+      ['teamwork', /teamwork/], ['fouls', /fouls/], ['offsides', /offside/], ['moveup', /move up/], ['comments', /^comments?$/],
+    ];
+    const FORM_STATUS = {
+      error: ['Cannot import', 'pill low'], new: ['New', 'pill acc'], changed: ['Edited on the form', 'pill acc'],
+      in_app: ['Uploaded from the app', 'pill'], same: ['Already imported', 'pill'],
+    };
+
+    /* The sheet's CSV link. gviz is the export endpoint that allows a browser
+       to read it (the same one the mentor app's schedule import uses). */
+    function sheetCsvUrl(idOrUrl) {
+      const str = String(idOrUrl || '').trim();
+      const m = str.match(/\/d\/([a-zA-Z0-9\-_]{20,})/);
+      const gid = str.match(/[#&?]gid=(\d+)/);
+      return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(m ? m[1] : str)}/gviz/tq?tqx=out:csv&headers=1` +
+        (gid ? '&gid=' + gid[1] : '');
+    }
+    /* RFC 4180 CSV: comments hold commas, quotes and line breaks. */
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], cell = '', inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+          if (ch === '"') {if (text[i + 1] === '"') {cell += '"'; i++;} else inQ = false;}
+          else cell += ch;
+        } else if (ch === '"') inQ = true;
+        else if (ch === ',') {row.push(cell); cell = '';}
+        else if (ch === '\n') {row.push(cell); rows.push(row); row = []; cell = '';}
+        else if (ch !== '\r') cell += ch;
+      }
+      if (cell.length || row.length) {row.push(cell); rows.push(row);}
+      return rows;
+    }
+    // slice() counts UTF-16 units; half an emoji makes the database refuse the whole batch.
+    const clip = (s, n) => (s.length > n && /[\ud800-\udbff]/.test(s[n - 1]) ? s.slice(0, n - 1) : s.slice(0, n));
+    /* The sheet writes dates the US way (9/12/2026). Anything unreadable is
+       sent as it is, and the server says it is not a date. */
+    function formDate(v) {
+      const t = String(v || '').trim();
+      let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+      m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})\b/);
+      if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(m[1])}-${pad2(m[2])}`;
+      return t;
+    }
+    function formTime(v) {   // "9:00:00 AM" -> "09:00"
+      const t = String(v || '').trim();
+      const m = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap])?/i);
+      if (!m) return t;
+      let h = Number(m[1]);
+      const ap = (m[3] || '').toLowerCase();
+      if (ap === 'p' && h < 12) h += 12;
+      if (ap === 'a' && h === 12) h = 0;
+      return `${pad2(h)}:${m[2]}`;
+    }
+    function formStamp(v) {  // the response time, "9/12/2026 15:04:05", in this computer's time zone
+      const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return '';
+      const d = new Date(+m[3], m[1] - 1, +m[2], +m[4], +m[5], +(m[6] || 0));
+      return isNaN(d) ? '' : d.toISOString();
+    }
+
+    /* Sheet rows -> the items import_form_evaluations() takes. Throws when
+       the columns it needs are not there. */
+    function formItems(rows) {
+      const head = rows[0].map(h => String(h).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
+      const col = {};
+      FORM_COLS.forEach(([k, re]) => {
+        const i = head.findIndex((h, j) => re.test(h) && !Object.values(col).includes(j));
+        if (i >= 0) col[k] = i;
+      });
+      const missing = [['mentor', 'Mentor/Monitor name'], ['date', 'Date'], ['referee', 'Referee being mentored'],
+        ['position', 'Position']].filter(([k]) => !(k in col)).map(([, l]) => l);
+      if (missing.length) {
+        throw new Error(`This does not look like the form's responses: no ${missing.join(', ')} column. ` +
+          'Check the link points at the responses tab (add its #gid=… if the sheet has several tabs).');
+      }
+      const get = (r, k) => (k in col ? String(r[col[k]] == null ? '' : r[col[k]]).trim() : '');
+      const rating = (v) => (v === '' ? null : v.replace(/\.0+$/, ''));
+      return rows.slice(1).map((r, i) => ({r, row: i + 2}))
+        .filter(({r}) => r.some(c => String(c).trim()))
+        .map(({r, row}) => {
+          const mv = get(r, 'moveup');
+          const item = {
+            row, mentor_name: clip(get(r, 'mentor'), 80), eval_date: formDate(get(r, 'date')), kickoff: formTime(get(r, 'time')),
+            field: clip(get(r, 'field'), 80), division: clip(get(r, 'division'), 40), referee_name: clip(get(r, 'referee'), 120),
+            position: get(r, 'position').toUpperCase(), move_up: /^y/i.test(mv) ? 'Yes' : /^n/i.test(mv) ? 'No' : mv,
+            comments: clip(get(r, 'comments'), 20000), saved_at: formStamp(get(r, 'timestamp'))
+          };
+          RATED.forEach(c => {item[c.id] = rating(get(r, c.id));});
+          return item;
+        });
+    }
+
+    /* Preview (apply = false) or import. The server takes 200 at a time. */
+    async function formRun(apply) {
+      const out = new Map();
+      for (let i = 0; i < IMPF.items.length; i += 200) {
+        const {data, error} = await sbc().rpc('import_form_evaluations', {p_items: IMPF.items.slice(i, i + 200), p_apply: apply});
+        if (error) throw error;
+        (data || []).forEach(d => out.set(d.out_row, {status: d.out_status, error: d.out_error || ''}));
+      }
+      return out;
+    }
+    function formCounts(st) {
+      const n = {new: 0, changed: 0, same: 0, in_app: 0, error: 0};
+      st.forEach(s => {if (s.status in n) n[s.status]++;});
+      return n;
+    }
+
+    async function formFetch() {
+      const link = String(IMPF.link || '').trim();
+      if (!link) {flash('Paste the responses sheet link first'); return;}
+      store.set('sideline:adminFormSheet', link);
+      Object.assign(IMPF, {busy: 'Fetching the sheet…', error: '', items: null, status: null, result: null});
+      paintView();
+      try {
+        let text;
+        try {
+          const res = await fetch(sheetCsvUrl(link), {cache: 'no-store'});
+          if (!res.ok) throw new Error();
+          text = await res.text();
+        } catch (e) {
+          // A private sheet fails here too: Google answers with a sign-in page
+          // the browser is not allowed to read.
+          throw new Error('Could not read that sheet. Check the link, and that the sheet is shared as ' +
+            '"Anyone with the link" can view.');
+        }
+        if (/^\s*</.test(text)) throw new Error('Google sent a sign-in page instead of the sheet. Share it as "Anyone with the link" can view.');
+        const rows = parseCSV(text);
+        if (rows.length < 2) throw new Error('The sheet has no responses yet.');
+        IMPF.items = formItems(rows);
+        IMPF.busy = 'Checking the responses against the database…';
+        paintView();
+        IMPF.status = await formRun(false);
+      } catch (e) {
+        IMPF.error = friendly(e); IMPF.items = null; IMPF.status = null;
+      }
+      IMPF.busy = '';
+      paintView();
+    }
+
+    async function formImport() {
+      if (!IMPF.status) return;
+      const n = formCounts(IMPF.status);
+      if (!n.new && !n.changed) {flash('Nothing new to import'); return;}
+      const ok = await confirmBox({title: 'Import these responses?',
+        message: `${plural(n.new, 'new evaluation')} and ${plural(n.changed, 'edited one')} go into the database, credited ` +
+          'to the mentor named on the form, and every approved mentor sees them in referee profiles. Responses already ' +
+          'uploaded from the app are skipped.', confirm: 'Import'});
+      if (!ok) return;
+      IMPF.busy = 'Importing…'; IMPF.error = '';
+      paintView();
+      try {
+        IMPF.result = formCounts(await formRun(true));
+        IMPF.status = await formRun(false);   // what the sheet looks like against the database now
+        flash(`${plural(IMPF.result.new, 'evaluation')} imported, ${IMPF.result.changed} updated`);
+      } catch (e) {
+        IMPF.error = friendly(e);
+      }
+      IMPF.busy = '';
+      await refresh();   // reloads the league's data, and repaints this page
+    }
+
+    function viewImport() {
+      const top = `<div class="card">
+        <h2>The form’s responses sheet</h2>
+        <p class="sub">Evaluations sent with the Google Form but never saved in the app come in here, so they count in the
+          referee profiles. Nothing changes until you press Import, and importing again later only adds what is new or edited.</p>
+        <div class="formrow">
+          <label class="fld" style="flex:1 1 320px"><span>Link to the responses sheet</span>
+            <input type="text" class="inp" id="fsLink" value="${esc(IMPF.link)}" autocomplete="off" spellcheck="false"
+              placeholder="https://docs.google.com/spreadsheets/d/…" /></label>
+          <button class="btn primary" id="fsFetch" ${IMPF.busy ? 'disabled' : ''}>${IMPF.status ? 'Fetch again' : 'Fetch responses'}</button>
+        </div>
+        <p class="hint">In the form’s Responses tab, open the linked sheet and copy its address. It has to be shared as
+          <b>Anyone with the link can view</b> for this page to read it, which means anyone who gets hold of the link can read
+          every response, so keep it among league leadership. The link is remembered in this browser only.</p>
+      </div>`;
+      if (IMPF.busy) return top + `<div class="card"><div class="empty">${esc(IMPF.busy)}</div></div>`;
+      const err = IMPF.error ? `<div class="warn">${esc(IMPF.error)}</div>` : '';
+      if (!IMPF.items || !IMPF.status) return top + err;
+
+      const n = formCounts(IMPF.status);
+      const done = IMPF.result ? `<div class="banner"><span><b>Imported ${plural(IMPF.result.new, 'evaluation')}</b>
+        and updated ${IMPF.result.changed}.</span></div>` : '';
+      const order = {error: 0, new: 1, changed: 2, in_app: 3, same: 4};
+      const rows = IMPF.items.map(it => ({it, s: IMPF.status.get(it.row) || {status: 'error', error: 'No answer from the server'}}))
+        .filter(x => IMPF.showAll || !['same', 'in_app'].includes(x.s.status))
+        .sort((a, z) => order[a.s.status] - order[z.s.status] || a.it.row - z.it.row);
+      const shown = rows.slice(0, 300);
+      const table = shown.length ? `<div class="tablewrap"><table class="data"><thead><tr>
+          <th class="n"><span>Row</span></th><th><span>Date</span></th><th><span>Referee</span></th><th><span>Pos</span></th>
+          <th class="hide-sm"><span>Mentor</span></th><th><span>Status</span></th></tr></thead><tbody>
+          ${shown.map(({it, s}) => {
+            const [label, cls] = FORM_STATUS[s.status] || FORM_STATUS.error;
+            return `<tr><td class="n">${it.row}</td><td class="num">${esc(prettyDate(ISO_RE.test(it.eval_date) ? it.eval_date : '') || it.eval_date || '–')}</td>
+              <td>${esc(it.referee_name || '–')}</td><td>${esc(it.position || '–')}</td><td class="hide-sm">${esc(it.mentor_name || '–')}</td>
+              <td><span class="${cls}">${esc(label)}</span>${s.error ? `<div class="muted" style="font-size:var(--fs-xs)">${esc(s.error)}</div>` : ''}</td></tr>`;
+          }).join('')}</tbody></table></div>
+          ${rows.length > shown.length ? `<p class="hint">Showing the first ${shown.length} of ${rows.length}.</p>` : ''}`
+        : '<div class="card"><div class="empty">Every response is already in the database.</div></div>';
+      const hidden = n.same + n.in_app;
+      return top + err + done + `
+      <div class="kpis">
+        <div class="kpi"><div class="l">New</div><div class="v">${n.new}</div><div class="s">not in the database yet</div></div>
+        <div class="kpi"><div class="l">Edited on the form</div><div class="v">${n.changed}</div><div class="s">imported before, changed since</div></div>
+        <div class="kpi"><div class="l">Already in</div><div class="v">${n.same + n.in_app}</div><div class="s">${n.in_app} uploaded from the app, skipped</div></div>
+        <div class="kpi"><div class="l">Cannot import</div><div class="v">${n.error}</div><div class="s">the reason is on each row</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" id="fsImport" ${n.new + n.changed ? '' : 'disabled'}>Import ${plural(n.new + n.changed, 'response')}</button>
+        <div class="spacer"></div>
+        ${hidden ? `<label class="chk"><input type="checkbox" id="fsAll" ${IMPF.showAll ? 'checked' : ''} /> Show the ${hidden} already in</label>` : ''}
+      </div>
+      ${table}
+      <p class="hint">A response counts as uploaded from the app when the app has an evaluation of the same referee, on the same date,
+        in the same position, by a mentor with the same name. The app’s copy is kept because it has the notes.</p>`;
+    }
+
+    /* ============================================================
        REFEREE PANEL
        ============================================================ */
     let drawerReturn = null;
@@ -2965,6 +3211,8 @@
         case 'resetNotSame': UI.notSame.clear(); store.set('sideline:adminNotSame', []); paintView(); return;
         case 'mGo': doMerge($('#mFrom').value, $('#mInto').value); return;
         case 'delOpen': {const v = $('#delPick').value; if (v) openDrawer(v); else flash('Choose a referee'); return;}
+        case 'fsFetch': formFetch(); return;
+        case 'fsImport': formImport(); return;
         case 'drMergeGo': {const v = $('#drMerge').value; if (v) doMerge(v, ST.drawer); else flash('Choose a referee to merge in'); return;}
         case 'drDelete': deleteRecords(ST.drawer); return;
       }
@@ -2982,6 +3230,7 @@
       if (t.id === 'loginEmail') {LOGIN.email = t.value; return;}
       if (t.id === 'refQ') {UI.refQ = t.value; $('#refTable').innerHTML = refTableHTML(); return;}
       if (t.id === 'evalQ') {UI.evalQ = t.value; UI.evalLimit = 100; $('#evalTable').innerHTML = evalTableHTML(); return;}
+      if (t.id === 'fsLink') {IMPF.link = t.value; return;}
     });
 
     document.addEventListener('change', (e) => {
@@ -2995,6 +3244,7 @@
         case 'fTo': F.to = ISO_RE.test(t.value) ? t.value : ''; filtersChanged(false); return;
         case 'fDiv': F.division = t.value; filtersChanged(false); return;
         case 'fPos': F.position = t.value; filtersChanged(false); return;
+        case 'fsAll': IMPF.showAll = t.checked; paintView(); return;
         case 'refLow': UI.refLow = t.checked; $('#refTable').innerHTML = refTableHTML(); return;
       }
     });
