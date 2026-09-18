@@ -276,6 +276,63 @@ begin
     'FAIL: remove_mentor did not delete the account';
 end $$;
 
+-- ---------- admin: importing the form's responses ----------
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+
+do $$
+declare
+  resp jsonb := jsonb_build_array(
+    -- also uploaded from the app below, typed a little differently on the form
+    jsonb_build_object('row', 2, 'mentor_name', 'test mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
+      'referee_name', 'Twin, Zed', 'position', 'CR', 'appearance', '3', 'move_up', 'No'),
+    jsonb_build_object('row', 3, 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '10:15',
+      'referee_name', 'Zed Formonly', 'position', 'AR', 'appearance', '2', 'workrate', '4', 'move_up', 'Yes',
+      'comments', 'From the form', 'field', 'Field 4', 'division', '5th', 'saved_at', '2026-09-12T16:00:00Z'),
+    jsonb_build_object('row', 4, 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12',
+      'referee_name', 'Zed Badrating', 'position', 'CR', 'fouls', '7'));
+  st text[];
+begin
+  perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-10', 'Zed Twin')));
+
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp);
+  assert st = array['in_app', 'new', 'error'], format('FAIL: preview statuses were %s', st);
+  assert not exists (select 1 from public.evaluations where source = 'form'), 'FAIL: a preview saved something';
+  assert not exists (select 1 from public.referees where display_name = 'Zed Formonly'),
+    'FAIL: a preview created a referee';
+
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st = array['in_app', 'new', 'error'], format('FAIL: import statuses were %s', st);
+  assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: import did not save exactly one row';
+  assert (select mentor_id is null and comments = 'From the form' and saved_at = '2026-09-12T16:00:00Z'
+          from public.evaluations where source = 'form'), 'FAIL: the imported row is wrong';
+
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st[2] = 'same', 'FAIL: importing the same sheet again changed something';
+  assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: re-import duplicated a row';
+
+  resp := jsonb_set(resp, '{1,comments}', '"Edited on the form"');
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st[2] = 'changed', 'FAIL: an edited response was not seen as changed';
+  assert (select comments from public.evaluations where source = 'form') = 'Edited on the form',
+    'FAIL: an edited response did not update in place';
+
+  -- The mentor uploads the same evaluation from the app afterwards: the app copy wins.
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-test-11', 'Zed Formonly') || '{"position": "AR", "kickoff": "10:15"}'));
+  assert not exists (select 1 from public.evaluations where source = 'form'),
+    'FAIL: an app upload did not replace the imported copy';
+  assert exists (select 1 from public.evaluations where client_id = 'zz-test-11'), 'FAIL: the app copy is missing';
+end $$;
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000c');
+do $$ begin
+  perform pg_temp.expect_error($q$ select public.import_form_evaluations('[]', true) $q$,
+    '42501', 'a mentor importing form responses');
+end $$;
+
 -- ---------- demote then re-approve: access follows the role ----------
 
 reset role;

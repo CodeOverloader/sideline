@@ -100,8 +100,21 @@ One filter row (dates, division, position) applies to every page:
 | Evaluations | Every evaluation, newest first, with ratings, notes and comments, and a CSV export in the same columns as the app's own. |
 | Mentors | Approving or rejecting sign-ups, each mentor's activity and the average rating they give, and changing who is an admin. |
 | Clean-up | Names that may be one referee typed two ways, to merge, and where to handle a deletion request. |
+| Import | Brings in evaluations sent with the Google Form but never saved in the app. See below. |
 
 The console keeps no copy of the league's data in the browser; it reads it fresh each time.
+
+### Importing the form's responses
+
+Some mentors only fill in the Referee Evaluation form. **Import** in the admin console brings those responses into the database, so they count in referee profiles like any other evaluation.
+
+1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. If the sheet has several tabs, copy the link while the responses tab is open, so it carries `#gid=…`.
+2. Paste the link into **Import** and choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
+3. Choose **Import**. Run it again whenever you like: responses already imported are left alone, and edited ones are updated in place.
+
+A response counts as already uploaded from the app when the app has an evaluation of the same referee, on the same date, in the same position (and kickoff, when both have one), by a mentor with the same name. It is skipped, because the app's copy has the notes. If a mentor uploads from the app after their form response was imported, the imported copy is replaced by the app's.
+
+Imported evaluations are credited to the name typed on the form, not to an account. Only admins can change or delete them. **Delete all records** on a referee removes them too.
 
 ### Handling a deletion request
 
