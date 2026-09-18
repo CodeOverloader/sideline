@@ -85,7 +85,12 @@ async function networkFirst(req) {
     if (res) return res;
   } catch (e) { /* offline: use the cache below */ }
 
-  const hit = (await cache.match(req, { ignoreSearch: true })) || (await cache.match('./index.html'));
+  // The admin console (admin/) is never swapped for the mentor app: with no
+  // copy of it cached, the browser's own offline page says what happened.
+  const url = new URL(req.url);
+  const consolePath = new URL('./admin', self.registration.scope).pathname;
+  const isConsole = url.pathname === consolePath || url.pathname.startsWith(consolePath + '/');
+  const hit = (await cache.match(req, { ignoreSearch: true })) || (isConsole ? null : await cache.match('./index.html'));
   // Nothing cached yet (very first visit on a slow link): keep waiting on the network.
   return hit || network;
 }

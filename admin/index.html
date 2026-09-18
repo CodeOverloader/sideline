@@ -1,0 +1,3012 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Sideline Admin</title>
+  <link rel="icon" href="../icon.svg" type="image/svg+xml" />
+
+  <script>
+    /* Same move to https as the mentor app. The console holds no local data
+       that a move could strand, so it always goes. */
+    (function () {
+      if (location.protocol === 'http:' && location.hostname === 'sideline.codeoverload.dev') {
+        location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+      }
+    })();
+
+    /* Theme before first paint. The console follows the computer's setting
+       unless someone picks one; the mentor app's own choice is left alone
+       (its 'sideline:theme' is about reading a phone in the sun). */
+    (function () {
+      var mode = 'auto';
+      try { mode = JSON.parse(localStorage.getItem('sideline:adminTheme')) || 'auto'; } catch (e) { }
+      var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <style>
+    /* ============================================================
+       SIDELINE ADMIN CONSOLE
+       The mentor app is built for a phone at a field with no signal. This
+       page is for the assignor and league leadership at a desk: tables,
+       filters and summaries. It is laid out for a computer first and still
+       works on a phone. Colors are the mentor app's own tokens, so the two
+       read as one product.
+       ============================================================ */
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: #14181d;
+      --panel2: #1b2127;
+      --line: #242c34;
+      --grid: #20272e;
+      --ink: #e9eef3;
+      --mute: #8b98a5;
+      --primary: #38bdf8;
+      --plus: #34d399;
+      --minus: #fb923c;
+      --on-primary: #06212e;
+      --primary-faint: rgba(56, 189, 248, .05);
+      --primary-tint: rgba(56, 189, 248, .1);
+      --primary-line: rgba(56, 189, 248, .38);
+      --minus-tint: rgba(251, 146, 60, .1);
+      --minus-line: rgba(251, 146, 60, .38);
+      /* de-emphasis for bars that are context, not the point */
+      --bar-muted: #5f6c78;
+      --scrim: rgba(0, 0, 0, .55);
+      --shadow: 0 10px 40px rgba(0, 0, 0, .45);
+      --r: 12px;
+      --side: 232px;
+
+      --fs-xs: 0.8125rem;
+      --fs-sm: 0.875rem;
+      --fs-md: 0.9375rem;
+      --fs-base: 1rem;
+      --fs-lg: 1.125rem;
+      --fs-xl: 1.25rem;
+      --fs-2xl: 1.625rem;
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #eef2f5;
+      --panel: #ffffff;
+      --panel2: #f4f7f9;
+      --line: #d3dce3;
+      --grid: #e6ebef;
+      --ink: #0b1218;
+      --mute: #4a5764;
+      --primary: #0369a1;
+      --plus: #047857;
+      --minus: #c2410c;
+      --on-primary: #ffffff;
+      --primary-faint: rgba(3, 105, 161, .04);
+      --primary-tint: rgba(3, 105, 161, .08);
+      --primary-line: rgba(3, 105, 161, .45);
+      --minus-tint: rgba(194, 65, 12, .07);
+      --minus-line: rgba(194, 65, 12, .4);
+      --bar-muted: #84919d;
+      --scrim: rgba(11, 18, 24, .4);
+      --shadow: 0 10px 40px rgba(11, 18, 24, .16);
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-size: var(--fs-base);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      color: inherit
+    }
+
+    button {
+      cursor: pointer
+    }
+
+    a {
+      color: var(--primary)
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px
+    }
+
+    [hidden] {
+      display: none !important
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      * {
+        transition: none !important;
+        animation: none !important
+      }
+    }
+
+    .muted {
+      color: var(--mute)
+    }
+
+    .num {
+      font-variant-numeric: tabular-nums
+    }
+
+    .vh {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap
+    }
+
+    /* ---------- controls ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 6px 14px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--ink);
+      font-weight: 600;
+      font-size: var(--fs-sm);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      border-color: var(--primary-line)
+    }
+
+    .btn.primary {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary)
+    }
+
+    .btn.ghost {
+      background: transparent
+    }
+
+    .btn.danger {
+      background: transparent;
+      color: var(--minus);
+      border-color: var(--minus-line)
+    }
+
+    .btn.sm {
+      min-height: 30px;
+      padding: 3px 10px;
+      font-size: var(--fs-xs)
+    }
+
+    .btn:disabled {
+      opacity: .45;
+      cursor: default
+    }
+
+    .linkbtn {
+      background: none;
+      border: 0;
+      padding: 0;
+      font-weight: 600;
+      text-align: left;
+      color: var(--ink);
+    }
+
+    .linkbtn:hover {
+      color: var(--primary);
+      text-decoration: underline
+    }
+
+    .fld {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      font-weight: 600;
+    }
+
+    .inp,
+    .fld select,
+    .fld input {
+      min-height: 36px;
+      padding: 5px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font-size: var(--fs-sm);
+      font-weight: 500;
+    }
+
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: var(--fs-sm);
+      min-height: 36px
+    }
+
+    .chk input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary)
+    }
+
+    /* Anything tapped by a finger is held to 44px, as in the mentor app. */
+    @media (pointer: coarse) {
+
+      .btn,
+      .inp,
+      .fld select,
+      .fld input,
+      .chk {
+        min-height: 44px
+      }
+
+      .btn.sm {
+        min-height: 40px
+      }
+
+      .inp,
+      .fld select,
+      .fld input {
+        font-size: 16px
+      }
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--mute);
+      white-space: nowrap;
+    }
+
+    .pill.low {
+      color: var(--minus);
+      border-color: var(--minus-line);
+      background: var(--minus-tint)
+    }
+
+    .pill.acc {
+      color: var(--primary);
+      border-color: var(--primary-line);
+      background: var(--primary-tint)
+    }
+
+    /* ---------- layout ---------- */
+    .shell {
+      display: grid;
+      grid-template-columns: var(--side) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .side {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 20px 14px 16px;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.75rem;
+      letter-spacing: .06em;
+      line-height: 1;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .brand span {
+      color: var(--primary)
+    }
+
+    .brand small {
+      font-family: Inter, sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 1px 6px;
+    }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px
+    }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 9px;
+      font-weight: 600;
+      font-size: var(--fs-sm);
+      color: var(--mute);
+      text-decoration: none;
+    }
+
+    .nav a:hover {
+      background: var(--panel2);
+      color: var(--ink)
+    }
+
+    .nav a[aria-current="page"] {
+      background: var(--primary-tint);
+      color: var(--ink)
+    }
+
+    .nav a[aria-current="page"] svg {
+      color: var(--primary)
+    }
+
+    .nav svg {
+      width: 18px;
+      height: 18px;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .badge {
+      margin-left: auto;
+      min-width: 20px;
+      text-align: center;
+      background: var(--primary);
+      color: var(--on-primary);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 6px;
+    }
+
+    .acct {
+      margin-top: auto;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: var(--fs-xs);
+    }
+
+    .acct .who {
+      overflow-wrap: anywhere;
+      color: var(--mute)
+    }
+
+    .acct .who b {
+      display: block;
+      color: var(--ink);
+      font-size: var(--fs-sm)
+    }
+
+    .acct .row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap
+    }
+
+    .main {
+      min-width: 0;
+      width: 100%;
+      max-width: 1400px;
+      padding: 22px 32px 64px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .top h1 {
+      margin: 0;
+      font-size: var(--fs-2xl);
+      font-weight: 700;
+      letter-spacing: -.01em
+    }
+
+    .spacer {
+      flex: 1
+    }
+
+    .fresh {
+      font-size: var(--fs-xs);
+      color: var(--mute)
+    }
+
+    /* One filter row above everything it scopes. It stays put while the
+       page scrolls, so the numbers never lose their context. */
+    .filters {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px 14px;
+      padding: 12px 0 14px;
+      margin-bottom: 18px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .filters .scope {
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      padding-bottom: 8px;
+    }
+
+    .view {
+      transition: opacity .15s
+    }
+
+    .view.busy {
+      opacity: .55
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px 14px;
+      flex-wrap: wrap;
+      margin-bottom: 12px
+    }
+
+    .toolbar .inp {
+      width: min(320px, 100%)
+    }
+
+    .banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border-radius: var(--r);
+      border: 1px solid var(--primary-line);
+      background: var(--primary-tint);
+      font-size: var(--fs-sm);
+    }
+
+    .warn {
+      margin: 0 0 14px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--minus-line);
+      background: var(--minus-tint);
+      font-size: var(--fs-sm);
+    }
+
+    .empty {
+      padding: 12px 0;
+      color: var(--mute);
+      font-size: var(--fs-sm)
+    }
+
+    .hint {
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      margin: 8px 0 0
+    }
+
+    /* ---------- cards + stat tiles ---------- */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      min-width: 0;
+    }
+
+    .kpi .l {
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      color: var(--mute)
+    }
+
+    .kpi .v {
+      font-size: 2rem;
+      font-weight: 650;
+      line-height: 1.15;
+      margin-top: 4px;
+      letter-spacing: -.01em
+    }
+
+    .kpi .s {
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      margin-top: 2px
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 16px 18px;
+      min-width: 0;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: var(--fs-md);
+      font-weight: 650
+    }
+
+    .card .sub {
+      margin: 2px 0 10px;
+      font-size: var(--fs-xs);
+      color: var(--mute)
+    }
+
+    h2.sec {
+      margin: 26px 0 10px;
+      font-size: var(--fs-lg);
+      font-weight: 650
+    }
+
+    h2.sec:first-child {
+      margin-top: 0
+    }
+
+    /* A short list of referees on the overview; each line opens the profile. */
+    .rlist {
+      list-style: none;
+      margin: 0;
+      padding: 0
+    }
+
+    .rrow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 9px 6px;
+      text-align: left;
+      background: none;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+    }
+
+    .rlist li:first-child .rrow {
+      border-top: 0
+    }
+
+    button.rrow:hover {
+      background: var(--primary-faint)
+    }
+
+    .rrow .t {
+      min-width: 0;
+      flex: 1
+    }
+
+    .rrow .nm {
+      font-weight: 600;
+      font-size: var(--fs-sm);
+      overflow-wrap: anywhere
+    }
+
+    .rrow .d {
+      font-size: var(--fs-xs);
+      color: var(--mute)
+    }
+
+    .rrow .r {
+      text-align: right;
+      white-space: nowrap;
+      font-size: var(--fs-xs);
+      color: var(--mute)
+    }
+
+    /* ---------- tables ---------- */
+    .tablewrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--panel);
+    }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-sm)
+    }
+
+    table.data th {
+      text-align: left;
+      background: var(--panel2);
+      color: var(--mute);
+      font-size: var(--fs-xs);
+      font-weight: 650;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--line);
+      padding: 0;
+    }
+
+    table.data th>span,
+    table.data th>button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      padding: 9px 8px;
+      background: none;
+      border: 0;
+      font: inherit;
+      color: inherit;
+    }
+
+    table.data th>button:hover {
+      color: var(--ink)
+    }
+
+    table.data th[aria-sort]>button {
+      color: var(--ink)
+    }
+
+    table.data td {
+      padding: 8px 8px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top
+    }
+
+    table.data tbody tr:last-child td {
+      border-bottom: 0
+    }
+
+    table.data .n {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap
+    }
+
+    table.data th.n>button,
+    table.data th.n>span {
+      justify-content: flex-end
+    }
+
+    table.data tr.click {
+      cursor: pointer
+    }
+
+    table.data tr.click:hover td {
+      background: var(--primary-faint)
+    }
+
+    table.data td.low {
+      color: var(--minus);
+      font-weight: 650
+    }
+
+    /* "Watch for" rides under the referee's name, cut to one line, so every
+       row stays one height and the skill columns fit a laptop screen. */
+    table.data .wf {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--mute);
+      font-size: var(--fs-xs)
+    }
+
+    @media (max-width: 1400px) {
+      .hide-md {
+        display: none !important
+      }
+    }
+
+    table.data tr.exp>td {
+      background: var(--panel2)
+    }
+
+    .more {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: var(--fs-xs);
+      color: var(--mute)
+    }
+
+    /* ---------- charts ----------
+       Thin marks, hairline solid grid, text in text colors. Every chart has
+       a "Show as a table" twin under it and a tooltip on hover and focus. */
+    .chart {
+      position: relative;
+      width: 100%;
+      min-height: 60px
+    }
+
+    .chart svg {
+      display: block;
+      overflow: visible
+    }
+
+    .chart .ax {
+      fill: var(--mute);
+      font-size: 12px;
+      font-family: Inter, sans-serif
+    }
+
+    .chart .lb {
+      fill: var(--ink);
+      font-size: 13px;
+      font-family: Inter, sans-serif
+    }
+
+    .chart .vl {
+      fill: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: Inter, sans-serif
+    }
+
+    .chart .gl {
+      stroke: var(--grid);
+      stroke-width: 1;
+      shape-rendering: crispEdges
+    }
+
+    .chart .base {
+      stroke: var(--line);
+      stroke-width: 1;
+      shape-rendering: crispEdges
+    }
+
+    .chart .m1 {
+      fill: var(--primary)
+    }
+
+    .chart .m0 {
+      fill: var(--bar-muted)
+    }
+
+    .chart .ln {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 2;
+      stroke-linejoin: round;
+      stroke-linecap: round
+    }
+
+    .chart .dot {
+      fill: var(--primary);
+      stroke: var(--panel);
+      stroke-width: 2
+    }
+
+    .chart .cross {
+      stroke: var(--mute);
+      stroke-width: 1;
+      opacity: 0
+    }
+
+    .chart .hit {
+      fill: transparent;
+      outline: none
+    }
+
+    .chart .mk:hover .m1,
+    .chart .mk:hover .m0,
+    .chart .mk:focus-within .m1,
+    .chart .mk:focus-within .m0 {
+      opacity: .72
+    }
+
+    .chart .mk:hover .cross,
+    .chart .mk:focus-within .cross {
+      opacity: .5
+    }
+
+    .chart .mk:focus-within .hit {
+      stroke: var(--primary);
+      stroke-width: 1.5
+    }
+
+    details.tv {
+      margin-top: 6px
+    }
+
+    details.tv summary {
+      cursor: pointer;
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      padding: 4px 0
+    }
+
+    details.tv table {
+      margin-top: 6px
+    }
+
+    .tip {
+      position: fixed;
+      z-index: 200;
+      pointer-events: none;
+      max-width: 260px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      font-size: var(--fs-xs);
+      color: var(--mute);
+    }
+
+    .tip b {
+      display: block;
+      color: var(--ink);
+      font-size: var(--fs-sm)
+    }
+
+    /* per-skill bars, the same shape as the mentor app's referee profile */
+    .catrow {
+      display: grid;
+      grid-template-columns: 96px 1fr 84px;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0;
+      font-size: var(--fs-sm);
+    }
+
+    .catrow .bar {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--panel2);
+      overflow: hidden
+    }
+
+    .catrow .bar i {
+      display: block;
+      height: 100%;
+      background: var(--primary);
+      border-radius: 0 4px 4px 0
+    }
+
+    .catrow .bar i.low {
+      background: var(--minus)
+    }
+
+    .catrow .cv {
+      text-align: right;
+      font-variant-numeric: tabular-nums
+    }
+
+    .catrow .cv small {
+      color: var(--mute)
+    }
+
+    .plist {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      font-size: var(--fs-sm)
+    }
+
+    .plist li {
+      margin: 3px 0
+    }
+
+    .evald {
+      border-top: 1px solid var(--line);
+      padding: 9px 0
+    }
+
+    .evald summary {
+      cursor: pointer;
+      font-size: var(--fs-sm)
+    }
+
+    .scores {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 8px 0
+    }
+
+    .comments {
+      white-space: pre-wrap;
+      font-family: inherit;
+      font-size: var(--fs-sm);
+      background: var(--panel2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 8px 0 0;
+      overflow-wrap: anywhere;
+    }
+
+    .evalbody .comments {
+      background: var(--panel)
+    }
+
+    .pol {
+      display: inline-block;
+      width: 1.1em;
+      font-weight: 700
+    }
+
+    .pol.p1 {
+      color: var(--plus)
+    }
+
+    .pol.m1 {
+      color: var(--minus)
+    }
+
+    .pol.up {
+      color: var(--primary)
+    }
+
+    /* ---------- the referee panel ---------- */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: var(--scrim)
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 60;
+      width: min(680px, 100vw);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      border-left: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .drhead {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .drhead h2 {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      font-size: var(--fs-xl);
+      overflow-wrap: anywhere
+    }
+
+    .xbtn {
+      width: 40px;
+      height: 40px;
+      flex: none;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .drbody {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px 48px
+    }
+
+    .drbody .card {
+      margin-bottom: 14px
+    }
+
+    .drstats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px
+    }
+
+    .cols2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+      gap: 14px
+    }
+
+    .dupe {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .dupe:first-of-type {
+      border-top: 0
+    }
+
+    .dupe .why {
+      grid-column: 1 / -1;
+      font-size: var(--fs-xs);
+      color: var(--mute);
+      margin-top: -6px
+    }
+
+    .dupe .acts {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end
+    }
+
+    .formrow {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end
+    }
+
+    /* A select sizes itself to its longest option; min-width lets it shrink
+       to the row instead of pushing past the edge of a phone. */
+    .formrow .fld {
+      flex: 1 1 220px;
+      min-width: 0
+    }
+
+    .formrow .fld select {
+      width: 100%;
+      min-width: 0
+    }
+
+    /* ---------- sign-in gate ---------- */
+    .gate {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px
+    }
+
+    .gate .card {
+      width: min(440px, 100%);
+      padding: 24px
+    }
+
+    .gate .brand {
+      padding: 0;
+      margin-bottom: 18px
+    }
+
+    .gate h1 {
+      font-size: var(--fs-xl);
+      margin: 0 0 6px
+    }
+
+    .gate p {
+      font-size: var(--fs-sm);
+      color: var(--mute);
+      margin: 0 0 14px
+    }
+
+    .gate .fld {
+      margin-bottom: 12px
+    }
+
+    .gate .btn {
+      width: 100%
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px
+    }
+
+    /* ---------- dialog + toast ---------- */
+    dialog.dlg {
+      width: min(460px, calc(100vw - 32px));
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    dialog.dlg::backdrop {
+      background: var(--scrim)
+    }
+
+    dialog.dlg h2 {
+      margin: 0 0 8px;
+      font-size: var(--fs-lg)
+    }
+
+    dialog.dlg p {
+      margin: 0 0 12px;
+      font-size: var(--fs-sm);
+      color: var(--mute)
+    }
+
+    dialog.dlg .acts {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      z-index: 300;
+      max-width: calc(100vw - 32px);
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: var(--ink);
+      color: var(--bg);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+
+    /* ---------- phones and narrow windows ----------
+       The side rail becomes a top bar with the sections in a scrolling
+       row, the filters stop sticking (they would eat half the screen), and
+       tables drop their secondary columns. */
+    @media (max-width: 900px) {
+      .shell {
+        display: block
+      }
+
+      .side {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        height: auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        padding: 10px 16px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        padding: 0;
+        font-size: 1.5rem
+      }
+
+      .nav {
+        order: 3;
+        flex-direction: row;
+        width: calc(100% + 32px);
+        margin: 0 -16px;
+        padding: 0 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        gap: 0;
+      }
+
+      .nav a {
+        flex: none;
+        border-radius: 0;
+        padding: 10px 12px 11px;
+        min-height: 44px;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+      }
+
+      .nav a[aria-current="page"] {
+        background: none;
+        border-bottom-color: var(--primary)
+      }
+
+      .nav svg {
+        display: none
+      }
+
+      .badge {
+        margin-left: 4px
+      }
+
+      .acct {
+        margin: 0 0 0 auto;
+        padding: 0;
+        border: 0;
+        flex-direction: row;
+        align-items: center
+      }
+
+      .acct .who,
+      .acct .note {
+        display: none
+      }
+
+      .main {
+        padding: 14px 16px 56px
+      }
+
+      .top h1 {
+        font-size: var(--fs-xl)
+      }
+
+      .filters {
+        position: static
+      }
+
+      .filters .fld {
+        flex: 1 1 140px
+      }
+
+      .kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px
+      }
+
+      .kpi {
+        padding: 12px
+      }
+
+      .kpis .kpi:last-child:nth-child(odd) {
+        grid-column: 1 / -1
+      }
+
+      .drstats {
+        gap: 8px
+      }
+
+      .drstats .kpi .v {
+        font-size: 1.375rem
+      }
+
+      .kpi .v {
+        font-size: 1.625rem
+      }
+
+      .card {
+        padding: 14px
+      }
+
+      .hide-sm {
+        display: none !important
+      }
+
+      .drhead {
+        padding: 10px 16px
+      }
+
+      .drbody {
+        padding: 14px 16px 48px
+      }
+
+      .dupe {
+        grid-template-columns: minmax(0, 1fr)
+      }
+
+      .dupe .acts {
+        justify-content: flex-start
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drTitle" hidden>
+    <div class="drhead">
+      <h2 id="drTitle">Referee</h2>
+      <button class="xbtn" id="drClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="drbody" id="drBody"></div>
+  </aside>
+
+  <dialog class="dlg" id="dlg">
+    <form id="dlgForm">
+      <h2 id="dlgTitle"></h2>
+      <p id="dlgMsg"></p>
+      <label class="fld" id="dlgTypeWrap" hidden><span id="dlgTypeLabel"></span>
+        <input type="text" id="dlgType" autocomplete="off" spellcheck="false" /></label>
+      <div class="acts">
+        <button type="button" class="btn ghost" id="dlgNo">Cancel</button>
+        <button type="submit" class="btn primary" id="dlgYes">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+
+  <script>
+    'use strict';
+
+    /* ============================================================
+       CONFIG - keep in step with index.html
+       ------------------------------------------------------------
+       The same Supabase project, key and pinned library as the mentor
+       app. The key is public by design: the database's access rules decide
+       what anyone can read or change, and every admin action here goes
+       through a function that checks is_admin() on the server. Hiding this
+       page protects nothing; those rules do.
+       ============================================================ */
+    const SUPABASE_URL = 'https://kgilrxcboicdxjbxldgw.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_VuoFX_hWHaODI-BBWa0uiQ_Uduxp-TQ';
+    const ACCOUNTS_ON = !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY) && !/^sb_secret_/.test(SUPABASE_PUBLISHABLE_KEY);
+    const SUPABASE_JS = {
+      src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js',
+      integrity: 'sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP'
+    };
+
+    const RATED = [
+      {id: 'appearance', label: 'Professional appearance', short: 'Appearance'},
+      {id: 'workrate', label: 'Workrate - position/movement', short: 'Workrate'},
+      {id: 'commands', label: 'Verbal and non-verbal commands', short: 'Commands'},
+      {id: 'teamwork', label: 'Teamwork', short: 'Teamwork'},
+      {id: 'fouls', label: 'Recognition of fouls', short: 'Fouls'},
+      {id: 'offsides', label: 'Recognition of offsides', short: 'Offsides'},
+    ];
+    const CAT_SHORT = {...Object.fromEntries(RATED.map(c => [c.id, c.short])), general: 'General'};
+    const DIVISIONS = ['PK', 'Kindergarten', '1st', '2nd', '3rd', '4th', '5th', '6th', 'Middle School', 'High School', 'Adult'];
+    const POL = {1: ['+', 'p1', 'Strength'], '-1': ['−', 'm1', 'To work on'], 2: ['↑', 'up', 'Improved after being told']};
+    const EVAL_COLS = 'id,mentor_id,referee_id,referee_name,mentor_name,eval_date,field,pitch,kickoff,' +
+      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at';
+    const LOW = 2;   // an average at or below this is flagged, as in the mentor app
+
+    /* ============================================================
+       SMALL HELPERS
+       ============================================================ */
+    const $ = (s, root) => (root || document).querySelector(s);
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+    const people = (n) => `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
+    const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
+    const fmtAvg = (v) => (v == null ? '–' : v.toFixed(1));
+    const evalAvg = (r) => mean(RATED.map(c => r.ratings[c.id]).filter(v => typeof v === 'number'));
+    // Lookups keyed by values from the database: "constructor" is not a category.
+    const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : undefined);
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const isoOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const todayISO = () => isoOf(new Date());
+    const dateOf = (iso) => {const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d);};
+    const addDays = (iso, n) => {const d = dateOf(iso); d.setDate(d.getDate() + n); return isoOf(d);};
+    const daysBetween = (a, b) => Math.round((Date.UTC(...b.split('-').map((v, i) => i === 1 ? v - 1 : +v)) -
+      Date.UTC(...a.split('-').map((v, i) => i === 1 ? v - 1 : +v))) / 864e5);
+    const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+    function prettyDate(iso) {
+      if (!iso) return '';
+      const [y, m, d] = iso.split('-');
+      return `${Number(m)}/${Number(d)}/${y}`;   // the Google Form's format, as in the mentor app
+    }
+    function shortDate(iso) {
+      return iso ? dateOf(iso).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : '';
+    }
+    function sinceText(iso) {
+      if (!iso) return '';
+      const n = daysBetween(iso, todayISO());
+      return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
+    }
+    function agoTs(ts) {
+      const s = Math.round((Date.now() - ts) / 1000);
+      if (s < 60) return 'just now';
+      if (s < 3600) return `${Math.round(s / 60)} min ago`;
+      if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+      const days = Math.round(s / 86400);
+      if (days < 14) return days === 1 ? 'yesterday' : `${days} days ago`;
+      return new Date(ts).toLocaleDateString();
+    }
+    function pretty12(hm) {
+      if (!hm) return '';
+      let [h, m] = hm.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h}:${pad2(m)} ${ap}`;
+    }
+    /* Accent- and case-blind text for searching and for spotting near-duplicate
+       names. Not the server's name_key: nothing here is sent to the database. */
+    const fold = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+    const store = {
+      get(k) {try {const v = localStorage.getItem(k); return v == null ? null : JSON.parse(v);} catch (e) {return null;}},
+      set(k, v) {try {localStorage.setItem(k, JSON.stringify(v));} catch (e) { }}
+    };
+
+    /* CSV for Excel and Google Sheets. Quoted per RFC 4180, and a cell that
+       starts like a formula is prefixed with ' so a name such as "=HYPERLINK(...)"
+       typed into the mentor app stays text in the assignor's spreadsheet. */
+    function csvCell(v) {
+      let s = String(v == null ? '' : v);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    function downloadCSV(name, rows) {
+      const text = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+      const url = URL.createObjectURL(new Blob([text], {type: 'text/csv;charset=utf-8'}));
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      flash('Downloaded ' + name);
+    }
+
+    let toastTimer = null;
+    function flash(msg) {
+      const t = $('#toast');
+      t.textContent = msg; t.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {t.hidden = true;}, 3200);
+    }
+
+    /* A confirm box. With typeToConfirm, the button stays off until the exact
+       word is typed: used for the one action here that cannot be undone. */
+    function confirmBox({title, message, confirm = 'OK', danger = false, typeToConfirm = ''}) {
+      const dlg = $('#dlg'), yes = $('#dlgYes'), typed = $('#dlgType');
+      $('#dlgTitle').textContent = title;
+      $('#dlgMsg').textContent = message;
+      yes.textContent = confirm;
+      yes.className = 'btn ' + (danger ? 'danger' : 'primary');
+      $('#dlgTypeWrap').hidden = !typeToConfirm;
+      typed.value = '';
+      $('#dlgTypeLabel').textContent = `Type ${typeToConfirm} to confirm`;
+      yes.disabled = !!typeToConfirm;
+      typed.oninput = () => {yes.disabled = typed.value.trim() !== typeToConfirm;};
+      // The buttons answer directly. The dialog's own close event is only the
+      // fallback for Esc: some browsers deliver it late or not at all.
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (v) => {
+          if (settled) return;
+          settled = true;
+          $('#dlgForm').onsubmit = $('#dlgNo').onclick = dlg.oncancel = dlg.onclose = null;
+          if (dlg.open) dlg.close();
+          resolve(v);
+        };
+        $('#dlgForm').onsubmit = (e) => {e.preventDefault(); if (!yes.disabled) done(true);};
+        $('#dlgNo').onclick = () => done(false);
+        dlg.oncancel = (e) => {e.preventDefault(); done(false);};   // Esc
+        dlg.onclose = () => done(false);
+        dlg.showModal();
+        (typeToConfirm ? typed : $('#dlgNo')).focus();
+      });
+    }
+
+    /* ============================================================
+       THEME
+       ============================================================ */
+    const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+    let themeMode = store.get('sideline:adminTheme') || 'auto';
+    const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+    function applyTheme() {
+      const dark = themeMode === 'dark' || (themeMode !== 'light' && darkQuery && darkQuery.matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+    if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener('change', () => {if (themeMode === 'auto') applyTheme();});
+
+    /* ============================================================
+       SIGN-IN
+       ------------------------------------------------------------
+       Same client settings as the mentor app, including where the login is
+       kept ('sideline:auth'). On the same site the two pages therefore share
+       one login: sign in on either and both are signed in in this browser.
+       ============================================================ */
+    let sb = null, sbLoading = null;
+    function loadSupabase() {
+      if (window.supabase && window.supabase.createClient) return Promise.resolve();
+      if (sbLoading) return sbLoading;
+      sbLoading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = SUPABASE_JS.src;
+        s.integrity = SUPABASE_JS.integrity;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => resolve();
+        s.onerror = () => {
+          sbLoading = null; s.remove();
+          reject(new Error('Could not load the sign-in library. Check your connection.'));
+        };
+        document.head.appendChild(s);
+      });
+      return sbLoading;
+    }
+    function sbc() {
+      if (sb || !ACCOUNTS_ON || !window.supabase || !window.supabase.createClient) return sb;
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sideline:auth'}
+      });
+      return sb;
+    }
+    function isNetErr(e) {
+      const m = String((e && (e.message || e)) || '');
+      return !navigator.onLine || /failed to fetch|networkerror|network request|load failed|timed? ?out/i.test(m);
+    }
+    function friendly(e) {
+      if (isNetErr(e)) return 'No connection. Check the internet and try again.';
+      const m = String((e && (e.message || e)) || 'Something went wrong');
+      if (e && e.code === '42501') return /last admin/i.test(m) ? 'The league needs at least one admin, so the last one cannot be changed.'
+        : /only an admin|not approved/i.test(m) ? 'Your account is no longer an admin.' : m;
+      if (/rate limit|too many/i.test(m)) return 'Too many attempts. Wait a minute, then try again.';
+      if (/otp|token/i.test(m) && /expired|invalid/i.test(m)) return 'That code is wrong or has expired. Send a new one.';
+      return m;
+    }
+
+    /* auth: loading | off | error | signedOut | notAdmin | admin */
+    const ST = {auth: 'loading', authError: '', me: null, view: 'overview', drawer: '', loading: false, error: ''};
+    const LOGIN = {step: 'email', email: '', busy: false, error: '', notice: ''};
+
+    async function startAuth() {
+      if (!ACCOUNTS_ON) {ST.auth = 'off'; render(); return;}
+      try {await loadSupabase();} catch (e) {ST.auth = 'error'; ST.authError = e.message; render(); return;}
+      const c = sbc();
+      // Supabase warns against awaiting its own calls inside this callback.
+      c.auth.onAuthStateChange((event, session) => setTimeout(() => onSession(event, session), 0));
+    }
+
+    /* Whether supabase-js still holds a login in this browser. It reports
+       "no session" both when there is none and when a stored login could not
+       be refreshed for want of a connection; only the first is a sign-out. */
+    function storedLogin() {
+      try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
+    }
+
+    async function onSession(event, session) {
+      if (!session && event !== 'SIGNED_OUT' && storedLogin()) {
+        // supabase-js retries on its own (and holds a failed try for a minute),
+        // so this page comes back by itself once the connection does.
+        ST.auth = 'error'; ST.authError = 'No connection, so the sign-in could not be checked. This page reconnects ' +
+          'by itself when the internet is back, or try again in a minute.';
+        render();
+        return;
+      }
+      if (!session) {
+        ST.me = null; DATA = null; ST.drawer = '';
+        ST.auth = 'signedOut';
+        render();
+        return;
+      }
+      // Token refreshes, and the SIGNED_IN some browsers repeat when a tab
+      // comes back, change nothing for someone already checked.
+      if (ST.me && ST.me.id === session.user.id && ST.auth === 'admin' && event !== 'USER_UPDATED') return;
+      await checkRole(session.user);
+    }
+
+    async function checkRole(user) {
+      try {
+        const {data, error} = await sbc().from('mentors')
+          .select('id,email,display_name,role').eq('id', user.id).maybeSingle();
+        if (error) throw error;
+        const row = data || {id: user.id, email: user.email || '', display_name: '', role: 'pending'};
+        ST.me = {id: row.id, email: row.email || user.email || '', name: row.display_name || '', role: row.role};
+        const was = ST.auth;
+        ST.auth = row.role === 'admin' ? 'admin' : 'notAdmin';
+        if (ST.auth !== 'admin') {DATA = null; ST.drawer = '';}   // demoted: the league's data goes with the role
+        render();
+        if (ST.auth === 'admin' && (was !== 'admin' || !DATA)) loadAll();
+      } catch (e) {
+        ST.auth = 'error'; ST.authError = friendly(e); render();
+      }
+    }
+
+    async function sendCode() {
+      const email = LOGIN.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {LOGIN.error = 'Enter a valid email address.'; render(); return;}
+      LOGIN.busy = true; LOGIN.error = ''; render();
+      try {
+        // shouldCreateUser: false - the console never creates accounts. New
+        // mentors sign up from the mentor app and are approved here.
+        const {error} = await sbc().auth.signInWithOtp({email, options: {shouldCreateUser: false}});
+        if (error) throw error;
+        Object.assign(LOGIN, {step: 'code', email, notice: `We emailed a code to ${email}. It can take a minute to arrive; check spam too.`});
+      } catch (e) {
+        LOGIN.error = /signups? not allowed|not found|otp_disabled/i.test(String(e && e.message))
+          ? 'There is no Sideline account for that email. Sign in once from the mentor app first.' : friendly(e);
+      }
+      LOGIN.busy = false; render();
+      const i = $('#loginCode'); if (i) i.focus();
+    }
+    async function verifyCode() {
+      const token = ($('#loginCode') ? $('#loginCode').value : '').replace(/\s+/g, '');
+      if (!/^\d{6,10}$/.test(token)) {LOGIN.error = 'Enter the code from the email.'; render(); return;}
+      LOGIN.busy = true; LOGIN.error = ''; render();
+      try {
+        const {error} = await sbc().auth.verifyOtp({email: LOGIN.email, token, type: 'email'});
+        if (error) throw error;
+        Object.assign(LOGIN, {step: 'email', notice: '', error: ''});
+        ST.auth = 'loading';   // onAuthStateChange(SIGNED_IN) checks the role
+      } catch (e) {
+        LOGIN.error = friendly(e);
+      }
+      LOGIN.busy = false; render();
+    }
+    async function signOut() {
+      const ok = await confirmBox({title: 'Sign out?',
+        message: 'This also signs out the mentor app in this browser. Nothing is deleted.', confirm: 'Sign out'});
+      if (!ok) return;
+      try {await sbc().auth.signOut({scope: 'local'});} catch (e) { }
+      ST.me = null; DATA = null; ST.auth = 'signedOut'; closeDrawer(true); render();
+    }
+
+    /* ============================================================
+       DATA
+       ------------------------------------------------------------
+       Everything is read fresh from the database each time: an admin works
+       online, and a full read of a season is small. Nothing is cached in
+       this browser, so a shared or borrowed computer keeps no copy of other
+       people's evaluations once the tab is closed.
+       ============================================================ */
+    let DATA = null, dataVersion = 0;
+
+    async function pageAll(build) {
+      const out = [], size = 1000;   // PostgREST returns at most 1000 rows per request
+      for (let from = 0; ; from += size) {
+        const {data, error} = await build().range(from, from + size - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < size) return out;
+      }
+    }
+
+    async function loadAll() {
+      const c = sbc(); if (!c) return;
+      ST.loading = true; ST.error = ''; paintBusy();
+      try {
+        const [mentors, refs, rows] = await Promise.all([
+          pageAll(() => c.from('mentors').select('id,email,display_name,role,created_at,approved_at').order('created_at').order('id')),
+          pageAll(() => c.from('referees').select('id,display_name,name_key,merged_into').order('id')),
+          pageAll(() => c.from('evaluations').select(EVAL_COLS).order('id'))
+        ]);
+        const referees = new Map(refs.map(x => [x.id, x]));
+        const canon = (id) => {
+          let cur = id;
+          for (let hops = 0; cur && hops < 10; hops++) {
+            const x = referees.get(cur);
+            if (!x || !x.merged_into) break;
+            cur = x.merged_into;
+          }
+          return cur;
+        };
+        const evals = rows.map(row => ({
+          id: row.id, mentorId: row.mentor_id || '', mentor: row.mentor_name || '',
+          refereeId: canon(row.referee_id), referee: row.referee_name || '',
+          date: ISO_RE.test(row.eval_date || '') ? row.eval_date : '',
+          field: row.field || '', sub: row.pitch || '', time: String(row.kickoff || '').slice(0, 5),
+          division: row.division || '', position: row.position || '',
+          ratings: Object.fromEntries(RATED.map(c => [c.id, typeof row[c.id] === 'number' ? row[c.id] : null])),
+          moveUp: row.move_up || '', comments: row.comments || '',
+          notes: Array.isArray(row.notes) ? row.notes.filter(n => n && typeof n === 'object') : [],
+          savedAt: Date.parse(row.saved_at) || 0
+        }));
+        evals.forEach(e => {e.avg = evalAvg(e);});
+        DATA = {mentors, referees, evals, at: Date.now()};
+        dataVersion++;
+      } catch (e) {
+        ST.error = friendly(e);
+      }
+      ST.loading = false;
+      render();
+    }
+
+    async function refresh() {
+      const c = sbc(); if (!c) return;
+      let session = null;
+      try {({data: {session}} = await c.auth.getSession());} catch (e) {ST.error = friendly(e); render(); return;}
+      // Not 'SIGNED_OUT': a refresh that could not reach the server keeps the
+      // stored login, and onSession tells the two apart.
+      if (!session) {onSession('NO_SESSION', null); return;}
+      await checkRole(session.user);   // an admin demoted elsewhere loses the console here
+      if (ST.auth === 'admin') await loadAll();
+    }
+
+    /* ============================================================
+       FILTERS
+       ============================================================ */
+    const RANGES = [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['90', 'Last 90 days'], ['year', 'This year'],
+      ['all', 'All dates'], ['custom', 'Custom dates']];
+    const F = {range: '90', from: '', to: '', division: '', position: ''};
+    (() => {
+      const s = store.get('sideline:adminFilters') || {};
+      if (RANGES.some(r => r[0] === s.range)) F.range = s.range;
+      if (ISO_RE.test(s.from || '')) F.from = s.from;
+      if (ISO_RE.test(s.to || '')) F.to = s.to;
+      if (typeof s.division === 'string') F.division = s.division;
+      if (['CR', 'AR'].includes(s.position)) F.position = s.position;
+    })();
+    const saveFilters = () => store.set('sideline:adminFilters', F);
+
+    function rangeBounds() {
+      const t = todayISO();
+      if (/^\d+$/.test(F.range)) {
+        const n = Number(F.range), from = addDays(t, -(n - 1));
+        return {from, to: t, days: n, prev: {from: addDays(from, -n), to: addDays(from, -1)}};
+      }
+      if (F.range === 'year') return {from: t.slice(0, 4) + '-01-01', to: t, days: 0, prev: null};
+      if (F.range === 'custom') {
+        let from = F.from, to = F.to;
+        if (from && to && from > to) [from, to] = [to, from];
+        return {from, to, days: 0, prev: null};
+      }
+      return {from: '', to: '', days: 0, prev: null};
+    }
+    const inRange = (e, b) => !(b.from && (!e.date || e.date < b.from)) && !(b.to && (!e.date || e.date > b.to));
+    const matchDims = (e) => (!F.division || e.division === F.division) && (!F.position || e.position === F.position);
+
+    function scopeText() {
+      const b = rangeBounds();
+      const r = F.range === 'custom' ? (b.from || b.to ? `${prettyDate(b.from) || 'the start'} to ${prettyDate(b.to) || 'today'}` : 'All dates')
+        : RANGES.find(x => x[0] === F.range)[1];
+      return [r, F.division || 'every division', F.position ? F.position + ' only' : 'CR and AR'].join(' · ');
+    }
+
+    /* ============================================================
+       ANALYSIS
+       ------------------------------------------------------------
+       buildProfile, tidyName and the display-name rule are copies of the
+       mentor app's (index.html, "REFEREE PROFILES"). They are copied, not
+       shared, because the mentor app is a single file that has to load with
+       no signal; keep the two in step so a referee's averages and "watch
+       for" list read the same in both places. The app never scores anyone:
+       every number is an average of ratings mentors gave, next to its count.
+       ============================================================ */
+    function buildProfile(records) {
+      const evals = records.slice().sort((a, b) =>
+        (b.date || '').localeCompare(a.date || '') || (b.savedAt || 0) - (a.savedAt || 0));
+      const cats = RATED.map(c => {
+        const vals = evals.map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
+        let trend = null;
+        if (vals.length >= 4) {
+          const d = mean(vals.slice(0, 3)) - mean(vals.slice(3));
+          trend = d >= 0.35 ? 'up' : d <= -0.35 ? 'down' : 'flat';
+        }
+        return {id: c.id, short: c.short, label: c.label, avg: mean(vals), n: vals.length, trend};
+      });
+      const avgs = evals.map(r => r.avg).filter(v => v != null);   // newest first
+      // Notes are counted once per evaluation, so one game's three late flags
+      // cannot outweigh a pattern across games.
+      const tally = (pol) => {
+        const m = new Map();
+        evals.forEach(r => {
+          const seen = new Set();
+          (r.notes || []).forEach(n => {
+            if (n.pol !== pol || !n.text) return;
+            const k = String(n.text).trim().toLowerCase();
+            if (seen.has(k)) return;
+            seen.add(k);
+            const cur = m.get(k) || {text: String(n.text).trim(), cat: n.cat, evals: 0, last: r.date || ''};
+            cur.evals++;
+            m.set(k, cur);
+          });
+        });
+        return [...m.values()].sort((a, b) => b.evals - a.evals || b.last.localeCompare(a.last));
+      };
+      const latest = evals[0];
+      const fixedLatest = new Set(((latest && latest.notes) || []).filter(n => n.pol === 2)
+        .map(n => String(n.text).trim().toLowerCase()));
+      const lastWork = [];
+      ((latest && latest.notes) || []).forEach(n => {
+        const k = String(n.text || '').trim().toLowerCase();
+        if (n.pol === -1 && k && !fixedLatest.has(k) && !lastWork.some(x => x.k === k)) lastWork.push({k, text: String(n.text).trim()});
+      });
+      return {
+        evals, count: evals.length,
+        mentors: new Set(evals.map(r => r.mentorId || r.mentor || '?')).size,
+        lastSeen: latest ? latest.date : '',
+        cats,
+        overall: mean(avgs), recentAvg: mean(avgs.slice(0, 3)), rated: avgs.length,
+        moveUp: {yes: evals.filter(r => r.moveUp === 'Yes').length, no: evals.filter(r => r.moveUp === 'No').length},
+        watch: tally(-1).filter(w => w.evals >= 2),
+        lowCats: cats.filter(c => c.avg != null && c.avg <= LOW),
+        lastWork,
+        improved: tally(2),
+        strengths: tally(1).filter(g => g.evals >= 2)
+      };
+    }
+    function topConcern(p) {
+      if (p.watch.length) return p.watch[0].text;
+      if (p.lowCats.length) return `${p.lowCats[0].short} averages ${fmtAvg(p.lowCats[0].avg)}`;
+      if (p.lastWork.length) return p.lastWork[0].text;
+      return '';
+    }
+    function tidyName(s) {
+      let t = String(s || '').trim().replace(/\s+/g, ' ');
+      const m = t.match(/^([^,]+),([^,]+)$/);
+      if (m) t = m[2].trim() + ' ' + m[1].trim();
+      return t.split(' ').map(w => (w.length > 1 && (w === w.toLowerCase() || w === w.toUpperCase()))
+        ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
+    }
+    const tidyScore = (s) => (s.includes(',') ? 0 : 2) + (/^(\p{Lu}[\p{Ll}'’.-]*\s?)+$/u.test(s) ? 1 : 0);
+    /* The most common spelling; on a tie the tidiest, then the fullest. */
+    function bestName(records, fallback) {
+      const counts = new Map();
+      records.forEach(r => {
+        const nm = r.referee.trim().replace(/\s+/g, ' ');
+        if (nm) counts.set(nm, (counts.get(nm) || 0) + 1);
+      });
+      const best = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || tidyScore(b[0]) - tidyScore(a[0]) || b[0].length - a[0].length || a[0].localeCompare(b[0]))[0];
+      if (!best) return fallback || 'Unnamed referee';
+      return tidyScore(best[0]) === 3 ? best[0] : tidyName(best[0]);
+    }
+
+    function groupRefs(evals) {
+      const groups = new Map();
+      evals.forEach(e => {
+        if (!groups.has(e.refereeId)) groups.set(e.refereeId, {id: e.refereeId, records: []});
+        groups.get(e.refereeId).records.push(e);
+      });
+      groups.forEach(g => {
+        const row = DATA.referees.get(g.id);
+        g.name = bestName(g.records, row && row.display_name);
+        g.spellings = [...new Set(g.records.map(r => fold(r.referee)))].join(' ');
+        g.profile = buildProfile(g.records);
+      });
+      return groups;
+    }
+
+    /* Everything the pages show is computed from one slice of the data, so
+       every number on screen agrees with every other. */
+    let memo = null;
+    function slice() {
+      const key = `${dataVersion}|${JSON.stringify(F)}|${todayISO()}`;
+      if (memo && memo.key === key) return memo;
+      const b = rangeBounds();
+      const dims = DATA.evals.filter(matchDims);
+      const evals = dims.filter(e => inRange(e, b));
+      memo = {
+        key, b, evals, dims,
+        groups: groupRefs(evals),
+        prevEvals: b.prev ? dims.filter(e => inRange(e, b.prev)) : null,
+        _dimGroups: null, _allGroups: null,
+        // Built only when asked for: the full-history views are rarer.
+        get dimGroups() {return this._dimGroups || (this._dimGroups = groupRefs(this.dims));},
+        get allGroups() {return this._allGroups || (this._allGroups = groupRefs(DATA.evals));}
+      };
+      return memo;
+    }
+
+    const mentorById = () => new Map(DATA.mentors.map(m => [m.id, m]));
+    function mentorName(e, byId) {
+      const m = e.mentorId && byId.get(e.mentorId);
+      return (m && (m.display_name || m.email)) || e.mentor || 'Unknown mentor';
+    }
+    const pendingMentors = () => (DATA ? DATA.mentors.filter(m => m.role === 'pending') : []);
+    const catAvg = (g, id) => (g.profile.cats.find(c => c.id === id) || {}).avg ?? null;
+
+    /* ============================================================
+       CHARTS
+       ------------------------------------------------------------
+       Drawn as inline SVG at the card's real width, so text stays at its
+       real size on a phone instead of shrinking with a viewBox. Each mark
+       sits in a .mk group with a hit area larger than the mark; the tooltip
+       shows on hover and on keyboard focus, and the same numbers are in the
+       "Show as a table" twin under every chart.
+       ============================================================ */
+    const TIPS = new Map();
+    let tipSeq = 0;
+    function tipAttrs(value, label) {
+      const k = 't' + (++tipSeq);
+      TIPS.set(k, {value, label});
+      return `data-tip="${k}" tabindex="0" role="img" aria-label="${esc(value + ' - ' + label)}"`;
+    }
+    function niceScale(max) {
+      const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+      const step = steps.find(s => max / s <= 4) || Math.ceil(max / 4);
+      return {top: Math.max(step, Math.ceil(max / step) * step), step};
+    }
+    /* A column's data end is rounded 4px; its baseline end stays square. */
+    function colPath(x, y, w, h) {
+      const r = Math.min(4, w / 2, h);
+      return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+    }
+    function barPath(x, y, w, h) {
+      const r = Math.min(4, h / 2, w);
+      return `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`;
+    }
+
+    /* Evaluations per day, week or month. */
+    function columnChart(el, buckets) {
+      const W = Math.max(260, el.clientWidth), H = 210, L = 34, R = 16, T = 20, B = 26;
+      const iw = W - L - R, ih = H - T - B;
+      const max = Math.max(0, ...buckets.map(b => b.value));
+      const {top, step} = niceScale(Math.max(1, max));
+      const y = (v) => T + ih - (v / top) * ih;
+      const band = iw / buckets.length;
+      const bw = Math.max(2, Math.min(24, band * 0.72, band - 2));
+      let s = '';
+      for (let t = 0; t <= top; t += step) {
+        s += `<line class="${t ? 'gl' : 'base'}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>` +
+          `<text class="ax num" x="${L - 7}" y="${y(t) + 4}" text-anchor="end">${t}</text>`;
+      }
+      const every = Math.max(1, Math.ceil(52 / band));
+      const peak = buckets.findIndex(b => b.value === max && max > 0);
+      buckets.forEach((b, i) => {
+        const cx = L + i * band + band / 2, h = (b.value / top) * ih;
+        s += `<g class="mk">${h > 0 ? `<path class="m1" d="${colPath(cx - bw / 2, y(b.value), bw, h)}"/>` : ''}
+          <rect class="hit" x="${L + i * band}" y="${T}" width="${band}" height="${ih}" ${tipAttrs(plural(b.value, 'evaluation'), b.title)}/></g>`;
+        if (i % every === 0) s += `<text class="ax" x="${cx}" y="${H - 7}" text-anchor="middle">${esc(b.label)}</text>`;
+        if (i === peak) s += `<text class="vl num" x="${cx}" y="${y(b.value) - 6}" text-anchor="middle">${b.value}</text>`;
+      });
+      el.innerHTML = `<svg width="${W}" height="${H}" role="group" aria-label="Evaluations over time">${s}</svg>`;
+    }
+
+    /* League average per skill on the 1-4 scale. The lowest skill is the
+       one drawn in the accent color; the others are context. */
+    function skillChart(el, rows) {
+      const W = Math.max(260, el.clientWidth), rowH = 30, L = 92, R = 44, T = 4, B = 24;
+      const H = T + rows.length * rowH + B, iw = W - L - R;
+      const x = (v) => L + (v / 4) * iw;
+      let s = '';
+      for (let t = 0; t <= 4; t++) {
+        s += `<line class="${t ? 'gl' : 'base'}" x1="${x(t)}" x2="${x(t)}" y1="${T}" y2="${H - B}"/>` +
+          (t ? `<text class="ax num" x="${x(t)}" y="${H - 6}" text-anchor="middle">${t}</text>` : '');
+      }
+      const low = rows.reduce((m, r) => (r.avg != null && (m == null || r.avg < m.avg) ? r : m), null);
+      rows.forEach((r, i) => {
+        const cy = T + i * rowH + rowH / 2, th = 14;
+        s += `<text class="lb" x="${L - 10}" y="${cy + 4}" text-anchor="end">${esc(r.short)}</text>`;
+        s += `<g class="mk">${r.avg != null ? `<path class="${r === low ? 'm1' : 'm0'}" d="${barPath(L, cy - th / 2, x(r.avg) - L, th)}"/>` : ''}
+          <rect class="hit" x="${L}" y="${cy - rowH / 2}" width="${iw + R}" height="${rowH}"
+            ${tipAttrs(r.avg == null ? 'No ratings' : `${fmtAvg(r.avg)} average`, `${r.label} · ${plural(r.n, 'rating')}`)}/></g>`;
+        if (r.avg != null) s += `<text class="vl num" x="${x(r.avg) + 6}" y="${cy + 4}">${fmtAvg(r.avg)}</text>`;
+      });
+      el.innerHTML = `<svg width="${W}" height="${H}" role="group" aria-label="League average by skill">${s}</svg>`;
+    }
+
+    /* One referee's average per evaluation, oldest to newest. Evaluations
+       are spaced evenly rather than by date, so two on one Saturday stay
+       two points instead of one blot. */
+    function trendChart(el, pts) {
+      const W = Math.max(260, el.clientWidth), H = 180, L = 26, R = 34, T = 12, B = 26;
+      const iw = W - L - R, ih = H - T - B;
+      const y = (v) => T + ih - ((v - 1) / 3) * ih;
+      const x = (i) => (pts.length === 1 ? L + iw / 2 : L + (i * iw) / (pts.length - 1));
+      let s = '';
+      for (let t = 1; t <= 4; t++) {
+        s += `<line class="${t > 1 ? 'gl' : 'base'}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>` +
+          `<text class="ax num" x="${L - 8}" y="${y(t) + 4}" text-anchor="end">${t}</text>`;
+      }
+      s += `<path class="ln" d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.value)}`).join('')}"/>`;
+      const hitW = Math.max(24, pts.length > 1 ? iw / (pts.length - 1) : iw);
+      pts.forEach((p, i) => {
+        s += `<g class="mk"><line class="cross" x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${T + ih}"/>
+          <circle class="dot" cx="${x(i)}" cy="${y(p.value)}" r="4"/>
+          <rect class="hit" x="${x(i) - hitW / 2}" y="${T}" width="${hitW}" height="${ih}" ${tipAttrs(fmtAvg(p.value) + ' average', p.label)}/></g>`;
+      });
+      const last = pts[pts.length - 1];
+      s += `<text class="vl num" x="${x(pts.length - 1) + 8}" y="${y(last.value) + 4}">${fmtAvg(last.value)}</text>`;
+      s += `<text class="ax" x="${L}" y="${H - 6}">${esc(shortDate(pts[0].date) || '')}</text>`;
+      if (pts.length > 1) s += `<text class="ax" x="${W - R}" y="${H - 6}" text-anchor="end">${esc(shortDate(last.date) || '')}</text>`;
+      el.innerHTML = `<svg width="${W}" height="${H}" role="group" aria-label="Average per evaluation over time">${s}</svg>`;
+    }
+
+    const CHARTS = new Map();   // element id -> draw function, redrawn on resize
+    function drawCharts() {
+      TIPS.clear(); hideTip();
+      CHARTS.forEach((draw, id) => {const el = document.getElementById(id); if (el) draw(el); else CHARTS.delete(id);});
+    }
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {clearTimeout(resizeTimer); resizeTimer = setTimeout(drawCharts, 120);});
+
+    function showTip(target) {
+      const d = TIPS.get(target.getAttribute('data-tip'));
+      if (!d) return;
+      const tip = $('#tip');
+      const b = document.createElement('b');
+      b.textContent = d.value;
+      const span = document.createElement('span');
+      span.textContent = d.label;
+      tip.replaceChildren(b, span);
+      tip.hidden = false;
+      const mk = target.closest('.mk');
+      const anchor = (mk && mk.querySelector('.m1, .m0, .dot')) || target;
+      const r = anchor.getBoundingClientRect(), tr = tip.getBoundingClientRect();
+      const left = Math.min(Math.max(8, r.left + r.width / 2 - tr.width / 2), innerWidth - tr.width - 8);
+      let top = r.top - tr.height - 8;
+      if (top < 8) top = r.bottom + 8;
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+    function hideTip() {const t = $('#tip'); if (t) t.hidden = true;}
+    document.addEventListener('pointerover', (e) => {const t = e.target.closest && e.target.closest('[data-tip]'); if (t) showTip(t);});
+    document.addEventListener('pointerout', (e) => {if (e.target.closest && e.target.closest('[data-tip]')) hideTip();});
+    document.addEventListener('focusin', (e) => {const t = e.target.closest && e.target.closest('[data-tip]'); if (t) showTip(t); else hideTip();});
+    document.addEventListener('scroll', hideTip, true);
+
+    function tableTwin(head, rows) {
+      return `<details class="tv"><summary>Show as a table</summary><div class="tablewrap"><table class="data">
+        <thead><tr>${head.map((h, i) => `<th class="${i ? 'n' : ''}"><span>${esc(h)}</span></th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i ? 'n' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div></details>`;
+    }
+
+    /* Day, week or month buckets, whichever gives a readable number of bars. */
+    function timeBuckets(evals, b) {
+      const dates = evals.map(e => e.date).filter(Boolean).sort();
+      if (!dates.length) return {unit: 'week', buckets: []};
+      const from = b.from || dates[0], to = b.to || todayISO();
+      const span = daysBetween(from, to);
+      const counts = new Map();
+      const out = [];
+      const unit = span <= 31 ? 'day' : span <= 182 ? 'week' : 'month';
+      if (unit === 'day') {
+        evals.forEach(e => {if (e.date) counts.set(e.date, (counts.get(e.date) || 0) + 1);});
+        for (let d = from; d <= to; d = addDays(d, 1)) {
+          out.push({label: shortDate(d), title: dateOf(d).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'}), value: counts.get(d) || 0});
+        }
+      } else if (unit === 'week') {
+        const monday = (iso) => addDays(iso, -((dateOf(iso).getDay() + 6) % 7));
+        evals.forEach(e => {if (e.date) {const k = monday(e.date); counts.set(k, (counts.get(k) || 0) + 1);}});
+        for (let d = monday(from); d <= to; d = addDays(d, 7)) {
+          out.push({label: shortDate(d), title: `Week of ${dateOf(d).toLocaleDateString(undefined, {month: 'long', day: 'numeric'})}`, value: counts.get(d) || 0});
+        }
+      } else {
+        evals.forEach(e => {if (e.date) {const k = e.date.slice(0, 7); counts.set(k, (counts.get(k) || 0) + 1);}});
+        const multiYear = from.slice(0, 4) !== to.slice(0, 4);
+        for (let d = from.slice(0, 7) + '-01'; d <= to; ) {
+          const dt = dateOf(d);
+          out.push({
+            label: dt.toLocaleDateString(undefined, multiYear ? {month: 'short', year: '2-digit'} : {month: 'short'}),
+            title: dt.toLocaleDateString(undefined, {month: 'long', year: 'numeric'}), value: counts.get(d.slice(0, 7)) || 0
+          });
+          dt.setMonth(dt.getMonth() + 1); d = isoOf(dt);
+        }
+      }
+      return {unit, buckets: out};
+    }
+
+    /* ============================================================
+       SHELL
+       ============================================================ */
+    const VIEWS = [
+      ['overview', 'Overview', '<path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z"/>'],
+      ['referees', 'Referees', '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.4 3.5 5.1"/>'],
+      ['evaluations', 'Evaluations', '<path d="M8 4h8v3H8z"/><path d="M8 5.5H5.5v15h13v-15H16"/><path d="M8.5 12h7M8.5 16h5"/>'],
+      ['mentors', 'Mentors', '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+      ['cleanup', 'Clean-up', '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>'],
+    ];
+    const TITLES = {overview: 'Overview', referees: 'Referees', evaluations: 'Evaluations', mentors: 'Mentors and admins', cleanup: 'Clean-up'};
+    const viewFromHash = () => {const v = location.hash.replace(/^#\/?/, ''); return TITLES[v] ? v : 'overview';};
+    ST.view = viewFromHash();
+
+    function render() {
+      const app = $('#app');
+      if (ST.auth !== 'admin') {
+        closeDrawer(true);
+        CHARTS.clear();
+        app.innerHTML = gateHTML();
+        return;
+      }
+      if (!$('#shell')) {
+        app.innerHTML = `<div class="shell" id="shell">
+        <aside class="side">
+          <a class="brand" href="#overview" aria-label="Sideline admin, overview">SIDE<span>LINE</span> <small>ADMIN</small></a>
+          <nav class="nav" id="nav" aria-label="Sections"></nav>
+          <div class="acct" id="acct"></div>
+        </aside>
+        <main class="main">
+          <div class="top">
+            <h1 id="viewTitle"></h1>
+            <div class="spacer"></div>
+            <span class="fresh" id="fresh" aria-live="polite"></span>
+            <button class="btn" id="refreshBtn">Refresh</button>
+          </div>
+          <div class="filters" id="filters"></div>
+          <div class="view" id="view"></div>
+        </main>
+      </div>`;
+      }
+      // A refresh that lands while someone is typing in a search box must not
+      // take the box, or the cursor, away from them.
+      const a = document.activeElement, keep = a && a.id && a.matches('input') ? {id: a.id, pos: a.selectionStart} : null;
+      paintNav(); paintAcct(); paintFilters(); paintFresh();
+      paintView();
+      if (ST.drawer) paintDrawer();
+      const back = keep && document.getElementById(keep.id);
+      if (back && back !== document.activeElement) {
+        back.focus();
+        try {back.setSelectionRange(keep.pos, keep.pos);} catch (e) { }
+      }
+    }
+
+    function paintNav() {
+      const pend = pendingMentors().length;
+      $('#nav').innerHTML = VIEWS.map(([k, label, icon]) => `<a href="#${k}" ${ST.view === k ? 'aria-current="page"' : ''}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>${label}${k === 'mentors' && pend
+          ? `<span class="badge" aria-label="${people(pend)} waiting">${pend}</span>` : ''}</a>`).join('');
+      $('#viewTitle').textContent = TITLES[ST.view];
+      document.title = `${TITLES[ST.view]} · Sideline Admin`;
+    }
+
+    function paintAcct() {
+      const me = ST.me || {};
+      $('#acct').innerHTML = `
+        <div class="who"><b>${esc(me.name || me.email)}</b>${me.name ? esc(me.email) + '<br>' : ''}Admin</div>
+        <div class="row">
+          <button class="btn sm ghost" id="themeBtn" aria-label="Switch to ${isDark() ? 'light' : 'dark'} theme">${isDark() ? 'Light' : 'Dark'} theme</button>
+          <button class="btn sm ghost" id="signOutBtn">Sign out</button>
+        </div>
+        <a class="note" href="../">Open the mentor app</a>`;
+    }
+
+    function paintFresh() {
+      const el = $('#fresh'); if (!el) return;
+      el.textContent = ST.loading ? 'Loading…' : DATA ? 'Updated ' + agoTs(DATA.at) : '';
+      $('#refreshBtn').disabled = ST.loading;
+    }
+    setInterval(paintFresh, 30000);
+    function paintBusy() {
+      const v = $('#view'); if (v) v.classList.toggle('busy', ST.loading && !!DATA);
+      paintFresh();
+    }
+
+    function paintFilters() {
+      const box = $('#filters'); if (!box) return;
+      const divs = [...DIVISIONS];
+      if (DATA) DATA.evals.forEach(e => {if (e.division && !divs.includes(e.division)) divs.push(e.division);});
+      if (F.division && !divs.includes(F.division)) divs.push(F.division);
+      box.innerHTML = `
+        <label class="fld"><span>Dates</span><select id="fRange">${RANGES.map(([k, l]) =>
+          `<option value="${k}"${F.range === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${F.range === 'custom' ? `
+        <label class="fld"><span>From</span><input type="date" id="fFrom" value="${esc(F.from)}" /></label>
+        <label class="fld"><span>To</span><input type="date" id="fTo" value="${esc(F.to)}" /></label>` : ''}
+        <label class="fld"><span>Division</span><select id="fDiv"><option value="">Every division</option>${divs.map(d =>
+          `<option${F.division === d ? ' selected' : ''}>${esc(d)}</option>`).join('')}</select></label>
+        <label class="fld"><span>Position</span><select id="fPos">
+          <option value="">CR and AR</option>
+          <option value="CR"${F.position === 'CR' ? ' selected' : ''}>Center (CR)</option>
+          <option value="AR"${F.position === 'AR' ? ' selected' : ''}>Assistant (AR)</option></select></label>
+        <span class="scope" id="scope">${esc(scopeText())}</span>`;
+    }
+    function filtersChanged(repaintFilters) {
+      saveFilters();
+      if (repaintFilters) paintFilters(); else $('#scope').textContent = scopeText();
+      UI.evalLimit = 100; UI.openEval = '';
+      paintView();
+      if (ST.drawer) paintDrawer();
+    }
+
+    function paintView() {
+      const v = $('#view'); if (!v) return;
+      CHARTS.clear();
+      paintNav();
+      if (!DATA) {
+        v.innerHTML = ST.error ? `<div class="warn">Could not load the league's data: ${esc(ST.error)}</div>
+          <button class="btn" id="retryBtn">Try again</button>` : '<div class="empty">Loading the league’s evaluations…</div>';
+        return;
+      }
+      const err = ST.error ? `<div class="warn">Could not refresh: ${esc(ST.error)}. Showing what was loaded ${esc(agoTs(DATA.at))}.</div>` : '';
+      v.innerHTML = err + ({overview: viewOverview, referees: viewReferees, evaluations: viewEvaluations,
+        mentors: viewMentors, cleanup: viewCleanup}[ST.view])();
+      v.classList.toggle('busy', ST.loading);
+      drawCharts();
+    }
+
+    /* ============================================================
+       OVERVIEW
+       ============================================================ */
+    const UI = {refSort: {key: 'recent', dir: 1}, refQ: '', refLow: false, evalQ: '', evalLimit: 100, openEval: '',
+      notSame: new Set(store.get('sideline:adminNotSame') || [])};
+
+    function refRow(g, right, detail) {
+      return `<li><button class="rrow" data-ref="${esc(g.id)}">
+        <span class="t"><span class="nm">${esc(g.name)}</span><br><span class="d">${detail}</span></span>
+        <span class="r">${right}</span></button></li>`;
+    }
+    const avgPill = (v, label) => v == null ? '<span class="pill">no ratings</span>'
+      : `<span class="pill${v <= LOW ? ' low' : ''}">${label ? label + ' ' : ''}${fmtAvg(v)}</span>`;
+
+    function viewOverview() {
+      const s = slice(), b = s.b, evals = s.evals;
+      const refs = [...s.groups.values()];
+      const pend = pendingMentors();
+      const banner = pend.length ? `<div class="banner"><span><b>${people(pend.length)}</b> ${pend.length === 1 ? 'is' : 'are'}
+        waiting for approval.</span><a class="btn sm primary" href="#mentors">Review</a></div>` : '';
+
+      // --- stat tiles ---
+      const avg = mean(evals.map(e => e.avg).filter(v => v != null));
+      const prevN = s.prevEvals ? s.prevEvals.length : null;
+      const prevAvg = s.prevEvals ? mean(s.prevEvals.map(e => e.avg).filter(v => v != null)) : null;
+      const delta = (d, digits) => {
+        const r = Number(Math.abs(d).toFixed(digits));
+        return r === 0 ? `same as the previous ${b.days} days` : `${d > 0 ? '+' : '−'}${r.toFixed(digits)} vs the previous ${b.days} days`;
+      };
+      const firstEver = new Map();
+      s.dimGroups.forEach(g => firstEver.set(g.id, g.records.map(r => r.date).filter(Boolean).sort()[0] || ''));
+      const newRefs = b.from ? refs.filter(g => (firstEver.get(g.id) || '') >= b.from).length : null;
+      // People who can evaluate now, and how many of them did in these filters.
+      // Evaluations from since-removed accounts still count everywhere else.
+      const withAccess = new Set(DATA.mentors.filter(m => m.role !== 'pending').map(m => m.id));
+      const mentorsActive = new Set(evals.map(e => e.mentorId).filter(id => withAccess.has(id))).size;
+      const latestSaysYes = refs.filter(g => {const e = g.profile.evals.find(r => r.moveUp); return e && e.moveUp === 'Yes';});
+      const tile = (l, v, sub) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+      const kpis = `<div class="kpis">
+        ${tile('Evaluations', evals.length.toLocaleString(), prevN != null ? delta(evals.length - prevN, 0) : esc(scopeText().split(' · ')[0]))}
+        ${tile('League average', fmtAvg(avg), prevAvg != null && avg != null ? delta(avg - prevAvg, 1) : '1 to 4 scale, all six skills')}
+        ${tile('Referees evaluated', refs.length.toLocaleString(), newRefs != null ? `${newRefs.toLocaleString()} evaluated for the first time` : 'at least once')}
+        ${tile('Mentors evaluating', mentorsActive.toLocaleString(), `of ${people(withAccess.size)} with access`)}
+        ${tile('Recommended to move up', latestSaysYes.length.toLocaleString(), 'latest evaluation says yes')}
+      </div>`;
+
+      if (!evals.length) {
+        return banner + kpis + `<div class="card"><div class="empty">No evaluations match these filters.
+          ${F.range !== 'all' ? '<button class="btn sm" data-allDates>Show all dates</button>' : ''}</div></div>`;
+      }
+
+      // --- charts ---
+      const {unit, buckets} = timeBuckets(evals, b);
+      CHARTS.set('chWhen', (el) => columnChart(el, buckets));
+      const skills = RATED.map(c => {
+        const vals = evals.map(e => e.ratings[c.id]).filter(v => typeof v === 'number');
+        return {...c, avg: mean(vals), n: vals.length};
+      });
+      CHARTS.set('chSkills', (el) => skillChart(el, skills));
+      const lowest = skills.filter(r => r.avg != null).sort((a, z) => a.avg - z.avg)[0];
+      const undated = evals.filter(e => !e.date).length;
+
+      // --- lists ---
+      const support = refs.filter(g => g.profile.recentAvg != null)
+        .sort((a, z) => a.profile.recentAvg - z.profile.recentAvg || z.profile.count - a.profile.count).slice(0, 6);
+      const moveUp = refs.map(g => ({g, yes: g.profile.moveUp.yes, asked: g.profile.moveUp.yes + g.profile.moveUp.no}))
+        .filter(x => x.yes > 0)
+        .sort((a, z) => z.yes / z.asked - a.yes / a.asked || z.yes - a.yes || (z.g.profile.recentAvg || 0) - (a.g.profile.recentAvg || 0)).slice(0, 6);
+      const overdue = [...s.dimGroups.values()].filter(g => g.profile.lastSeen)
+        .sort((a, z) => a.profile.lastSeen.localeCompare(z.profile.lastSeen)).slice(0, 6);
+      const work = new Map();
+      evals.forEach(e => {
+        const seen = new Set();
+        e.notes.forEach(n => {
+          if (n.pol !== -1 || !n.text) return;
+          const k = String(n.text).trim().toLowerCase();
+          if (!k || seen.has(k)) return;
+          seen.add(k);
+          const cur = work.get(k) || {text: String(n.text).trim(), cat: n.cat, evals: 0, refs: new Set()};
+          cur.evals++; cur.refs.add(e.refereeId);
+          work.set(k, cur);
+        });
+      });
+      const topWork = [...work.values()].sort((a, z) => z.refs.size - a.refs.size || z.evals - a.evals).slice(0, 8);
+
+      return banner + kpis + `
+      <div class="grid2">
+        <div class="card">
+          <h2>Evaluations per ${unit}</h2>
+          <p class="sub">${esc(scopeText())}${undated ? ` · ${plural(undated, 'evaluation')} with no date not shown` : ''}</p>
+          <div class="chart" id="chWhen"></div>
+          ${tableTwin([unit[0].toUpperCase() + unit.slice(1), 'Evaluations'], buckets.map(x => [x.title, x.value]))}
+        </div>
+        <div class="card">
+          <h2>League average by skill</h2>
+          <p class="sub">${lowest ? `Lowest: ${esc(lowest.label)}, ${fmtAvg(lowest.avg)}. ` : ''}Mixes every mentor and division in the filters.</p>
+          <div class="chart" id="chSkills"></div>
+          ${tableTwin(['Skill', 'Average', 'Ratings'], skills.map(r => [r.label, fmtAvg(r.avg), r.n]))}
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Needs the most support</h2>
+          <p class="sub">Lowest average over each referee’s last three evaluations.</p>
+          ${support.length ? `<ul class="rlist">${support.map(g => refRow(g, avgPill(g.profile.recentAvg),
+            `${plural(g.profile.count, 'evaluation')}${topConcern(g.profile) ? ' · ' + esc(topConcern(g.profile)) : ''}`)).join('')}</ul>
+            <div class="more"><a href="#referees" data-sort="recent">See every referee</a></div>`
+          : '<div class="empty">No ratings in these filters.</div>'}
+        </div>
+        <div class="card">
+          <h2>Recommended to move up</h2>
+          <p class="sub">Referees mentors said yes to moving up, most consistent first.</p>
+          ${moveUp.length ? `<ul class="rlist">${moveUp.map(x => refRow(x.g, `yes in ${x.yes} of ${x.asked}`,
+            `last three average ${fmtAvg(x.g.profile.recentAvg)} · last evaluated ${esc(prettyDate(x.g.profile.lastSeen) || '–')}`)).join('')}</ul>`
+          : '<div class="empty">No move-up recommendations in these filters.</div>'}
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Most common things to work on</h2>
+          <p class="sub">Notes mentors marked “to work on”, by how many referees got them. Useful for training topics.</p>
+          ${topWork.length ? `<ul class="rlist">${topWork.map(w => `<li><div class="rrow"><span class="t"><span class="nm">${esc(w.text)}</span><br>
+            <span class="d">${esc(own(CAT_SHORT, w.cat) || 'General')}</span></span>
+            <span class="r">${plural(w.refs.size, 'referee')}<br>${plural(w.evals, 'evaluation')}</span></div></li>`).join('')}</ul>`
+          : '<div class="empty">No “to work on” notes in these filters.</div>'}
+        </div>
+        <div class="card">
+          <h2>Longest since last evaluated</h2>
+          <p class="sub">Across all dates, so the date filter does not hide anyone. Referees appear once someone has evaluated them.</p>
+          ${overdue.length ? `<ul class="rlist">${overdue.map(g => refRow(g, esc(sinceText(g.profile.lastSeen)),
+            `last evaluated ${esc(prettyDate(g.profile.lastSeen))} · ${plural(g.profile.count, 'evaluation')} in all`)).join('')}</ul>`
+          : '<div class="empty">No dated evaluations yet.</div>'}
+        </div>
+      </div>`;
+    }
+
+    /* ============================================================
+       REFEREES
+       ============================================================ */
+    const REF_COLS = [
+      {key: 'name', label: 'Referee', get: g => g.name.toLowerCase(), first: 1},
+      {key: 'count', label: 'Evals', get: g => g.profile.count, n: 1, first: -1},
+      {key: 'mentors', label: 'Mentors', get: g => g.profile.mentors, n: 1, first: -1, wide: 1, md: 1},
+      {key: 'last', label: 'Last evaluated', get: g => g.profile.lastSeen || null, first: -1},
+      {key: 'recent', label: 'Last 3 avg', get: g => g.profile.recentAvg, n: 1, avg: 1, first: 1},
+      {key: 'overall', label: 'Overall', get: g => g.profile.overall, n: 1, avg: 1, first: 1, wide: 1, md: 1},
+      ...RATED.map(c => ({key: c.id, label: c.short, get: g => catAvg(g, c.id), n: 1, avg: 1, first: 1, wide: 1})),
+      {key: 'move', label: 'Move up', get: g => {const m = g.profile.moveUp; return m.yes + m.no ? m.yes / (m.yes + m.no) : null;}, n: 1, first: -1, wide: 1},
+    ];
+    const colClass = (c) => [c.n ? 'n' : '', c.wide ? 'hide-sm' : '', c.md ? 'hide-md' : ''].filter(Boolean).join(' ');
+
+    function refList() {
+      const q = fold(UI.refQ);
+      let list = [...slice().groups.values()];
+      if (q) list = list.filter(g => fold(g.name).includes(q) || g.spellings.includes(q));
+      if (UI.refLow) list = list.filter(g => g.profile.recentAvg != null && g.profile.recentAvg <= LOW);
+      const col = REF_COLS.find(c => c.key === UI.refSort.key) || REF_COLS[4], dir = UI.refSort.dir;
+      return list.sort((a, z) => {
+        const x = col.get(a), y = col.get(z);
+        if (x == null || y == null) return (x == null) - (y == null) || a.name.localeCompare(z.name);
+        return (x < y ? -1 : x > y ? 1 : 0) * dir || a.name.localeCompare(z.name);
+      });
+    }
+
+    function viewReferees() {
+      return `<div class="toolbar">
+        <input type="search" class="inp" id="refQ" placeholder="Search referees, any spelling" aria-label="Search referees" value="${esc(UI.refQ)}" autocomplete="off" />
+        <label class="chk"><input type="checkbox" id="refLow" ${UI.refLow ? 'checked' : ''} /> Last-three average ${LOW.toFixed(1)} or lower</label>
+        <div class="spacer"></div>
+        <button class="btn" id="exportRefs">Export CSV</button>
+      </div>
+      <div id="refTable">${refTableHTML()}</div>
+      <p class="hint">Averages are on the form’s 1 to 4 scale and mix mentors and divisions, so read them next to the counts.
+        Select a referee to see their full profile.</p>`;
+    }
+    function refTableHTML() {
+      const list = refList();
+      const th = (c) => {
+        const cls = colClass(c);
+        const on = UI.refSort.key === c.key;
+        return `<th class="${cls}" ${on ? `aria-sort="${UI.refSort.dir > 0 ? 'ascending' : 'descending'}"` : ''}>
+          <button data-refsort="${c.key}">${c.label}${on ? (UI.refSort.dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`;
+      };
+      if (!list.length) {
+        return `<div class="card"><div class="empty">${UI.refQ || UI.refLow ? 'No referee matches.' : 'No evaluations match these filters.'}</div></div>`;
+      }
+      const cell = (c, g) => {
+        const cls = colClass(c);
+        if (c.key === 'name') {
+          const w = topConcern(g.profile);
+          return `<td><button class="linkbtn" data-ref="${esc(g.id)}">${esc(g.name)}</button>${w ? `<div class="wf" title="${esc(w)}">Watch for: ${esc(w)}</div>` : ''}</td>`;
+        }
+        if (c.key === 'last') return `<td class="num">${esc(prettyDate(g.profile.lastSeen) || '–')}</td>`;
+        if (c.key === 'move') {const m = g.profile.moveUp; return `<td class="${cls}">${m.yes + m.no ? `${m.yes} of ${m.yes + m.no}` : '–'}</td>`;}
+        const v = c.get(g);
+        if (c.avg) return `<td class="${cls}${v != null && v <= LOW ? ' low' : ''}">${fmtAvg(v)}</td>`;
+        return `<td class="${cls}">${v}</td>`;
+      };
+      return `<p class="hint" style="margin:0 0 8px">${plural(list.length, 'referee')} · ${esc(scopeText())}</p>
+      <div class="tablewrap"><table class="data">
+        <thead><tr>${REF_COLS.map(th).join('')}</tr></thead>
+        <tbody>${list.map(g => `<tr class="click" data-ref="${esc(g.id)}">${REF_COLS.map(c => cell(c, g)).join('')}</tr>`).join('')}</tbody>
+      </table></div>`;
+    }
+    function exportRefs() {
+      const list = refList();
+      if (!list.length) {flash('Nothing to export'); return;}
+      const head = ['Referee', 'Evaluations', 'Mentors', 'Last evaluated', 'Last three average', 'Overall average',
+        ...RATED.map(c => c.label), 'Move up: yes', 'Move up: no', 'Watch for', 'Filters'];
+      const rows = list.map(g => [g.name, g.profile.count, g.profile.mentors, prettyDate(g.profile.lastSeen),
+        fmtAvg(g.profile.recentAvg), fmtAvg(g.profile.overall), ...RATED.map(c => fmtAvg(catAvg(g, c.id))),
+        g.profile.moveUp.yes, g.profile.moveUp.no, topConcern(g.profile), scopeText()]);
+      downloadCSV(`sideline-referees-${todayISO()}.csv`, [head, ...rows]);
+    }
+
+    /* ============================================================
+       EVALUATIONS
+       ============================================================ */
+    function evalList() {
+      const q = fold(UI.evalQ), byId = mentorById();
+      let list = slice().evals;
+      if (q) list = list.filter(e => fold(e.referee).includes(q) || fold(mentorName(e, byId)).includes(q));
+      return list.slice().sort((a, z) => (z.date || '').localeCompare(a.date || '') || z.savedAt - a.savedAt);
+    }
+    function viewEvaluations() {
+      return `<div class="toolbar">
+        <input type="search" class="inp" id="evalQ" placeholder="Search by referee or mentor" aria-label="Search evaluations" value="${esc(UI.evalQ)}" autocomplete="off" />
+        <div class="spacer"></div>
+        <button class="btn" id="exportEvals">Export CSV</button>
+      </div>
+      <div id="evalTable">${evalTableHTML()}</div>`;
+    }
+    function evalBody(e) {
+      const notes = e.notes.map(n => {
+        const p = own(POL, n.pol) || ['·', '', 'Note'], cat = own(CAT_SHORT, n.cat);
+        return `<li><span class="pol ${p[1]}" title="${esc(p[2])}" aria-label="${esc(p[2])}">${p[0]}</span>${esc(n.text)}${cat ? ` <span class="muted">· ${esc(cat)}</span>` : ''}</li>`;
+      }).join('');
+      return `<div class="evalbody">
+        <div class="scores">${RATED.map(c => `<span class="pill">${esc(c.short)} ${e.ratings[c.id] ?? '–'}</span>`).join('')}
+          <span class="pill">Move up: ${esc(e.moveUp || '–')}</span></div>
+        <div class="muted" style="font-size:var(--fs-xs)">${esc([e.field + (e.sub ? ' ' + e.sub : ''), pretty12(e.time), e.division, e.position].filter(Boolean).join(' · '))}</div>
+        ${notes ? `<ul class="plist" style="list-style:none;padding-left:0">${notes}</ul>` : ''}
+        ${e.comments ? `<div class="comments">${esc(e.comments)}</div>` : ''}
+      </div>`;
+    }
+    function evalTableHTML() {
+      const list = evalList(), byId = mentorById();
+      if (!list.length) return `<div class="card"><div class="empty">${UI.evalQ ? 'No evaluation matches.' : 'No evaluations match these filters.'}</div></div>`;
+      const shown = list.slice(0, UI.evalLimit);
+      return `<p class="hint" style="margin:0 0 8px">${plural(list.length, 'evaluation')} · ${esc(scopeText())} · newest first</p>
+      <div class="tablewrap"><table class="data">
+        <thead><tr><th><span>Date</span></th><th><span>Referee</span></th><th><span>Pos</span></th>
+          <th class="hide-sm"><span>Division</span></th><th class="hide-sm"><span>Field</span></th><th class="hide-sm"><span>Mentor</span></th>
+          <th class="n"><span>Avg</span></th><th class="hide-sm"><span>Move up</span></th><th><span><span class="vh">Details</span></span></th></tr></thead>
+        <tbody>${shown.map(e => {
+          const open = UI.openEval === e.id;
+          return `<tr class="click" data-openeval="${esc(e.id)}">
+            <td class="num">${esc(prettyDate(e.date) || '–')}</td>
+            <td><button class="linkbtn" data-ref="${esc(e.refereeId)}">${esc(e.referee)}</button></td>
+            <td>${esc(e.position)}</td>
+            <td class="hide-sm">${esc(e.division || '–')}</td>
+            <td class="hide-sm">${esc(e.field + (e.sub ? ' ' + e.sub : '') || '–')}</td>
+            <td class="hide-sm">${esc(mentorName(e, byId))}</td>
+            <td class="n${e.avg != null && e.avg <= LOW ? ' low' : ''}">${fmtAvg(e.avg)}</td>
+            <td class="hide-sm">${esc(e.moveUp || '–')}</td>
+            <td class="n"><button class="btn sm ghost" data-openeval="${esc(e.id)}" aria-expanded="${open}">${open ? 'Hide' : 'Details'}</button></td>
+          </tr>${open ? `<tr class="exp"><td colspan="9"><div class="muted" style="font-size:var(--fs-xs)">By ${esc(mentorName(e, byId))}</div>${evalBody(e)}</td></tr>` : ''}`;
+        }).join('')}</tbody>
+      </table></div>
+      ${list.length > shown.length ? `<div class="more">Showing ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}
+        <button class="btn sm" id="evalMore">Show ${Math.min(100, list.length - shown.length)} more</button></div>` : ''}`;
+    }
+    function exportEvals() {
+      const list = evalList(), byId = mentorById();
+      if (!list.length) {flash('Nothing to export'); return;}
+      // The same columns as the mentor app's own CSV, plus the average.
+      const head = ['Mentor', 'Date', 'Field', 'Pitch', 'Time', 'Division', 'Referee', 'Position',
+        ...RATED.map(c => c.label), 'Average', 'Move up', 'Comments'];
+      const rows = list.map(e => [mentorName(e, byId), prettyDate(e.date), e.field, e.sub, pretty12(e.time), e.division,
+        e.referee, e.position, ...RATED.map(c => e.ratings[c.id] ?? ''), fmtAvg(e.avg), e.moveUp, e.comments]);
+      downloadCSV(`sideline-evaluations-${todayISO()}.csv`, [head, ...rows]);
+    }
+
+    /* ============================================================
+       MENTORS AND ADMINS
+       ------------------------------------------------------------
+       Admin is for league leadership - the assignor and a few others - not
+       for mentors. Making someone an admin is a separate, confirmed step.
+       ============================================================ */
+    function viewMentors() {
+      const s = slice(), me = ST.me.id;
+      const act = new Map();
+      s.evals.forEach(e => {
+        const k = e.mentorId || 'n:' + fold(e.mentor);
+        if (!act.has(k)) act.set(k, {evals: [], name: e.mentor});
+        act.get(k).evals.push(e);
+      });
+      const stats = (k) => {
+        const a = act.get(k);
+        if (!a) return {n: 0, refs: 0, last: '', avg: null};
+        return {n: a.evals.length, refs: new Set(a.evals.map(e => e.refereeId)).size,
+          last: a.evals.reduce((m, e) => (e.date > m ? e.date : m), ''), avg: mean(a.evals.map(e => e.avg).filter(v => v != null))};
+      };
+      const league = mean(s.evals.map(e => e.avg).filter(v => v != null));
+      const pending = DATA.mentors.filter(m => m.role === 'pending');
+      const admins = DATA.mentors.filter(m => m.role === 'admin');
+      const mentors = DATA.mentors.filter(m => m.role === 'mentor');
+      const known = new Set(DATA.mentors.map(m => m.id));
+      const removed = [...act.entries()].filter(([k]) => !known.has(k));
+      const who = (m) => `<b>${esc(m.display_name || m.email)}</b>${m.id === me ? ' <span class="pill acc">you</span>' : ''}
+        ${m.display_name ? `<br><span class="muted" style="font-size:var(--fs-xs)">${esc(m.email)}</span>` : ''}`;
+      const actCells = (st) => `<td class="n">${st.n}</td><td class="n hide-sm">${st.refs}</td>
+        <td class="num hide-sm">${esc(prettyDate(st.last) || '–')}</td><td class="n hide-sm">${fmtAvg(st.avg)}</td>`;
+      const actHead = `<th class="n"><span>Evaluations</span></th><th class="n hide-sm"><span>Referees</span></th>
+        <th class="hide-sm"><span>Last evaluation</span></th><th class="n hide-sm"><span>Avg given</span></th>`;
+
+      const pendingHTML = pending.length ? `<div class="tablewrap"><table class="data"><thead><tr><th><span>Person</span></th>
+          <th class="hide-sm"><span>Asked</span></th><th class="n"><span>Actions</span></th></tr></thead><tbody>
+          ${pending.map(m => `<tr><td>${who(m)}</td><td class="hide-sm">${esc(agoTs(Date.parse(m.created_at)))}</td>
+            <td class="n"><button class="btn sm primary" data-approve="${esc(m.id)}">Approve</button>
+              <button class="btn sm danger" data-reject="${esc(m.id)}">Reject</button></td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="card"><div class="empty">Nobody is waiting.</div></div>';
+
+      const peopleTable = (list, isAdmin) => list.length ? `<div class="tablewrap"><table class="data"><thead><tr>
+          <th><span>${isAdmin ? 'Admin' : 'Mentor'}</span></th>${actHead}<th class="n"><span>Actions</span></th></tr></thead><tbody>
+          ${list.map(m => `<tr><td>${who(m)}</td>${actCells(stats(m.id))}<td class="n">${m.id === me ? '' : isAdmin
+            ? `<button class="btn sm" data-setrole="${esc(m.id)}|mentor">Make mentor</button>`
+            : `<button class="btn sm" data-setrole="${esc(m.id)}|admin">Make admin</button>
+               <button class="btn sm danger" data-revoke="${esc(m.id)}">Revoke</button>`}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="card"><div class="empty">${isAdmin ? 'No admins.' : 'No approved mentors yet.'}</div></div>`;
+
+      return `
+      <h2 class="sec">Waiting for approval (${pending.length})</h2>
+      <p class="hint" style="margin:-4px 0 10px">People who signed in from the mentor app. They can read and upload nothing until approved.
+        Reject anyone you do not recognise: it deletes the sign-up, and they can ask again.</p>
+      ${pendingHTML}
+      <h2 class="sec">Mentors (${mentors.length})</h2>
+      <p class="hint" style="margin:-4px 0 10px">Activity is for ${esc(scopeText())}. League average in these filters: ${fmtAvg(league)}.
+        A mentor whose “avg given” sits well above or below it may be scoring on a different scale.</p>
+      ${peopleTable(mentors, false)}
+      <h2 class="sec">Admins (${admins.length})</h2>
+      <p class="hint" style="margin:-4px 0 10px">Admins approve people, merge and delete referee records, and use this console.
+        Keep it to league leadership such as the assignor. Admins can still use the mentor app to evaluate.</p>
+      ${peopleTable(admins, true)}
+      ${removed.length ? `<h2 class="sec">Removed accounts (${removed.length})</h2>
+      <p class="hint" style="margin:-4px 0 10px">Evaluations whose mentor’s account has since been removed. They stay in every report.</p>
+      <div class="tablewrap"><table class="data"><thead><tr><th><span>Name on the evaluations</span></th>${actHead}</tr></thead><tbody>
+        ${removed.map(([k, a]) => `<tr><td>${esc(a.name || 'Unknown')}</td>${actCells(stats(k))}</tr>`).join('')}</tbody></table></div>` : ''}`;
+    }
+
+    async function mentorAction(fn, args, done) {
+      try {
+        const {error} = await sbc().rpc(fn, args);
+        if (error) throw error;
+        flash(done);
+      } catch (e) {
+        flash(friendly(e));
+      }
+      await refresh();
+    }
+    function personName(id) {const m = DATA.mentors.find(x => x.id === id); return m ? (m.display_name || m.email) : 'this person';}
+
+    /* ============================================================
+       CLEAN-UP
+       ------------------------------------------------------------
+       The same referee typed two ways ("Alex Smith", "Alexander Smith")
+       becomes two profiles, each with half the history. The server already
+       treats case, accents, spacing and "Last, First" as one name; this
+       finds the rest for a person to decide. Nothing merges on its own.
+       ============================================================ */
+    function lev(a, b, max) {
+      if (Math.abs(a.length - b.length) > max) return max + 1;
+      let prev = Array.from({length: b.length + 1}, (_, j) => j);
+      for (let i = 1; i <= a.length; i++) {
+        const cur = [i];
+        let best = i;
+        for (let j = 1; j <= b.length; j++) {
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+          if (cur[j] < best) best = cur[j];
+        }
+        if (best > max) return max + 1;
+        prev = cur;
+      }
+      return prev[b.length];
+    }
+    function whySimilar(a, b) {
+      const ta = a.split(' '), tb = b.split(' ');
+      if (a === b) return 'Same letters';
+      if ([...ta].sort().join(' ') === [...tb].sort().join(' ')) return 'Same names in a different order';
+      if (ta.length > 1 && tb.length > 1 && ta[ta.length - 1] === tb[tb.length - 1]) {
+        const fa = ta[0], fb = tb[0];
+        if (fa !== fb && (fa.startsWith(fb) || fb.startsWith(fa))) return 'Short and long first name';
+      }
+      const [sm, bg] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+      if (sm.length >= 2 && sm.length < bg.length && sm.every(t => bg.includes(t))) return 'One has an extra name';
+      const minLen = Math.min(a.length, b.length), max = minLen >= 9 ? 2 : minLen >= 5 ? 1 : 0;
+      if (max && lev(a, b, max) <= max) return 'Spelled almost the same';
+      return '';
+    }
+    const pairKey = (a, b) => [a, b].sort().join('|');
+    function dupePairs() {
+      const groups = [...slice().allGroups.values()].map(g => ({g, f: fold(g.name)})).filter(x => x.f);
+      if (groups.length > 4000) return [];   // a guard, far beyond a league's size
+      const out = [];
+      for (let i = 0; i < groups.length; i++) {
+        for (let j = i + 1; j < groups.length; j++) {
+          const why = whySimilar(groups[i].f, groups[j].f);
+          if (why && !UI.notSame.has(pairKey(groups[i].g.id, groups[j].g.id))) out.push({a: groups[i].g, b: groups[j].g, why});
+        }
+      }
+      return out.sort((x, y) => (y.a.profile.count + y.b.profile.count) - (x.a.profile.count + x.b.profile.count)).slice(0, 60);
+    }
+    function refOptions(exclude) {
+      const all = slice().allGroups;
+      return [...DATA.referees.values()].filter(x => !x.merged_into && x.id !== exclude)
+        .map(x => ({id: x.id, name: all.has(x.id) ? all.get(x.id).name : x.display_name, n: all.has(x.id) ? all.get(x.id).profile.count : 0}))
+        .sort((a, z) => a.name.localeCompare(z.name))
+        .map(x => `<option value="${esc(x.id)}">${esc(x.name)} (${plural(x.n, 'evaluation')})</option>`).join('');
+    }
+    function viewCleanup() {
+      const pairs = dupePairs();
+      const side = (g) => `<div><button class="linkbtn" data-ref="${esc(g.id)}">${esc(g.name)}</button>
+        <div class="muted" style="font-size:var(--fs-xs)">${plural(g.profile.count, 'evaluation')} · ${plural(g.profile.mentors, 'mentor')} · last ${esc(prettyDate(g.profile.lastSeen) || '–')}</div></div>`;
+      const keepLabel = (g) => `Keep “${esc(g.name.length > 22 ? g.name.slice(0, 21) + '…' : g.name)}”`;
+      return `
+      <h2 class="sec">Possible duplicate names (${pairs.length})</h2>
+      <p class="hint" style="margin:-4px 0 10px">Pairs that may be one referee typed two ways, across all dates. “Keep” merges the other
+        spelling into that one: their evaluations become one profile, and later saves under either spelling land there.</p>
+      <div class="card">${pairs.length ? pairs.map(p => `<div class="dupe">${side(p.a)}${side(p.b)}
+        <div class="acts">
+          <button class="btn sm" data-merge="${esc(p.b.id)}|${esc(p.a.id)}">${keepLabel(p.a)}</button>
+          <button class="btn sm" data-merge="${esc(p.a.id)}|${esc(p.b.id)}">${keepLabel(p.b)}</button>
+          <button class="btn sm ghost" data-notsame="${esc(pairKey(p.a.id, p.b.id))}">Different people</button>
+        </div><div class="why">${esc(p.why)}</div></div>`).join('')
+          : '<div class="empty">No likely duplicates.</div>'}
+        ${UI.notSame.size ? `<div class="more">${plural(UI.notSame.size, 'pair')} marked as different people in this browser.
+          <button class="btn sm ghost" id="resetNotSame">Show them again</button></div>` : ''}
+      </div>
+      <h2 class="sec">Merge by hand</h2>
+      <div class="card"><div class="formrow">
+        <label class="fld"><span>This spelling</span><select id="mFrom"><option value="">Choose a referee</option>${refOptions('')}</select></label>
+        <label class="fld"><span>becomes part of</span><select id="mInto"><option value="">Choose a referee</option>${refOptions('')}</select></label>
+        <button class="btn primary" id="mGo">Merge</button>
+      </div></div>
+      <h2 class="sec">Deletion requests</h2>
+      <div class="card"><p class="sub" style="margin-top:0">When a referee or their family asks for their records to be removed, open the referee
+        and use <b>Delete all records</b> at the bottom of their profile. It removes every uploaded evaluation of them, from every mentor.
+        Copies kept on mentors’ own phones are not touched; ask those mentors to delete them on the Saved tab.</p>
+        <div class="formrow"><label class="fld"><span>Referee</span><select id="delPick"><option value="">Choose a referee</option>${refOptions('')}</select></label>
+        <button class="btn" id="delOpen">Open profile</button></div></div>`;
+    }
+
+    async function doMerge(fromId, intoId) {
+      if (!fromId || !intoId) {flash('Choose both referees'); return;}
+      if (fromId === intoId) {flash('Choose two different referees'); return;}
+      const all = slice().allGroups;
+      const nm = (id) => (all.get(id) || {}).name || (DATA.referees.get(id) || {}).display_name || 'that referee';
+      const n = all.has(fromId) ? all.get(fromId).profile.count : 0;
+      const ok = await confirmBox({title: `Merge into ${nm(intoId)}?`,
+        message: `“${nm(fromId)}” and its ${plural(n, 'evaluation')} become part of “${nm(intoId)}”. Later saves under either ` +
+          'spelling land there too. This cannot be split apart again from here.', confirm: 'Merge'});
+      if (!ok) return;
+      try {
+        const {error} = await sbc().rpc('merge_referees', {p_from: fromId, p_into: intoId});
+        if (error) throw error;
+        flash('Merged');
+        if (ST.drawer === fromId) ST.drawer = intoId;
+      } catch (e) {
+        flash(friendly(e));
+      }
+      await refresh();
+    }
+
+    async function deleteRecords(id) {
+      const all = slice().allGroups, g = all.get(id);
+      const name = g ? g.name : (DATA.referees.get(id) || {}).display_name || 'this referee';
+      const ok = await confirmBox({title: `Delete every record of ${name}?`,
+        message: `Removes ${plural(g ? g.profile.count : 0, 'uploaded evaluation')} of ${name}, from every mentor, and the referee ` +
+          'with them. It cannot be undone. Copies on mentors’ own phones are not touched.',
+        confirm: 'Delete all records', danger: true, typeToConfirm: 'DELETE'});
+      if (!ok) return;
+      try {
+        const {data, error} = await sbc().rpc('delete_referee_records', {p_referee: id});
+        if (error) throw error;
+        flash(`${plural(Number(data) || 0, 'evaluation')} deleted`);
+        closeDrawer();
+      } catch (e) {
+        flash(friendly(e));
+      }
+      await refresh();
+    }
+
+    /* ============================================================
+       REFEREE PANEL
+       ============================================================ */
+    let drawerReturn = null;
+    function openDrawer(id) {
+      if (!id) return;
+      if (!ST.drawer) drawerReturn = document.activeElement;
+      ST.drawer = id;
+      // Shown before it is painted: the chart measures the panel's width.
+      $('#drawer').hidden = false; $('#scrim').hidden = false;
+      paintDrawer();
+      const shell = $('#shell'); if (shell) shell.inert = true;
+      document.body.style.overflow = 'hidden';
+      $('#drBody').scrollTop = 0;
+      $('#drClose').focus();
+    }
+    function closeDrawer(silent) {
+      const was = ST.drawer;
+      ST.drawer = '';
+      CHARTS.delete('chTrend');
+      $('#drawer').hidden = true; $('#scrim').hidden = true;
+      const shell = $('#shell'); if (shell) shell.inert = false;
+      document.body.style.overflow = '';
+      if (was && !silent && drawerReturn && document.contains(drawerReturn)) drawerReturn.focus();
+      hideTip();
+    }
+
+    function paintDrawer() {
+      if (!DATA) return;
+      const s = slice(), id = ST.drawer;
+      let g = s.groups.get(id), outside = false;
+      const all = s.allGroups.get(id);
+      if (!g) {g = all; outside = true;}
+      if (!g) {
+        $('#drTitle').textContent = 'Referee';
+        $('#drBody').innerHTML = '<div class="empty">There are no evaluations for this referee any more.</div>';
+        return;
+      }
+      const p = g.profile, byId = mentorById();
+      $('#drTitle').textContent = g.name;
+      const extra = all && !outside ? all.profile.count - p.count : 0;
+      const trendMark = (t) => t === 'up' ? ' <span title="Better in the last three ratings" aria-label="improving" style="color:var(--plus)">&uarr;</span>'
+        : t === 'down' ? ' <span title="Worse in the last three ratings" aria-label="slipping" style="color:var(--minus)">&darr;</span>' : '';
+      const list = (items) => `<ul class="plist">${items.join('')}</ul>`;
+      const watch = p.watch.map(w => `<li>${esc(w.text)} <span class="muted">· in ${w.evals} evaluations</span></li>`)
+        .concat(p.lowCats.map(c => `<li>${esc(c.label)} <span class="muted">· averages ${fmtAvg(c.avg)} over ${plural(c.n, 'rating')}</span></li>`));
+      const notesCards = [
+        watch.length ? `<div class="card"><h2>Watch for</h2>${list(watch)}</div>` : '',
+        p.lastWork.length ? `<div class="card"><h2>Still to work on after the last evaluation</h2>${list(p.lastWork.map(n => `<li>${esc(n.text)}</li>`))}</div>` : '',
+        p.improved.length ? `<div class="card"><h2>Fixed after being told</h2>${list(p.improved.slice(0, 8).map(n => `<li>${esc(n.text)}${n.evals > 1 ? ` <span class="muted">· ${n.evals} times</span>` : ''}</li>`))}</div>` : '',
+        p.strengths.length ? `<div class="card"><h2>Consistent strengths</h2>${list(p.strengths.slice(0, 6).map(n => `<li>${esc(n.text)} <span class="muted">· in ${n.evals} evaluations</span></li>`))}</div>` : ''
+      ].filter(Boolean).join('');
+      const pts = p.evals.filter(e => e.avg != null).slice().reverse()
+        .map(e => ({date: e.date, value: e.avg, label: `${prettyDate(e.date) || 'No date'} · ${mentorName(e, byId)} · ${e.division || 'no division'} ${e.position}`}));
+      if (pts.length >= 2) CHARTS.set('chTrend', (el) => trendChart(el, pts)); else CHARTS.delete('chTrend');
+      const tile = (l, v, sub) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+
+      $('#drBody').innerHTML = `
+        <p class="hint" style="margin:0 0 12px">${plural(p.count, 'evaluation')} · ${plural(p.mentors, 'mentor')} · last evaluated
+          ${esc(prettyDate(p.lastSeen) || '–')}${p.lastSeen ? ` (${esc(sinceText(p.lastSeen))})` : ''}<br>
+          ${outside ? '<b>Nothing in the current filters</b>, so this shows every evaluation.' : esc(scopeText())}
+          ${extra > 0 ? `· ${plural(extra, 'more evaluation')} outside these filters <button class="btn sm" data-allDates>Show all dates</button>` : ''}</p>
+        <div class="drstats">
+          ${tile('Overall average', fmtAvg(p.overall), plural(p.rated, 'rated evaluation'))}
+          ${tile('Last three', fmtAvg(p.recentAvg), p.rated > 3 ? 'newest evaluations' : 'too few to differ')}
+          ${tile('Move up', `${p.moveUp.yes}<span class="muted" style="font-size:1rem"> / ${p.moveUp.yes + p.moveUp.no}</span>`, 'said yes')}
+        </div>
+        ${pts.length >= 2 ? `<div class="card"><h2>Average per evaluation</h2><p class="sub">Oldest to newest, 1 to 4.</p>
+          <div class="chart" id="chTrend"></div>
+          ${tableTwin(['Evaluation', 'Average'], pts.map(x => [x.label, fmtAvg(x.value)]))}</div>` : ''}
+        <div class="card"><h2>By skill</h2><p class="sub">(n) is how many ratings each average rests on. &uarr;&darr; compare the last three with earlier ones.</p>
+          ${p.cats.map(c => `<div class="catrow"><span>${esc(c.short)}</span>
+            <span class="bar" aria-hidden="true"><i class="${c.avg != null && c.avg <= LOW ? 'low' : ''}" style="width:${c.avg == null ? 0 : (c.avg / 4) * 100}%"></i></span>
+            <span class="cv">${fmtAvg(c.avg)} <small>(${c.n})</small>${trendMark(c.trend)}</span></div>`).join('')}
+        </div>
+        ${notesCards ? `<div class="cols2">${notesCards}</div>` : ''}
+        <h2 class="sec">Evaluations</h2>
+        ${p.evals.map(e => `<details class="evald"><summary><b>${esc(prettyDate(e.date) || 'No date')}</b> · ${esc(e.division || 'no division')}
+          · ${esc(e.position)} · avg ${fmtAvg(e.avg)} <span class="muted">· ${esc(mentorName(e, byId))}${fold(e.referee) !== fold(g.name) ? ` · as “${esc(e.referee)}”` : ''}</span></summary>
+          ${evalBody(e)}</details>`).join('')}
+        <h2 class="sec">Records</h2>
+        <div class="card">
+          <div class="formrow">
+            <label class="fld"><span>Another spelling of this referee</span><select id="drMerge"><option value="">Choose a referee to merge in</option>${refOptions(id)}</select></label>
+            <button class="btn" id="drMergeGo">Merge into ${esc(g.name)}</button>
+          </div>
+          <div style="border-top:1px solid var(--line);margin:16px 0"></div>
+          <button class="btn danger" id="drDelete">Delete all records</button>
+          <p class="hint">For deletion requests: removes every uploaded evaluation of this referee, from every mentor, across all dates.</p>
+        </div>`;
+      drawCharts();
+    }
+
+    /* ============================================================
+       SIGN-IN SCREENS
+       ============================================================ */
+    function gateHTML() {
+      const brand = '<div class="brand">SIDE<span>LINE</span> <small>ADMIN</small></div>';
+      const box = (inner) => `<div class="gate"><div class="card">${brand}${inner}</div></div>`;
+      const err = LOGIN.error ? `<div class="warn" style="margin-top:12px">${esc(LOGIN.error)}</div>` : '';
+      switch (ST.auth) {
+        case 'loading': return box('<p>Checking your sign-in…</p>');
+        case 'off': return box('<h1>Accounts are off</h1><p>This copy of Sideline has no database connected, so there is nothing to administer.</p>');
+        case 'error': return box(`<h1>Could not connect</h1><div class="warn">${esc(ST.authError)}</div>
+          <div class="stack"><button class="btn primary" id="retryAuth">Try again</button></div>`);
+        case 'notAdmin': {
+          const pending = ST.me && ST.me.role === 'pending';
+          return box(`<h1>This console is for league admins</h1>
+            <p>You are signed in as <b>${esc(ST.me ? ST.me.email : '')}</b>, ${pending ? 'which is still waiting for approval' : 'a mentor account'}.
+            ${pending ? '' : 'Mentors do everything they need in the mentor app. '}Ask the assignor if you need admin access.</p>
+            <div class="stack"><a class="btn primary" href="../">Open the mentor app</a>
+            <button class="btn ghost" id="recheck">Check again</button>
+            <button class="btn ghost" id="signOutBtn">Sign out</button></div>`);
+        }
+        default:
+          if (LOGIN.step === 'code') {
+            return box(`<h1>Enter your code</h1><p>${esc(LOGIN.notice)}</p>
+              <label class="fld"><span>Sign-in code</span><input type="text" id="loginCode" inputmode="numeric"
+                autocomplete="one-time-code" maxlength="10" placeholder="123456" /></label>
+              <button class="btn primary" id="verifyBtn" ${LOGIN.busy ? 'disabled' : ''}>${LOGIN.busy ? 'Checking…' : 'Sign in'}</button>
+              <div class="stack"><button class="btn ghost" id="resendBtn" ${LOGIN.busy ? 'disabled' : ''}>Send a new code</button>
+              <button class="btn ghost" id="backBtn">Different email</button></div>${err}`);
+          }
+          return box(`<h1>Admin console</h1>
+            <p>For the assignor and league leadership: approve mentors, review referees and export reports.
+              Sign in with the email you use in the mentor app.</p>
+            <label class="fld"><span>Email</span><input type="email" id="loginEmail" autocomplete="email" autocapitalize="off"
+              spellcheck="false" value="${esc(LOGIN.email)}" placeholder="you@example.com" /></label>
+            <button class="btn primary" id="sendBtn" ${LOGIN.busy ? 'disabled' : ''}>${LOGIN.busy ? 'Sending…' : 'Email me a sign-in code'}</button>
+            <p class="hint">Signing in here also signs this browser in to the mentor app.</p>${err}`);
+      }
+    }
+
+    /* ============================================================
+       EVENTS
+       ============================================================ */
+    window.addEventListener('hashchange', () => {
+      const v = viewFromHash();
+      if (v === ST.view) return;
+      ST.view = v;
+      if (ST.drawer) closeDrawer(true);
+      paintView();
+      window.scrollTo(0, 0);
+    });
+
+    document.addEventListener('click', async (e) => {
+      const hit = (attr) => {const el = e.target.closest(`[${attr}]`); return el ? el.getAttribute(attr) : null;};
+      if (e.target.closest('#scrim') || e.target.closest('#drClose')) {closeDrawer(); return;}
+
+      const sortTo = hit('data-sort'); if (sortTo) {UI.refSort = {key: sortTo, dir: 1};}
+      if (hit('data-alldates') !== null) {F.range = 'all'; filtersChanged(true); return;}
+      const ref = hit('data-ref'); if (ref) {e.preventDefault(); openDrawer(ref); return;}
+      const refSort = hit('data-refsort');
+      if (refSort) {
+        const col = REF_COLS.find(c => c.key === refSort);
+        UI.refSort = UI.refSort.key === refSort ? {key: refSort, dir: -UI.refSort.dir} : {key: refSort, dir: col.first || 1};
+        $('#refTable').innerHTML = refTableHTML();
+        return;
+      }
+      const openEval = hit('data-openeval');
+      if (openEval) {
+        UI.openEval = UI.openEval === openEval ? '' : openEval;
+        $('#evalTable').innerHTML = evalTableHTML();
+        const b = $(`button[data-openeval="${CSS.escape(openEval)}"]`); if (b) b.focus();
+        return;
+      }
+      const approve = hit('data-approve');
+      if (approve) {mentorAction('set_mentor_role', {p_mentor: approve, p_role: 'mentor'}, `${personName(approve)} approved`); return;}
+      const reject = hit('data-reject');
+      if (reject) {
+        if (await confirmBox({title: 'Reject this sign-up?', message: `Deletes the sign-in for ${personName(reject)}. They can ask again later.`,
+          confirm: 'Reject', danger: true})) mentorAction('remove_mentor', {p_mentor: reject}, 'Sign-up removed');
+        return;
+      }
+      const setRole = hit('data-setrole');
+      if (setRole) {
+        const [id, role] = setRole.split('|'), name = personName(id);
+        const ok = role === 'admin'
+          ? await confirmBox({title: `Make ${name} an admin?`, message: 'Admins can approve and remove people, merge referees, ' +
+            'delete every record of a referee and use this console. Admin is meant for league leadership such as the assignor, not for mentors.',
+            confirm: 'Make admin'})
+          : await confirmBox({title: `Make ${name} a mentor?`, message: 'They keep the mentor app and every evaluation, but lose this console.', confirm: 'Make mentor'});
+        if (ok) mentorAction('set_mentor_role', {p_mentor: id, p_role: role}, role === 'admin' ? `${name} is now an admin` : `${name} is now a mentor`);
+        return;
+      }
+      const revoke = hit('data-revoke');
+      if (revoke) {
+        if (await confirmBox({title: `Revoke ${personName(revoke)}’s access?`, message: 'They can no longer upload or read shared evaluations ' +
+          'until approved again. Evaluations they already uploaded stay.', confirm: 'Revoke', danger: true})) {
+          mentorAction('set_mentor_role', {p_mentor: revoke, p_role: 'pending'}, 'Access revoked');
+        }
+        return;
+      }
+      const merge = hit('data-merge'); if (merge) {const [a, b] = merge.split('|'); doMerge(a, b); return;}
+      const notSame = hit('data-notsame');
+      if (notSame) {
+        UI.notSame.add(notSame); store.set('sideline:adminNotSame', [...UI.notSame]);
+        paintView(); return;
+      }
+
+      const btn = e.target.closest('button[id]');
+      switch (btn ? btn.id : '') {
+        case 'sendBtn': case 'resendBtn': {const i = $('#loginEmail'); if (i) LOGIN.email = i.value; sendCode(); return;}
+        case 'verifyBtn': verifyCode(); return;
+        case 'backBtn': Object.assign(LOGIN, {step: 'email', error: '', notice: ''}); render(); return;
+        case 'retryAuth': ST.auth = 'loading'; render(); sb ? refresh() : startAuth(); return;
+        case 'recheck': refresh(); return;
+        case 'signOutBtn': signOut(); return;
+        case 'refreshBtn': refresh(); return;
+        case 'retryBtn': loadAll(); return;
+        case 'themeBtn':
+          themeMode = isDark() ? 'light' : 'dark'; store.set('sideline:adminTheme', themeMode);
+          applyTheme(); paintAcct(); return;
+        case 'exportRefs': exportRefs(); return;
+        case 'exportEvals': exportEvals(); return;
+        case 'evalMore': UI.evalLimit += 100; $('#evalTable').innerHTML = evalTableHTML(); return;
+        case 'resetNotSame': UI.notSame.clear(); store.set('sideline:adminNotSame', []); paintView(); return;
+        case 'mGo': doMerge($('#mFrom').value, $('#mInto').value); return;
+        case 'delOpen': {const v = $('#delPick').value; if (v) openDrawer(v); else flash('Choose a referee'); return;}
+        case 'drMergeGo': {const v = $('#drMerge').value; if (v) doMerge(v, ST.drawer); else flash('Choose a referee to merge in'); return;}
+        case 'drDelete': deleteRecords(ST.drawer); return;
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && $('#dlg').open) {e.preventDefault(); $('#dlgNo').click(); return;}
+      if (e.key === 'Escape' && ST.drawer) {closeDrawer(); return;}
+      if (e.key === 'Enter' && e.target.id === 'loginEmail') {LOGIN.email = e.target.value; sendCode(); return;}
+      if (e.key === 'Enter' && e.target.id === 'loginCode') verifyCode();
+    });
+
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t.id === 'loginEmail') {LOGIN.email = t.value; return;}
+      if (t.id === 'refQ') {UI.refQ = t.value; $('#refTable').innerHTML = refTableHTML(); return;}
+      if (t.id === 'evalQ') {UI.evalQ = t.value; UI.evalLimit = 100; $('#evalTable').innerHTML = evalTableHTML(); return;}
+    });
+
+    document.addEventListener('change', (e) => {
+      const t = e.target;
+      switch (t.id) {
+        case 'fRange':
+          F.range = t.value;
+          if (F.range === 'custom' && !F.from && !F.to) {const b = {from: addDays(todayISO(), -89), to: todayISO()}; F.from = b.from; F.to = b.to;}
+          filtersChanged(true); return;
+        case 'fFrom': F.from = ISO_RE.test(t.value) ? t.value : ''; filtersChanged(false); return;
+        case 'fTo': F.to = ISO_RE.test(t.value) ? t.value : ''; filtersChanged(false); return;
+        case 'fDiv': F.division = t.value; filtersChanged(false); return;
+        case 'fPos': F.position = t.value; filtersChanged(false); return;
+        case 'refLow': UI.refLow = t.checked; $('#refTable').innerHTML = refTableHTML(); return;
+      }
+    });
+
+    // Coming back to the tab after a while fetches what mentors uploaded since.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && ST.auth === 'admin' && DATA && !ST.loading && Date.now() - DATA.at > 5 * 60000) loadAll();
+    });
+
+    render();
+    startAuth();
+  </script>
+</body>
+
+</html>
