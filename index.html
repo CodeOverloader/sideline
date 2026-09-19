@@ -841,6 +841,43 @@
       text-align: center;
     }
 
+    /* The games one evaluation covers, listed on the Score tab. */
+    ul.daygames {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0
+    }
+
+    ul.daygames li {
+      padding: 5px 0 5px 16px;
+      position: relative;
+      font-size: var(--fs-sm);
+      border-top: 1px solid var(--line)
+    }
+
+    ul.daygames li::before {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 13px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--mute)
+    }
+
+    ul.daygames li.on {
+      font-weight: 650
+    }
+
+    ul.daygames li.on::before {
+      background: var(--primary)
+    }
+
+    ul.daygames .muted {
+      color: var(--mute)
+    }
+
     /* ---------- the finish sequence ----------
        Copy, open the form, save. It was four buttons of equal weight in a row,
        so the order you had to do them in was something you had to already know. */
@@ -2105,20 +2142,28 @@
        That is handled with a `sub` on each field entry: an internal A/B label
        used everywhere in the app and deliberately absent from the block you
        paste into the form. Default crew is 1, since each pitch has one official. */
+    /* `offside` says whether the division plays offside at all. It tracks the
+       crew size for a reason: offside arrives with the assistant referees who
+       judge it, so the divisions refereed without ARs are the ones that do not
+       play it. The form still wants a 1 in the offside box for those games -
+       but a 1 there is a note about the division, not about the referee, and
+       everything that averages or ranks referees has to know the difference.
+       If the league enforces offside lower down than this, change it here: it
+       is the only place the answer is written. */
     const DIVISION_RULES = [
       // Matched in order against the sheet's division name.
       // pitches:2 means two simultaneous games sharing one field, one official each.
-      {re: /^pre-?k/i, form: 'PK', pitches: 2, crew: 1},
-      {re: /^kinder/i, form: 'Kindergarten', pitches: 2, crew: 1},
-      {re: /^1st/i, form: '1st', pitches: 1, crew: 2},
-      {re: /^2nd/i, form: '2nd', pitches: 1, crew: 2},
-      {re: /^3rd/i, form: '3rd', pitches: 1, crew: 3},
-      {re: /^4th/i, form: '4th', pitches: 1, crew: 3},
-      {re: /^5th/i, form: '5th', pitches: 1, crew: 3},
-      {re: /^6th/i, form: '6th', pitches: 1, crew: 3},
-      {re: /^middle\s*school/i, form: 'Middle School', pitches: 1, crew: 3},
-      {re: /^high\s*school/i, form: 'High School', pitches: 1, crew: 3},
-      {re: /^adult/i, form: 'Adult', pitches: 1, crew: 3},
+      {re: /^pre-?k/i, form: 'PK', pitches: 2, crew: 1, offside: false},
+      {re: /^kinder/i, form: 'Kindergarten', pitches: 2, crew: 1, offside: false},
+      {re: /^1st/i, form: '1st', pitches: 1, crew: 2, offside: false},
+      {re: /^2nd/i, form: '2nd', pitches: 1, crew: 2, offside: false},
+      {re: /^3rd/i, form: '3rd', pitches: 1, crew: 3, offside: true},
+      {re: /^4th/i, form: '4th', pitches: 1, crew: 3, offside: true},
+      {re: /^5th/i, form: '5th', pitches: 1, crew: 3, offside: true},
+      {re: /^6th/i, form: '6th', pitches: 1, crew: 3, offside: true},
+      {re: /^middle\s*school/i, form: 'Middle School', pitches: 1, crew: 3, offside: true},
+      {re: /^high\s*school/i, form: 'High School', pitches: 1, crew: 3, offside: true},
+      {re: /^adult/i, form: 'Adult', pitches: 1, crew: 3, offside: true},
     ];
     /* The schedule fills CR 1 + CR 2 with no ARs for Pre-K, Kindergarten, 1st AND
        2nd grade - the rows are indistinguishable. Only the division says whether
@@ -2126,8 +2171,53 @@
        game with a dual-referee crew (1st, 2nd). So splitting keys off division,
        never off "there are no ARs". */
     function divisionRule(v) {
-      const t = String(v || '');
-      return DIVISION_RULES.find(r => r.re.test(t)) || null;
+      const t = String(v || '').trim();
+      if (!t) return null;
+      /* Two spellings reach this. The sheet's, which the patterns are written
+         for ("Pre-K Girls"), and the form's own value, which is what normDiv
+         stores and what every saved evaluation carries. Those are not always
+         the same string: "Pre-K Girls" normalises to "PK", and /^pre-?k/ does
+         not match "PK". Missing that made PK - the very youngest referees -
+         the one division the offside rule failed to recognise. */
+      return DIVISION_RULES.find(r => r.re.test(t))
+        || DIVISION_RULES.find(r => r.form.toLowerCase() === t.toLowerCase())
+        || null;
+    }
+
+    /* Does this division play offside? Anything we do not recognise - a blank
+       division, a typo, a new age group - answers yes, which is how the app
+       behaved before this existed. Guessing "no" would quietly delete a real
+       offside rating from a referee's record, and that is the worse mistake. */
+    function divisionHasOffside(division) {
+      const r = divisionRule(division);
+      return r ? r.offside !== false : true;
+    }
+
+    /* The categories a record can fairly be judged on. Offside drops out for
+       divisions that do not play it, so a Kindergarten referee is averaged over
+       the five things they were actually there to do. */
+    function ratedFor(division) {
+      return divisionHasOffside(division) ? RATED : RATED.filter(c => c.id !== 'offsides');
+    }
+
+    /* One evaluation can now cover several games, so a record carries every
+       division it was written across. Records saved before that - and any
+       single-game one - just have the one. */
+    function recordDivisions(r) {
+      if (!r) return [];
+      if (Array.isArray(r.divisions) && r.divisions.length) return r.divisions;
+      return r.division ? [r.division] : [];
+    }
+
+    /* Offside counted against this referee only if at least one of the games it
+       covers actually played it. */
+    function recordHasOffside(r) {
+      const divs = recordDivisions(r);
+      return divs.length ? divs.some(divisionHasOffside) : true;
+    }
+
+    function ratedForRecord(r) {
+      return recordHasOffside(r) ? RATED : RATED.filter(c => c.id !== 'offsides');
     }
 
     const SUBS = ['A', 'B', 'C', 'D'];
@@ -2578,6 +2668,113 @@
     /* ---------- lookups ---------- */
     function allRefs() {return S.fields.flatMap(f => f.refs.map(r => ({field: f, ref: r})));}
     function activePair() {return allRefs().find(x => x.ref.id === S.activeRefId) || null;}
+
+    /* ---------- the day group ----------
+       The league takes ONE evaluation per referee per day, not one per game.
+       A referee who works 8:00 on 2A and 9:00 on 2B is one submission covering
+       both, so everything that scores or files a referee works on this group
+       rather than on a single pitch entry.
+
+       Membership is by name, through nameKey, which already folds "Ruiz, Ana"
+       and accents together for the referee profiles. An entry with no name yet
+       is only ever itself: blank names must not all collapse into one person. */
+    function dayGroupFor(ref) {
+      if (!ref) return [];
+      const all = allRefs();
+      const key = nameKey(ref.name);
+      const mine = key
+        ? all.filter(x => nameKey(x.ref.name) === key)
+        : all.filter(x => x.ref.id === ref.id);
+      const idx = (n) => {const i = FIELDS.indexOf(n); return i < 0 ? 999 : i;};
+      return mine.sort((a, b) =>
+        (a.field.time || '99:99').localeCompare(b.field.time || '99:99')
+        || idx(a.field.name) - idx(b.field.name)
+        || (a.field.sub || '').localeCompare(b.field.sub || ''));
+    }
+
+    /* The entry whose game answers the form's single Field / Time / Division
+       questions. The others are named in the comments and in the block.
+
+       Normally that is the earliest kickoff. When the day mixes divisions it is
+       the earliest that PLAYS offside, and that is not cosmetic: only the lead's
+       division is uploaded, so a day of Kindergarten at 8:00 and 4th grade at
+       9:00 filed under "Kindergarten" would come back from the league looking
+       like a day with no offside, and a real offside rating would be dropped
+       from the referee's average. Naming the 4th-grade game keeps the copy
+       other mentors see consistent with the one on this phone. */
+    function dayLead(g) {
+      if (!g || !g.length) return null;
+      return g.find(x => x.field.division && divisionHasOffside(x.field.division)) || g[0];
+    }
+    const dayIds = (g) => g.map(x => x.ref.id);
+    const dayNotes = (g) => g.flatMap(x => x.ref.notes || []);
+    const dayDivisions = (g) => [...new Set(g.map(x => x.field.division).filter(Boolean))];
+
+    /* Offside counts for the day if ANY game that day played it. A referee who
+       did Kindergarten at 8:00 and 4th grade at 9:00 did face offside, so their
+       offside rating is real and belongs in their average. */
+    const dayHasOffside = (g) => {
+      const divs = dayDivisions(g);
+      return divs.length ? divs.some(divisionHasOffside) : true;
+    };
+
+    /* One set of answers for the day, written to every entry in the group. The
+       per-game copies are what the pitch markers, the crew rows and the picker's
+       "4/6 rated" read, so they have to agree with what the Score tab shows. */
+    function applyToDay(g, patch) {
+      g.forEach(x => {
+        if (patch.ratings) x.ref.ratings = {...x.ref.ratings, ...patch.ratings};
+        if ('moveUp' in patch) x.ref.moveUp = patch.moveUp;
+        if ('comments' in patch) x.ref.comments = patch.comments;
+        if ('commentsEdited' in patch) x.ref.commentsEdited = patch.commentsEdited;
+        if ('noOffsides' in patch) x.ref.noOffsides = patch.noOffsides;
+        if ('submitted' in patch) x.ref.submitted = patch.submitted;
+      });
+    }
+
+    /* Bring a group into step. Two games rated separately before the second was
+       named would otherwise disagree; take the lead's answer where it has one
+       and the earliest other answer where it does not, so no work is thrown
+       away by two entries becoming one person. */
+    function reconcileDay(g) {
+      if (g.length < 2) return false;
+      const lead = dayLead(g).ref;
+      const pick = (get) => {
+        const v = get(lead);
+        if (v != null && v !== '') return v;
+        for (const x of g) {const o = get(x.ref); if (o != null && o !== '') return o;}
+        return v;
+      };
+      const ratings = {};
+      RATED.forEach(c => {ratings[c.id] = pick(r => r.ratings[c.id]);});
+      const moveUp = pick(r => r.moveUp);
+      const comments = pick(r => r.comments);
+      const before = JSON.stringify(g.map(x => [x.ref.ratings, x.ref.moveUp, x.ref.comments]));
+      applyToDay(g, {
+        ratings, moveUp: moveUp || null, comments: comments || '',
+        commentsEdited: g.some(x => x.ref.commentsEdited),
+        noOffsides: g.some(x => x.ref.noOffsides)
+      });
+      return before !== JSON.stringify(g.map(x => [x.ref.ratings, x.ref.moveUp, x.ref.comments]));
+    }
+
+    /* A referee can centre one game and run the line in the next, so the day
+       has more than one role even though the form has a single Position box.
+       The heading says both; the form gets the lead's, and every game's slot is
+       listed in the comments. */
+    function dayRoles(g) {
+      const roles = [...new Set(g.map(x => x.ref.role).filter(Boolean))];
+      return roles.length ? roles.join(' and ') : '';
+    }
+
+    /* "Field 2A 8:00 AM (Kindergarten, CR)" - how a game reads in the block and
+       in the comments when a referee worked more than one. */
+    function dayGameLabel(x) {
+      const bits = [fullPitchLabel(x.field)];
+      if (x.field.time) bits.push(pretty12(x.field.time));
+      const inner = [x.field.division, x.ref.slot].filter(Boolean).join(', ');
+      return bits.join(' ') + (inner ? ` (${inner})` : '');
+    }
     function refDisplay(r) {return r.name.trim() || `Unnamed ${r.slot}`;}
 
     /* ---------- crew size ----------
@@ -3049,8 +3246,9 @@
        after two hours and six referees the notes are more reliable than
        memory.
        ============================================================ */
-    function catTally(ref, catId) {
-      const ns = ref.notes.filter(n => n.cat === catId);
+    // Takes a notes array, so it can tally one game or a whole day's games.
+    function catTally(notes, catId) {
+      const ns = (notes || []).filter(n => n.cat === catId);
       return {
         n: ns.length, plus: ns.filter(n => n.pol === 1).length,
         minus: ns.filter(n => n.pol === -1).length, better: ns.filter(n => n.pol === 2).length
@@ -3065,12 +3263,16 @@
       2: {mark: '\u2191', word: 'Improved after halftime'}
     };
 
-    function buildComments(ref, field) {
+    function buildComments(g) {
+      const lead = dayLead(g);
+      if (!lead) return '';
+      const {ref, field} = lead;
+      const notes = dayNotes(g);
       const group = (pol) => {
         const out = [];
         CATS.forEach(c => {
           const counts = new Map();
-          ref.notes.filter(n => n.cat === c.id && n.pol === pol).forEach(n => {
+          notes.filter(n => n.cat === c.id && n.pol === pol).forEach(n => {
             const key = n.text;
             const cur = counts.get(key) || {text: n.text, n: 0};
             cur.n++; counts.set(key, cur);
@@ -3085,11 +3287,21 @@
       };
       const good = group(1), work = group(-1), better = group(2);
       const parts = [];
+      /* The form has one Field, one Time and one Division, but this evaluation
+         can cover several games. Say so first, so the reader knows the ratings
+         below are the day rather than the one game named at the top. */
+      if (g.length > 1) parts.push(`${plural(g.length, 'game')} today: ${g.map(dayGameLabel).join('; ')}.`);
       if (good.length) parts.push('Strengths: ' + good.join('; ') + '.');
       if (work.length) parts.push('To work on: ' + work.join('; ') + '.');
       // The halftime story: what you corrected at the break and they fixed after.
       if (better.length) parts.push('Improved after halftime: ' + better.join('; ') + '.');
-      if (ref.noOffsides) parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
+      const divs = dayDivisions(g);
+      if (divs.length && !dayHasOffside(g)) {
+        parts.push(`${divs.join(' and ')} ${divs.length > 1 ? 'do' : 'does'} not play offside, ` +
+          'so offside is scored 1 per the form instructions.');
+      } else if (ref.noOffsides) {
+        parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
+      }
       if (!parts.length) parts.push(`Watched ${refDisplay(ref)} at ${field.name || 'the field'}. `);
       return parts.join(' ');
     }
@@ -3097,33 +3309,72 @@
     function renderScore() {
       const p = activePair();
       if (!p) {$('#scoreBody').innerHTML = '<div class="empty">Pick a referee first.</div>'; return;}
-      const {field, ref} = p;
-      if (!ref.comments && !ref.commentsEdited) ref.comments = buildComments(ref, field);
+
+      /* One evaluation per referee per day, so everything below is the whole
+         day: every game they worked, their notes pooled, rated once. */
+      const g = dayGroupFor(p.ref);
+      const lead = dayLead(g) || p;
+      const {field, ref} = lead;
+      const notes = dayNotes(g);
+      let dirty = reconcileDay(g);
+
+      /* In divisions that do not play offside, the form still wants a 1 in that
+         box. Fill it in and say why, rather than leaving the mentor to find the
+         checkbox and do it by hand every single game. Nothing here counts
+         towards the referee's average - see ratedForRecord(). Across a day this
+         applies only when NONE of their games played offside. */
+      const noOffsideDivision = !!dayDivisions(g).length && !dayHasOffside(g);
+      if (noOffsideDivision && ref.ratings.offsides !== 1) {
+        applyToDay(g, {ratings: {offsides: 1}});
+        dirty = true;
+      }
+
+      if (!ref.comments && !ref.commentsEdited) {
+        applyToDay(g, {comments: buildComments(g)});
+        dirty = true;
+      }
+      if (dirty) save();
 
       const scales = RATED.map(c => {
-        const t = catTally(ref, c.id);
-        const locked = c.id === 'offsides' && ref.noOffsides;
+        const t = catTally(notes, c.id);
+        const locked = c.id === 'offsides' && (ref.noOffsides || noOffsideDivision);
         const bits = [];
         if (t.plus) bits.push(`${t.plus} strength${t.plus === 1 ? '' : 's'}`);
         if (t.minus) bits.push(`${t.minus} to work on`);
         if (t.better) bits.push(`${t.better} improved`);
         const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
+        /* In a division with no offside, the form's 1 would otherwise sit there
+           labelled "Needs work" - the exact thing this whole rule exists to
+           stop the app saying about a referee. It reads "Not played" instead. */
+        const wordFor = (v) => (c.id === 'offsides' && noOffsideDivision && v === 1)
+          ? 'Not played' : RATING_WORDS[v];
         const nums = [1, 2, 3, 4].map(v => `<button data-rate="${c.id}|${v}"
       aria-pressed="${ref.ratings[c.id] === v}"
-      aria-label="${v} - ${esc(RATING_WORDS[v])}" ${locked ? 'disabled style="opacity:.45"' : ''}>
-      <span class="rn">${v}</span><span class="rw">${esc(RATING_WORDS[v])}</span></button>`).join('');
+      aria-label="${v} - ${esc(wordFor(v))}" ${locked ? 'disabled style="opacity:.45"' : ''}>
+      <span class="rn">${v}</span><span class="rw">${esc(wordFor(v))}</span></button>`).join('');
         return `<div class="ratewrap">
       <div class="rlabel">${esc(c.label)}</div>
-      <div class="rhint">${esc(hint)}${c.id === 'offsides' ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
+      <div class="rhint">${esc(hint)}${c.id === 'offsides' && !noOffsideDivision
+          ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
       <div class="scale"><div class="nums">${nums}</div></div>
-      ${c.id === 'offsides' ? `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
-        No offside situations this game</label>` : ''}
+      ${c.id !== 'offsides' ? '' : noOffsideDivision
+          ? `<div class="okbox" style="margin-top:8px">${esc(field.division)} does not play offside, so the
+        form's 1 is filled in for you. It is not counted against ${esc(refDisplay(ref))}.</div>`
+          : `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
+        No offside situations this game</label>`}
     </div>`;
       }).join('');
 
       $('#scoreBody').innerHTML = `
-    <h2 class="sec">${esc(refDisplay(ref))} &mdash; ${esc(ref.role)}</h2>
-    <p class="hint">${esc(field.name || 'field not set')}${field.division ? ', ' + esc(field.division) : ''}${field.time ? ', ' + esc(pretty12(field.time)) : ''}</p>
+    <h2 class="sec">${esc(refDisplay(ref))} &mdash; ${esc(dayRoles(g))}</h2>
+    ${g.length > 1 ? `<div class="okbox" style="margin:6px 0 10px">
+      <b>${esc(refDisplay(ref))} worked ${plural(g.length, 'game')} today.</b>
+      This is one evaluation covering all of them - the league takes one per referee per day.
+      <ul class="daygames">${g.map(x => `<li${x.ref.id === lead.ref.id ? ' class="on"' : ''}>${esc(dayGameLabel(x))}
+        ${x.ref.notes.length ? `<span class="muted">${plural(x.ref.notes.length, 'note')}</span>` : '<span class="muted">no notes</span>'}</li>`).join('')}</ul>
+      <div class="hint" style="margin:6px 0 0">The form only has room for one game, so it gets the one in
+        bold. Every game is listed in the comments.</div></div>`
+          : `<p class="hint">${esc(field.name || 'field not set')}${field.division ? ', ' + esc(field.division) : ''}${field.time ? ', ' + esc(pretty12(field.time)) : ''}</p>`}
     ${historyLine(ref)}
     <div class="card">${scales}</div>
     <div class="card">
@@ -3143,7 +3394,7 @@
       <div class="charcount" id="charCount">${charCountText(ref.comments)}</div>
       <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
     </div>
-    <div id="readyBox">${readyHTML(field, ref)}</div>
+    <div id="readyBox">${readyHTML(g)}</div>
 
     <h2 class="sec">Send it in</h2>
     <ol class="finish">
@@ -3160,12 +3411,17 @@
         <div class="hint">Keeps a copy here, for the referee's profile and your backup.</div></div></li>
     </ol>
   `;
-      paintSaveState(field, ref);
+      paintSaveState(g);
     }
 
     /* What the form still needs, shown beside the copy button so a half-rated
        referee gets noticed before you are standing in the parking lot. */
-    function missingFor(field, ref) {
+    /* Checked against the game that answers the form's questions - the day's
+       lead - because that is the one whose field, time and division get typed
+       in. The ratings and comments are the day's and shared by every entry. */
+    function missingFor(g) {
+      const lead = dayLead(g); if (!lead) return ['a referee'];
+      const {field, ref} = lead;
       const out = [];
       if (!S.mentor.trim()) out.push('your name (account button, top left)');
       // A name the import could not match is kept as the sheet wrote it, but
@@ -3180,8 +3436,8 @@
       if (!ref.comments.trim()) out.push('comments');
       return out;
     }
-    function readyHTML(field, ref) {
-      const miss = missingFor(field, ref);
+    function readyHTML(g) {
+      const miss = missingFor(g);
       return miss.length
         ? `<div class="warn"><b>Still missing:</b> ${esc(miss.join(', '))}</div>`
         : `<div class="okbox">&check; Everything the form asks for is filled in.</div>`;
@@ -3193,32 +3449,71 @@
        formText() the one place a record becomes the form-order block. The
        Score tab, the Saved list and the "changed since saving" check all go
        through them, so they cannot drift apart. */
-    function recordFor(field, ref) {
+    /* The form's Field, Time, Division and Position come from the day's lead
+       game; `games` and `divisions` carry the rest, so the referee's profile and
+       the offside rule can see everywhere they worked. A single-game day looks
+       exactly like it always did, one entry long. */
+    function recordFor(g) {
+      const lead = dayLead(g); if (!lead) return null;
+      const {field, ref} = lead;
       return {
         mentor: S.mentor, date: S.date, field: field.name, sub: field.sub || '', time: field.time,
         division: field.division, referee: ref.name, position: ref.role,
         ratings: {...ref.ratings}, moveUp: ref.moveUp, comments: ref.comments,
-        notes: ref.notes.map(n => ({...n}))
+        notes: dayNotes(g).map(n => ({...n})),
+        games: g.map(x => ({field: x.field.name, sub: x.field.sub || '', time: x.field.time,
+          division: x.field.division, position: x.ref.role, slot: x.ref.slot})),
+        divisions: dayDivisions(g)
       };
     }
     function formText(r) {
+      // More than one game means the form's single Field/Time/Division answer
+      // cannot tell the whole story, so the block spells the rest out above the
+      // ratings as well as inside the comments.
+      const extra = Array.isArray(r.games) && r.games.length > 1
+        ? ['', `Games covered (${r.games.length}):`,
+          ...r.games.map(x => `  - ${[x.field, x.sub].filter(Boolean).join(' ')}` +
+            `${x.time ? ' ' + pretty12(x.time) : ''}` +
+            `${[x.division, x.slot].filter(Boolean).length ? ' (' + [x.division, x.slot].filter(Boolean).join(', ') + ')' : ''}`)]
+        : [];
       return [
         `Mentor/Monitor name: ${r.mentor}`, `Date: ${prettyDate(r.date)}`, `Field: ${r.field}`,
         `Time: ${pretty12(r.time)}`, `Division: ${r.division}`, `Referee being mentored: ${r.referee}`,
-        `Position: ${r.position}`, '',
+        `Position: ${r.position}`,
+        ...extra, '',
         ...RATED.map(c => `${c.label}: ${r.ratings[c.id] == null ? '-' : r.ratings[c.id]}`),
         `Should they move up: ${r.moveUp || '-'}`, '', 'COMMENTS:', r.comments
       ].join('\n');
     }
-    function formBlock(field, ref) {return formText(recordFor(field, ref));}
+    function formBlock(g) {return formText(recordFor(g));}
 
-    function savedRecordFor(ref) {return HIST.find(h => h.refId === ref.id) || null;}
+    /* EVERY saved record this day covers, not just the first.
+
+       There is usually one, but there can be more: records written per game
+       before evaluations became per day, and records whose entry ids no longer
+       exist because the session was cleared and the schedule re-imported. Both
+       are the same referee on the same date, which the league counts once, so
+       saving has to fold them together rather than update one and leave the
+       others behind looking like extra evaluations.
+
+       Matched two ways: by the entry ids the record was saved from, and by
+       referee name plus date, which survives the ids changing. */
+    function savedRecordsFor(g) {
+      const lead = dayLead(g); if (!lead) return [];
+      const ids = dayIds(g);
+      const key = nameKey(lead.ref.name);
+      return HIST.filter(h =>
+        ids.includes(h.refId)
+        || (Array.isArray(h.refIds) && h.refIds.some(id => ids.includes(id)))
+        || (!!key && nameKey(h.referee) === key && h.date === S.date));
+    }
+    function savedRecordFor(g) {return savedRecordsFor(g)[0] || null;}
     /* The save button says whether this referee is saved, and whether they
        have changed since - so a late edit is not silently left out of the record. */
-    function paintSaveState(field, ref) {
+    function paintSaveState(g) {
       const b = $('#saveEval'), h = $('#saveHint'); if (!b || !h) return;
-      const saved = savedRecordFor(ref);
-      const current = !!saved && formText(saved) === formText(recordFor(field, ref));
+      const saved = savedRecordFor(g);
+      const current = !!saved && formText(saved) === formText(recordFor(g));
       b.innerHTML = saved ? (current ? 'Saved &check;' : 'Update saved copy') : 'Save this referee';
       b.classList.toggle('primary', !!saved && !current);
       h.hidden = !saved;
@@ -3252,24 +3547,49 @@
        ============================================================ */
     function saveEval() {
       const p = activePair(); if (!p) return;
-      const {field, ref} = p;
-      if (!ref.name.trim()) {flash('Add the referee name first'); return;}
-      // Saving the same referee again updates their record instead of stacking
-      // a duplicate (which also listed them twice in the CSV).
-      const prev = savedRecordFor(ref);
-      const rec = {id: prev ? prev.id : uid(), refId: ref.id, savedAt: Date.now(), ...recordFor(field, ref)};
+      const g = dayGroupFor(p.ref);
+      const lead = dayLead(g); if (!lead) return;
+      if (!lead.ref.name.trim()) {flash('Add the referee name first'); return;}
+
+      /* One record for the referee's whole day. refIds lists every entry it
+         covers so selecting them from any of their games finds it again; refId
+         stays as the lead's, which is what older records and the uploader use.
+         Saving the same referee again updates their record instead of stacking
+         a duplicate (which also listed them twice in the CSV). */
+      /* Keep the oldest matching record's id so the league updates its copy
+         rather than gaining a second one, and clear away any others this day
+         now covers - including from the server, if they ever got there. */
+      const prevAll = savedRecordsFor(g).sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
+      const prev = prevAll[0] || null;
+      const rec = {
+        id: prev ? prev.id : uid(), refId: lead.ref.id, refIds: dayIds(g),
+        savedAt: Date.now(), ...recordFor(g)
+      };
+      const folded = prevAll.slice(1);
+      if (folded.length) {
+        folded.forEach(queueRemoteDelete);
+        const drop = new Set(folded.map(x => x.id));
+        HIST = HIST.filter(x => !drop.has(x.id));
+      }
       if (prev) HIST[HIST.indexOf(prev)] = rec; else HIST.unshift(rec);
-      ref.submitted = true;
-      // Once every official on this pitch is filed, the game is finished - retire
-      // it from the picker automatically instead of making you tidy up later.
-      const wasDone = field.done;
-      if (field.refs.every(r => r.submitted)) field.done = true;
+
+      // Every game this evaluation covers is filed, not just the one on screen.
+      applyToDay(g, {submitted: true});
+      /* Once every official on a pitch is filed, the game is finished - retire
+         it from the picker automatically instead of making you tidy up later.
+         Check every pitch the day touched, since one save can finish two. */
+      const newlyDone = [];
+      [...new Set(g.map(x => x.field))].forEach(f => {
+        if (!f.done && f.refs.every(r => r.submitted)) {f.done = true; newlyDone.push(f);}
+      });
       histChanged();
       save(); renderAll(); requestPersistence(); syncNow();
       const sharing = isApproved() && uploadConsent() === true;
-      flash(prev ? (sharing ? 'Saved copy updated; uploading' : 'Saved copy updated')
-        : field.done && !wasDone ? 'Saved. Game marked done.'
-          : sharing ? 'Saved; uploading for other mentors' : 'Saved to this device');
+      const covered = g.length > 1 ? ` (${plural(g.length, 'game')})` : '';
+      const merged = folded.length ? ` ${plural(folded.length, 'duplicate')} folded in.` : '';
+      flash((prev ? (sharing ? `Saved copy updated${covered}; uploading` : `Saved copy updated${covered}`)
+        : newlyDone.length ? `Saved${covered}. ${plural(newlyDone.length, 'game')} marked done.`
+          : sharing ? `Saved${covered}; uploading for other mentors` : `Saved${covered} to this device`) + merged);
     }
 
     function csvCell(v) {
@@ -3288,10 +3608,23 @@
       // Pitch is in the CSV because it is your own record and two Tigers rows would
       // otherwise look identical. It is deliberately absent from the form block:
       // the form has no pitch question and the Field value must match its dropdown.
+      /* One row per evaluation, and an evaluation can now cover a referee's
+         whole day, so "Games covered" spells out what the single Field, Pitch,
+         Time and Division columns cannot. It reads "1" for an ordinary row. */
       const head = ['Mentor', 'Date', 'Field', 'Pitch', 'Time', 'Division', 'Referee', 'Position',
-        ...RATED.map(c => c.label), 'Move up', 'Comments'];
-      const rows = HIST.map(r => [r.mentor, prettyDate(r.date), r.field, r.sub || '', pretty12(r.time), r.division,
-      r.referee, r.position, ...RATED.map(c => r.ratings[c.id] ?? ''), r.moveUp || '', r.comments]);
+        'Games covered', 'All games', ...RATED.map(c => c.label), 'Move up', 'Comments'];
+      const gamesOf = (r) => (Array.isArray(r.games) && r.games.length ? r.games : null);
+      const rows = HIST.map(r => {
+        const gs = gamesOf(r);
+        return [r.mentor, prettyDate(r.date), r.field, r.sub || '', pretty12(r.time), r.division,
+          r.referee, r.position,
+          gs ? gs.length : 1,
+          gs ? gs.map(x => `${[x.field, x.sub].filter(Boolean).join(' ')}` +
+            `${x.time ? ' ' + pretty12(x.time) : ''}` +
+            `${[x.division, x.slot].filter(Boolean).length ? ' (' + [x.division, x.slot].filter(Boolean).join(', ') + ')' : ''}`).join('; ')
+            : [[r.field, r.sub].filter(Boolean).join(' '), pretty12(r.time)].filter(Boolean).join(' '),
+          ...RATED.map(c => r.ratings[c.id] ?? ''), r.moveUp || '', r.comments];
+      });
       const csv = [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
       // The byte-order mark makes Excel read the file as UTF-8, so accented
       // names do not turn into mojibake.
@@ -4107,6 +4440,10 @@
     }
 
     let pullNext = null;
+    /* mode: undefined - routine, throttled to once every two minutes.
+              'force'   - pull now, skipping the throttle, but still only what
+                          changed since the cursor.
+              'full'    - throw the cache away and rebuild from the server. */
     function pullLeague(mode) {
       const c = sbc();
       if (!c || !isApproved()) return Promise.resolve();
@@ -4217,7 +4554,14 @@
     }
     const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
     const fmtAvg = (v) => (v == null ? '–' : v.toFixed(1));
-    function evalAvg(r) {return mean(RATED.map(c => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number'));}
+    /* Averages only the categories that apply to the divisions this evaluation
+       was written across. Reading it off the record rather than off a stored
+       flag means evaluations saved before this fix - and every one pulled from
+       the league - are scored correctly too, with no migration. */
+    function evalAvg(r) {
+      return mean(ratedForRecord(r).map(c => r.ratings && r.ratings[c.id])
+        .filter(v => typeof v === 'number'));
+    }
 
     let profileCache = null;
     function invalidateProfiles() {profileCache = null;}
@@ -4263,6 +4607,47 @@
         groups.get(key).records.push(r);
       });
 
+      /* Collapse copies of the SAME evaluation.
+
+         The league takes one evaluation per referee per day per mentor, so that
+         is the identity - and several things can produce a second copy of one:
+         an evaluation the mentor filed in the app that also arrives through the
+         Google Form import (those carry no mentor_id, so their dedup key can
+         never match the mentor's own upload), and records written per game
+         before evaluations became per day.
+
+         Counting both would inflate the referee's evaluation count and let one
+         game's ratings pull their average twice. The count of what was folded
+         is kept so the profile can say so: this makes the numbers right without
+         hiding that there is something to tidy up on the server. */
+      const copyRank = (r) => [
+        Array.isArray(r.games) ? r.games.length : 1,
+        (r.notes || []).length,
+        r.savedAt || 0
+      ];
+      const better = (a, b) => {
+        const x = copyRank(a), y = copyRank(b);
+        for (let i = 0; i < x.length; i++) {if (x[i] !== y[i]) return x[i] > y[i];}
+        return false;
+      };
+      groups.forEach(g => {
+        const byDay = new Map();
+        let dupes = 0;
+        g.records.forEach(r => {
+          // By the mentor's NAME, not their id: a form-imported row has no
+          // mentor_id at all, so the name is the only thing the two copies of
+          // one evaluation share.
+          const who = nameKey(r.mentor) || r.mentorId || '';
+          const k = `${r.date || ''}|${who}`;
+          const cur = byDay.get(k);
+          if (!cur) {byDay.set(k, r); return;}
+          dupes++;
+          if (better(r, cur)) byDay.set(k, r);
+        });
+        g.duplicates = dupes;
+        if (dupes) g.records = [...byDay.values()];
+      });
+
       // Display name: the most common spelling; on a tie, the tidiest (no
       // "Last, First", capitalised words), then the fullest.
       const tidy = (s) => (s.includes(',') ? 0 : 2) + (/^(\p{Lu}[\p{Ll}'’.-]*\s?)+$/u.test(s) ? 1 : 0);
@@ -4295,7 +4680,11 @@
       const evals = records.slice().sort((a, b) =>
         (b.date || '').localeCompare(a.date || '') || (b.savedAt || 0) - (a.savedAt || 0));
       const cats = RATED.map(c => {
-        const vals = evals.map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
+        // Same rule per category: a division that does not play offside
+        // contributes nothing to the offside average, rather than contributing
+        // the 1 the form made the mentor write.
+        const vals = evals.filter(r => c.id !== 'offsides' || recordHasOffside(r))
+          .map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
         // Trend compares the three most recent ratings with everything before.
         let trend = null;
         if (vals.length >= 4) {
@@ -4362,8 +4751,11 @@
       if (!ref.name.trim()) return null;
       const g = profileFor(ref.name);
       if (!g) return null;
-      const own = savedRecordFor(ref);
-      const past = g.profile.evals.filter(r => !(own && r.local && r.id === own.id) && !(r.local && r.refId === ref.id));
+      const day = dayGroupFor(ref);
+      const own = savedRecordFor(day);
+      const ids = dayIds(day);
+      const past = g.profile.evals.filter(r => !(own && r.local && r.id === own.id)
+        && !(r.local && ids.includes(r.refId)));
       return past.length ? {g, past} : null;
     }
     function historyLine(ref) {
@@ -4496,6 +4888,10 @@
       $('#sheetBody').innerHTML = `
     <p class="hint" style="margin-top:0">${plural(p.count, 'evaluation')} &middot; ${plural(p.mentors, 'mentor')}
       &middot; last seen ${esc(prettyDate(p.lastSeen) || '–')}<br>${esc(scopeText())}</p>
+    ${g.duplicates ? `<div class="warn">${plural(g.duplicates, 'extra copy')} of an evaluation already counted here
+      ${g.duplicates === 1 ? 'was' : 'were'} left out - same referee, same date, same mentor. The numbers below
+      count each evaluation once. This usually means a form import landed beside the mentor's own upload;
+      an admin can remove the extra from the admin console.</div>` : ''}
     <div class="card">
       <div class="profhead">
         <div><div class="bigavg">${fmtAvg(p.overall)}</div>
@@ -4530,7 +4926,11 @@
         ${cloud}
         <span class="pill">Move up: ${esc(r.moveUp || '-')}</span>
       </div>
-      <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}</div>
+      <div class="hint" style="margin:4px 0 0">${esc(prettyDate(r.date))}, ${esc(r.field)}${r.sub ? ' ' + esc(r.sub) : ''}${r.time ? ', ' + esc(pretty12(r.time)) : ''}, ${esc(r.division)}${
+          Array.isArray(r.games) && r.games.length > 1 ? ` &middot; <b>${esc(plural(r.games.length, 'game'))}</b>` : ''}</div>
+      ${Array.isArray(r.games) && r.games.length > 1 ? `<ul class="daygames">${r.games.map(x =>
+          `<li>${esc([x.field, x.sub].filter(Boolean).join(' '))}${x.time ? ' ' + esc(pretty12(x.time)) : ''}
+        <span class="muted">${esc([x.division, x.slot].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>` : ''}
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
       ${problem ? `<div class="warn" style="margin-top:8px">Not uploaded: ${esc(problem)}</div>` : ''}
       <pre>${esc(r.comments)}</pre>
@@ -5692,13 +6092,17 @@
       if (rate) {
         const [cid, v] = rate.split('|');
         const p = activePair(); if (!p) return;
-        p.ref.ratings[cid] = p.ref.ratings[cid] === Number(v) ? null : Number(v);
+        // One score for the day: written to every game the referee worked.
+        const g = dayGroupFor(p.ref);
+        const cur = dayLead(g).ref.ratings[cid];
+        applyToDay(g, {ratings: {[cid]: cur === Number(v) ? null : Number(v)}});
         save(); renderScore(); return;
       }
       const move = hit('data-move');
       if (move) {
         const p = activePair(); if (!p) return;
-        p.ref.moveUp = p.ref.moveUp === move ? null : move;
+        const g = dayGroupFor(p.ref);
+        applyToDay(g, {moveUp: dayLead(g).ref.moveUp === move ? null : move});
         save(); renderScore(); return;
       }
       const role = hit('data-role');
@@ -5778,7 +6182,13 @@
         case 'uploadOn': setUploadConsent(true); syncNow(); renderSaved(); return;
         case 'syncRetry': SYNC.backoff = 0; syncNow(); return;
         case 'refsRefresh':
-          pullLeague('force').then(() => flash(pullError || 'Profiles updated'));
+          /* 'full', not 'force'. This button is what someone taps when the
+             profiles look wrong - most often just after an admin merged two
+             spellings of a referee in the admin console. 'force' only skips the
+             two-minute throttle and still pulls incrementally from the cursor,
+             so it rebuilds nothing; the whole point of tapping Refresh is to
+             stop trusting what is already cached. */
+          pullLeague('full').then(() => flash(pullError || 'Profiles updated'));
           renderRefs();
           return;
         case 'doFetch': {
@@ -5868,14 +6278,15 @@
         case 'toScore': setTab('score'); return;
         case 'rebuild': {
           const p = activePair(); if (!p) return;
-          p.ref.comments = buildComments(p.ref, p.field); p.ref.commentsEdited = false;
+          const g = dayGroupFor(p.ref);
+          applyToDay(g, {comments: buildComments(g), commentsEdited: false});
           save(); renderScore(); return;
         }
         case 'copyComments': {
           const p = activePair(); if (p) copyText(p.ref.comments, 'Comments'); return;
         }
         case 'copyAll': {
-          const p = activePair(); if (p) copyText(formBlock(p.field, p.ref), 'Evaluation'); return;
+          const p = activePair(); if (p) copyText(formBlock(dayGroupFor(p.ref)), 'Evaluation'); return;
         }
         case 'saveEval': saveEval(); return;
         case 'exportCsv': exportCSV(); return;
@@ -5908,12 +6319,13 @@
       if (t.id === 'refSearch') {REFS_UI.q = t.value; $('#refsList').innerHTML = refsListHTML(); return;}
       if (t.id === 'comments') {
         const p = activePair(); if (!p) return;
-        p.ref.comments = t.value; p.ref.commentsEdited = true; save();
+        const g = dayGroupFor(p.ref);
+        applyToDay(g, {comments: t.value, commentsEdited: true}); save();
         // Patch the counter, checklist and save state in place. The count used
         // to freeze at its render-time value; a full re-render would drop the keyboard.
         $('#charCount').textContent = charCountText(t.value);
-        $('#readyBox').innerHTML = readyHTML(p.field, p.ref);
-        paintSaveState(p.field, p.ref);
+        $('#readyBox').innerHTML = readyHTML(g);
+        paintSaveState(g);
         return;
       }
     });
@@ -5970,11 +6382,11 @@
       }
       if (t.id === 'noOff') {
         const p = activePair(); if (!p) return;
-        p.ref.noOffsides = t.checked;
+        const g = dayGroupFor(p.ref);
         // Checking forces the form's "1 if no offsides"; unchecking has to release
         // that forced 1, not leave it behind looking like a real rating.
-        p.ref.ratings.offsides = t.checked ? 1 : null;
-        if (!p.ref.commentsEdited) p.ref.comments = buildComments(p.ref, p.field);
+        applyToDay(g, {noOffsides: t.checked, ratings: {offsides: t.checked ? 1 : null}});
+        if (!dayLead(g).ref.commentsEdited) applyToDay(g, {comments: buildComments(g)});
         save(); renderScore(); return;
       }
     });
