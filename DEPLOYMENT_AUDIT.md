@@ -19,8 +19,8 @@ PostgREST harness with the new migration, including when the migration is applie
 
 | Item | Status |
 | --- | --- |
-| D1 mentor can delete imported rows / sign as someone else | ✅ Fixed. New migration `20260918220000_deploy_hardening.sql`; tests added |
-| D2 sorted or edited sheet overwrites a different evaluation | ✅ Import now refuses a row that holds a different game; README warns. Test added |
+| D1 mentor can delete imported rows / sign as someone else | ✅ Fixed. New migration `20260918220000_deploy_hardening.sql`. After Copilot's review, an imported row records the account it belongs to when first imported (`form_owner_mentor_id`), and the one-name-per-account check runs under a lock |
+| D2 sorted or edited sheet overwrites a different evaluation | ✅ Import refuses a row whose response time was imported from another row, whose response is older than the stored one, or that holds a different referee in a different game. README warns. Tests added |
 | D3 old imports would duplicate | ✅ The first import adopts them automatically. Test added |
 | D4 RLS per-row function calls | ✅ Policies rewritten |
 | D5 last-admin race, stale `mentors.email` | ✅ Lock added; email follows `auth.users` |

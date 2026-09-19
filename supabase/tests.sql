@@ -323,12 +323,12 @@ declare
       'referee_name', 'Zed Badrating', 'position', 'CR', 'fouls', '7'),
     -- row 5: the game mentor 1 uploaded under the admin's name - not the admin's upload
     jsonb_build_object('row', 5, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
-      'referee_name', 'Zed Spoofed', 'position', 'CR', 'comments', 'The admin''s own'),
+      'referee_name', 'Zed Spoofed', 'position', 'CR', 'comments', 'The admin''s own', 'saved_at', '2026-09-12T17:00:00Z'),
     -- row 6: imported before rows were keyed by sheet row
     jsonb_build_object('row', 6, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '08:00',
       'referee_name', 'Zed Legacy', 'position', 'CR', 'saved_at', '2026-09-12T14:00:00Z'));
   sorted jsonb;
-  shifted_same_ref jsonb;
+  shifted jsonb;
   st text[];
 begin
   perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-10', 'Zed Twin')));
@@ -363,19 +363,23 @@ begin
      and (select referee_name from public.evaluations where source = 'form' and form_row = 5) = 'Zed Spoofed',
     'FAIL: a sorted sheet overwrote an evaluation';
 
-  -- Row 3 now points at another response for the same referee: still refuse it.
-  shifted_same_ref := jsonb_set(resp, '{1,eval_date}', '"2026-09-14"');
-  shifted_same_ref := jsonb_set(shifted_same_ref, '{1,kickoff}', '"12:30"');
-  shifted_same_ref := jsonb_set(shifted_same_ref, '{1,saved_at}', '"2026-09-14T18:45:00Z"');
-  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(shifted_same_ref, true);
-  assert st[2] = 'error', format('FAIL: a shifted row for the same referee was not refused: %s', st);
-  assert (select eval_date from public.evaluations where source = 'form' and form_row = 3) = '2026-09-12'::date
-     and (select kickoff from public.evaluations where source = 'form' and form_row = 3) = '10:15'::time,
-    'FAIL: a shifted row for the same referee overwrote an evaluation';
+  -- Sheet row 2 is deleted, so every later response moves up a row. Each
+  -- moved row is refused (row 3 for its bad rating), and nothing changes.
+  shifted := jsonb_build_array(resp -> 1 || '{"row": 2}', resp -> 2 || '{"row": 3}',
+                               resp -> 3 || '{"row": 4}', resp -> 4 || '{"row": 5}');
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(shifted, true);
+  assert st = array['error', 'error', 'error', 'error'], format('FAIL: a sheet with a deleted row was not refused: %s', st);
+  assert (select count(*) from public.evaluations where source = 'form') = 3
+     and (select referee_name from public.evaluations where source = 'form' and form_row = 3) = 'Zed Formonly'
+     and (select referee_name from public.evaluations where source = 'form' and form_row = 5) = 'Zed Spoofed'
+     and (select referee_name from public.evaluations where source = 'form' and form_row = 6) = 'Zed Legacy',
+    'FAIL: a sheet with a deleted row overwrote or removed an evaluation';
 
   resp := jsonb_set(resp, '{1,comments}', '"Edited on the form"');
   resp := jsonb_set(resp, '{1,eval_date}', '"2026-09-13"');
   resp := jsonb_set(resp, '{1,kickoff}', '"11:15"');
+  -- Google Forms moves the response time forward when a response is edited.
+  resp := jsonb_set(resp, '{1,saved_at}', '"2026-09-13T08:00:00Z"');
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
   assert st[2] = 'changed', 'FAIL: an edited response was not seen as changed';
   assert (select comments from public.evaluations where source = 'form' and form_row = 3) = 'Edited on the form',
@@ -384,9 +388,18 @@ begin
     'FAIL: an edited response date did not update in place';
   assert (select kickoff from public.evaluations where source = 'form' and form_row = 3) = '11:15'::time,
     'FAIL: an edited response kickoff did not update in place';
+  assert (select saved_at from public.evaluations where source = 'form' and form_row = 3) = '2026-09-13T08:00:00Z',
+    'FAIL: an edited response time did not update in place';
   assert (select form_owner_mentor_id from public.evaluations where source = 'form' and form_row = 3)
          = '5d1e0000-0000-4000-8000-00000000000a',
     'FAIL: a form row did not keep its imported owner';
+
+  -- A response older than the one imported from its row is another response.
+  select array_agg(out_status order by out_row) into st
+  from public.import_form_evaluations(jsonb_set(resp, '{1,saved_at}', '"2026-09-12T12:00:00Z"'), true);
+  assert st[2] = 'error', format('FAIL: an older response on an imported row was not refused: %s', st);
+  assert (select comments from public.evaluations where source = 'form' and form_row = 3) = 'Edited on the form',
+    'FAIL: an older response overwrote an evaluation';
 end $$;
 
 -- Historical ownership survives account deletion and same-name reuse.
@@ -406,7 +419,6 @@ select public.import_form_evaluations(jsonb_build_array(
     'appearance', '3', 'saved_at', '2026-09-12T13:00:00Z')), true);
 select public.remove_mentor('5d1e0000-0000-4000-8000-00000000000e');
 select public.set_mentor_role('5d1e0000-0000-4000-8000-00000000000f', 'mentor');
-update public.mentors set display_name = 'Zz Reused Name' where id = '5d1e0000-0000-4000-8000-00000000000f';
 
 -- Mentor 1 uploads the admin's form games claiming the admin's name: the
 -- imported evaluations stay.
@@ -424,6 +436,9 @@ end $$;
 reset role;
 select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000f');
 do $$ begin
+  -- The removed account's name is free again, so this account can take it.
+  update public.mentors set display_name = 'Zz Reused Name' where id = '5d1e0000-0000-4000-8000-00000000000f';
+  assert (select display_name from public.mentors) = 'Zz Reused Name', 'FAIL: a freed name could not be taken';
   perform public.save_evaluations(jsonb_build_array(
     pg_temp.item('zz-test-14', 'Zed Reuse') || '{"eval_date": "2026-09-12", "kickoff": "07:00"}'));
   assert exists (select 1 from public.evaluations where source = 'form' and form_row = 7),

@@ -12,18 +12,21 @@
 --    which only admins are meant to do. Now:
 --      - an uploaded evaluation carries the account's display_name (the
 --        sent name is only used while the account has none);
---      - an upload replaces only form rows credited to the account's own
---        name;
+--      - an imported form row records the account it belongs to
+--        (form_owner_mentor_id) when first imported, and only that
+--        account's uploads replace it. Renaming later, or taking the name
+--        of a removed account, gains nothing;
 --      - an import counts an app evaluation as "already uploaded" only
---        when that evaluation's account has the form's mentor name.
---    Two accounts can no longer take the same name, so a mentor cannot
---    rename themselves into someone else.
+--        when it is that account's.
+--    Two accounts can no longer take the same name (checked under a lock,
+--    so two renames at once cannot both get through).
 --
--- 2. Imports notice when the responses sheet was re-sorted or had rows
---    deleted. Imported rows are keyed by sheet row; if a row now holds a
---    different referee in a different game than the one imported from it,
---    the import refuses that row instead of overwriting another
---    evaluation.
+-- 2. Imports notice when rows in the responses sheet were moved, sorted
+--    or deleted. Imported rows are keyed by sheet row, so a moved row
+--    would overwrite another evaluation. A row is refused when its
+--    response's time was imported from a different row, when its response
+--    is older than the one imported from it, or when it holds a different
+--    referee in a different game.
 --
 -- 3. Rows imported before 20260918160000 (keyed the old way, with no
 --    form_source_key) are adopted by the first import that sees them,
@@ -78,6 +81,11 @@ create trigger mentors_name_check
 -- ------------------------------------------------------------
 -- 1b. save_evaluations: the account's name, and only its own form rows
 -- ------------------------------------------------------------
+-- The account an imported form row belongs to: the account that had the
+-- form's mentor name when the row was first imported, and only that one
+-- account's uploads replace the row. There is deliberately no foreign key.
+-- When that account is removed the id stays behind, so no later account,
+-- even one that takes the same name, inherits the row.
 alter table public.evaluations
   add column if not exists form_owner_mentor_id uuid;
 
@@ -172,17 +180,15 @@ begin
 
       -- The same evaluation imported from the form's responses gives way to
       -- this copy, which has the notes: same referee, date and position, the
-      -- same kickoff when both have one, and credited on the form to this
-      -- account's own name. Only an account with a name replaces anything.
-      if public.name_key(my_name) <> '' then
-        delete from public.evaluations f
-        where f.source = 'form' and f.referee_id = rid
-          and f.form_owner_mentor_id = me
-          and f.eval_date = nullif(it ->> 'eval_date', '')::date
-          and f.position = it ->> 'position'
-          and (f.kickoff is null or nullif(it ->> 'kickoff', '') is null
-               or f.kickoff = nullif(it ->> 'kickoff', '')::time);
-      end if;
+      -- same kickoff when both have one, and imported as this account's
+      -- (form_owner_mentor_id, fixed when it was imported).
+      delete from public.evaluations f
+      where f.source = 'form' and f.referee_id = rid
+        and f.form_owner_mentor_id = me
+        and f.eval_date = nullif(it ->> 'eval_date', '')::date
+        and f.position = it ->> 'position'
+        and (f.kickoff is null or nullif(it ->> 'kickoff', '') is null
+             or f.kickoff = nullif(it ->> 'kickoff', '')::time);
     exception
       when insufficient_privilege then
         raise;
@@ -216,7 +222,9 @@ declare
   source_key text;
   row_no integer;
   owner_id uuid;
-  incoming_saved_at timestamptz;
+  stamp timestamptz;
+  moved_from integer;
+  legacy boolean;
   cur public.evaluations%rowtype;
   have boolean;
 begin
@@ -259,59 +267,72 @@ begin
       end if;
       d := nullif(it ->> 'eval_date', '')::date;
       k := nullif(it ->> 'kickoff', '')::time;
-      incoming_saved_at := nullif(it ->> 'saved_at', '')::timestamptz;
+      stamp := nullif(it ->> 'saved_at', '')::timestamptz;
       cid := public.form_client_id(source_key, row_no);
       rid := public.find_referee(nm);
-      owner_id := null;
-      if public.name_key(mentor) <> '' then
-        select m.id into owner_id
-        from public.mentors m
+
+      -- What this sheet row held at the last import, if anything.
+      select * into cur from public.evaluations where source = 'form' and client_id = cid;
+      have := found;
+      legacy := false;
+      if not have then
+        -- Imported before rows were keyed by sheet row: adopt it.
+        select * into cur from public.evaluations
+        where source = 'form' and form_source_key is null
+          and client_id = public.form_client_id(mentor, d, k, nm, pos);
+        have := found;
+        legacy := have;
+      end if;
+
+      -- Rows moved in the sheet (sorted, deleted or inserted) mean this row
+      -- may now hold another response than the evaluation stored for it.
+      -- Checked before anything is written or removed. Google Forms moves a
+      -- response's time forward when it is edited, never back, and two
+      -- responses almost never share a second, so a row has moved when:
+      --   its response time was imported from a different row,
+      select x.form_row into moved_from from public.evaluations x
+      where stamp is not null and x.source = 'form' and x.form_source_key = source_key
+        and x.saved_at = stamp and x.form_row <> row_no
+      limit 1;
+      if found then
+        raise exception 'Row % holds the response that was on row % at the last import. Rows in the responses sheet have been moved, sorted or deleted: put them back in their original order, then import again.',
+          row_no, moved_from using errcode = '22023';
+      end if;
+      --   its response is older than the one imported from it,
+      --   or it is a different referee in a different game.
+      if have and ((stamp is not null and stamp < cur.saved_at)
+          or (public.name_key(cur.referee_name) <> public.name_key(nm)
+              and (cur.eval_date is distinct from d or cur.kickoff is distinct from k or cur.position <> pos
+                   or public.name_key(cur.mentor_name) <> public.name_key(mentor)))) then
+        raise exception 'Row % no longer holds the response imported from it (that was % by %). Rows in the responses sheet may have been moved, sorted or deleted: put them back in their original order, then import again.',
+          row_no, cur.referee_name, cur.mentor_name using errcode = '22023';
+      end if;
+
+      -- The account this response belongs to, fixed when it is first
+      -- imported: the account that then has the form's mentor name. Only
+      -- that account's uploads replace it (see save_evaluations).
+      owner_id := case when have then cur.form_owner_mentor_id end;
+      if owner_id is null and public.name_key(mentor) <> '' then
+        select m.id into owner_id from public.mentors m
         where public.name_key(m.display_name) = public.name_key(mentor)
         limit 1;
       end if;
 
-      -- Already uploaded from the app by the mentor named on the form. The
-      -- name is the evaluation's account's name, which its owner cannot set
-      -- to someone else's; an evaluation whose account was removed keeps
-      -- the name it was saved with.
+      -- Already uploaded from the app by that account, or by a removed
+      -- account under the form's mentor name.
       if d is not null and rid is not null and exists (
           select 1 from public.evaluations a
-          left join public.mentors m on m.id = a.mentor_id
           where a.source = 'app' and a.referee_id = rid and a.eval_date = d and a.position = pos
-            and public.name_key(case when a.mentor_id is null then a.mentor_name else m.display_name end)
-                = public.name_key(mentor)
-            and public.name_key(mentor) <> ''
-            and (a.kickoff is null or k is null or a.kickoff = k)) then
+            and (a.kickoff is null or k is null or a.kickoff = k)
+            and (a.mentor_id = owner_id
+                 or (a.mentor_id is null and public.name_key(mentor) <> ''
+                     and public.name_key(a.mentor_name) = public.name_key(mentor)))) then
         out_status := 'in_app';
-        if p_apply then
-          delete from public.evaluations where source = 'form' and client_id = cid;
+        -- A copy imported before the app one arrived goes now.
+        if p_apply and have then
+          delete from public.evaluations where id = cur.id;
         end if;
       else
-        select * into cur from public.evaluations where source = 'form' and client_id = cid;
-        have := found;
-        if not have then
-          -- Imported before rows were keyed by sheet row: adopt it.
-          select * into cur from public.evaluations
-          where source = 'form' and form_source_key is null
-            and client_id = public.form_client_id(mentor, d, k, nm, pos);
-          have := found;
-          if have and p_apply then
-            update public.evaluations set client_id = cid, form_source_key = source_key, form_row = row_no
-            where id = cur.id;
-          end if;
-        end if;
-
-        -- Each form response keeps its original saved_at. If the same sheet
-        -- row now has a different saved_at, rows were sorted/deleted and this
-        -- row now points at a different response.
-        if have then
-          incoming_saved_at := coalesce(incoming_saved_at, cur.saved_at);
-        end if;
-        if have and incoming_saved_at is distinct from cur.saved_at then
-          raise exception 'Row % no longer holds the response imported from it (that was % by %). Rows in the responses sheet may have been deleted or sorted: put them back in their original order, then import again.',
-            row_no, cur.referee_name, cur.mentor_name using errcode = '22023';
-        end if;
-
         if not have then
           out_status := 'new';
         elsif (cur.referee_name, cur.mentor_name, cur.eval_date, cur.field, cur.pitch, cur.kickoff, cur.division,
@@ -322,10 +343,20 @@ begin
                nullif(it ->> 'move_up', ''), coalesce(it ->> 'comments', ''), (it ->> 'appearance')::smallint,
                (it ->> 'workrate')::smallint, (it ->> 'commands')::smallint, (it ->> 'teamwork')::smallint,
                (it ->> 'fouls')::smallint, (it ->> 'offsides')::smallint,
-               coalesce(nullif(it ->> 'saved_at', '')::timestamptz, cur.saved_at)) then
+               coalesce(stamp, cur.saved_at)) then
           out_status := 'same';
         else
           out_status := 'changed';
+        end if;
+
+        -- An adopted row takes its sheet row, and a row imported before
+        -- owners were recorded gets one. Other rows are left untouched, so
+        -- phones do not download them again.
+        if p_apply and have and (legacy or (cur.form_owner_mentor_id is null and owner_id is not null)) then
+          update public.evaluations
+          set client_id = cid, form_source_key = source_key, form_row = row_no,
+              form_owner_mentor_id = coalesce(form_owner_mentor_id, owner_id)
+          where id = cur.id;
         end if;
 
         if p_apply and out_status in ('new', 'changed') then
@@ -340,7 +371,7 @@ begin
             (it ->> 'appearance')::smallint, (it ->> 'workrate')::smallint, (it ->> 'commands')::smallint,
             (it ->> 'teamwork')::smallint, (it ->> 'fouls')::smallint, (it ->> 'offsides')::smallint,
             nullif(it ->> 'move_up', ''), coalesce(it ->> 'comments', ''), '[]'::jsonb,
-            coalesce(incoming_saved_at, now()))
+            coalesce(stamp, now()))
           on conflict (client_id) where source = 'form' do update set
             form_source_key = excluded.form_source_key, form_row = excluded.form_row,
             form_owner_mentor_id = coalesce(e.form_owner_mentor_id, excluded.form_owner_mentor_id),
@@ -349,7 +380,7 @@ begin
             division = excluded.division, position = excluded.position, appearance = excluded.appearance,
             workrate = excluded.workrate, commands = excluded.commands, teamwork = excluded.teamwork,
             fouls = excluded.fouls, offsides = excluded.offsides, move_up = excluded.move_up,
-            comments = excluded.comments;
+            comments = excluded.comments, saved_at = coalesce(stamp, e.saved_at);
         end if;
       end if;
     exception

@@ -93,7 +93,7 @@ Only *saved* evaluations are uploaded. Games and notes you are still working on 
 
 Admin is for league leadership, such as the assignor, not for mentors. The app itself looks the same for an admin as for a mentor, apart from a link to the console on the Account sheet.
 
-An uploaded evaluation is credited to its account's name, which follows the name the mentor types in the app. The phone cannot claim someone else's name, and two accounts cannot share one: the second is asked to add a middle initial. That is what keeps one mentor's uploads from replacing another's imported form evaluations.
+An uploaded evaluation is credited to its account's name, which follows the name the mentor types in the app. The phone cannot claim someone else's name, and two accounts cannot share one: the second is asked to add a middle initial. An imported form evaluation belongs to the account that had its mentor name when it was first imported, and only that account's upload of the same game replaces it. Renaming later, or taking a removed mentor's name, does not change who it belongs to.
 
 ## The admin console
 
@@ -120,7 +120,7 @@ Some mentors only fill in the Referee Evaluation form. **Import** in the admin c
 2. Paste the link into **Import** and choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
 3. Choose **Import**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
 
-**Never sort, delete or insert rows in the responses tab.** Imported evaluations are matched to their sheet row. If rows move, the import refuses each row that now holds a different game (with the reason) rather than overwrite another evaluation, and you have to put the rows back in their original order to go on. To hide or tidy responses, use a filter view or another tab instead.
+**Never sort, delete or insert rows in the responses tab.** Imported evaluations are matched to their sheet row. If rows move, the import recognises each moved response by its time stamp and refuses it (with the reason) rather than overwrite another evaluation. You then have to put the rows back in their original order to go on. To hide or tidy responses, use a filter view or another tab instead.
 
 A response counts as already uploaded from the app when the app has an evaluation of the same referee, on the same date, in the same position (and kickoff, when both have one), by a mentor with the same name. It is skipped, because the app's copy has the notes. If a mentor uploads from the app after their form response was imported, the imported copy is replaced by the app's.
 
