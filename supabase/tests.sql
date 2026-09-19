@@ -456,11 +456,113 @@ do $$ begin
   assert exists (select 1 from public.evaluations where client_id = 'zz-test-11'), 'FAIL: the app copy is missing';
 end $$;
 
+-- ---------- one evaluation per referee per day per mentor ----------
+-- The app files a referee's whole day as one evaluation and can only put one
+-- of its games in the form's single Time and Position answers, so the import
+-- must not ask those to match before deciding a response is already in the
+-- app. Referee, date and mentor are what identify it.
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare st text[];
+begin
+  -- The admin files a day that began at 08:00 as CR.
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-test-day', 'Zed Allday')
+      || '{"eval_date": "2026-09-26", "kickoff": "08:00", "position": "CR"}'));
+
+  -- The same evaluation off the form, carrying the SECOND game's time and
+  -- position. Same referee, same date, same mentor: already in the app.
+  select array_agg(out_status) into st from public.import_form_evaluations(jsonb_build_array(
+    jsonb_build_object('row', 20, 'source_key', 'test-sheet|day', 'mentor_name', 'Zz Test Mentor',
+      'eval_date', '2026-09-26', 'kickoff', '09:00', 'referee_name', 'Zed Allday', 'position', 'AR',
+      'appearance', '3', 'saved_at', '2026-09-26T16:00:00Z')), true);
+  assert st = array['in_app'], format('FAIL: a form response for a day already filed imported anyway: %s', st);
+  assert not exists (select 1 from public.evaluations where source = 'form' and referee_name = 'Zed Allday'),
+    'FAIL: the duplicate form response was written';
+
+  -- What must still import: another mentor, another date, another referee.
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(jsonb_build_array(
+    jsonb_build_object('row', 22, 'source_key', 'test-sheet|day', 'mentor_name', 'Zz Mentor One',
+      'eval_date', '2026-09-26', 'kickoff', '09:00', 'referee_name', 'Zed Allday', 'position', 'AR',
+      'appearance', '3', 'saved_at', '2026-09-26T18:00:00Z'),
+    jsonb_build_object('row', 23, 'source_key', 'test-sheet|day', 'mentor_name', 'Zz Test Mentor',
+      'eval_date', '2026-09-27', 'kickoff', '09:00', 'referee_name', 'Zed Allday', 'position', 'CR',
+      'appearance', '3', 'saved_at', '2026-09-27T18:00:00Z'),
+    jsonb_build_object('row', 24, 'source_key', 'test-sheet|day', 'mentor_name', 'Zz Test Mentor',
+      'eval_date', '2026-09-26', 'kickoff', '09:00', 'referee_name', 'Zed Someoneelse', 'position', 'CR',
+      'appearance', '3', 'saved_at', '2026-09-26T19:00:00Z')), true);
+  assert st = array['new', 'new', 'new'],
+    format('FAIL: a different mentor, date or referee was wrongly treated as already in the app: %s', st);
+end $$;
+
+-- A second spelling of that referee, merged into the first (as the owner:
+-- ensure_referee is not something a client may call).
+reset role;
+select public.merge_referees(public.ensure_referee('Allday, Zed E'), public.find_referee('Zed Allday'));
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare st text[];
+begin
+  -- The form spells the referee the way that was merged away. It still has to
+  -- match the app evaluation filed under the surviving spelling.
+  select array_agg(out_status) into st from public.import_form_evaluations(jsonb_build_array(
+    jsonb_build_object('row', 21, 'source_key', 'test-sheet|day', 'mentor_name', 'Zz Test Mentor',
+      'eval_date', '2026-09-26', 'kickoff', '10:15', 'referee_name', 'Allday, Zed E', 'position', 'AR',
+      'appearance', '3', 'saved_at', '2026-09-26T17:00:00Z')), true);
+  assert st = array['in_app'], format('FAIL: a merged spelling did not match the app evaluation: %s', st);
+end $$;
+
+-- ---------- pruning the copies imported before that check ----------
+
+reset role;
+-- A form row duplicating the admin's app evaluation, as the old check left it,
+-- and one that duplicates nothing.
+insert into public.evaluations (mentor_id, client_id, source, form_source_key, form_row, referee_id,
+                                referee_name, mentor_name, eval_date, kickoff, position, saved_at)
+select null, 'form:zz-dupe', 'form', 'test-sheet|old', 2, public.find_referee('Zed Allday'),
+       'Zed Allday', 'Zz Test Mentor', '2026-09-26', '09:00', 'AR', '2026-09-26T20:00:00Z';
+insert into public.evaluations (mentor_id, client_id, source, form_source_key, form_row, referee_id,
+                                referee_name, mentor_name, eval_date, kickoff, position, saved_at)
+select null, 'form:zz-keep', 'form', 'test-sheet|old', 3, public.find_referee('Zed Allday'),
+       'Zed Allday', 'Zz Mentor Two', '2026-09-26', '09:00', 'AR', '2026-09-26T20:00:00Z';
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare n int; dupe_id uuid;
+begin
+  -- A dry run reports and changes nothing.
+  select count(*) into n from public.prune_duplicate_form_evaluations() where form_client = 'form:zz-dupe';
+  assert n = 1, 'FAIL: the prune did not find a duplicate imported copy';
+  assert exists (select 1 from public.prune_duplicate_form_evaluations() where form_client = 'form:zz-dupe' and not removed),
+    'FAIL: a dry run claimed to have removed something';
+  assert exists (select 1 from public.evaluations where client_id = 'form:zz-dupe'),
+    'FAIL: a dry run deleted an evaluation';
+  assert not exists (select 1 from public.prune_duplicate_form_evaluations() where form_client = 'form:zz-keep'),
+    'FAIL: the prune matched a form row that duplicates nothing';
+
+  select id into dupe_id from public.evaluations where client_id = 'form:zz-dupe';
+  assert exists (select 1 from public.prune_duplicate_form_evaluations(true) where form_client = 'form:zz-dupe' and removed),
+    'FAIL: applying the prune did not remove the duplicate';
+  assert not exists (select 1 from public.evaluations where client_id = 'form:zz-dupe'),
+    'FAIL: the duplicate imported copy is still there';
+  assert exists (select 1 from public.evaluations where client_id = 'zz-test-day'),
+    'FAIL: the prune removed the mentor''s own evaluation instead of the imported copy';
+  assert exists (select 1 from public.evaluations where client_id = 'form:zz-keep'),
+    'FAIL: the prune removed a form row that duplicates nothing';
+  assert exists (select 1 from public.evaluation_deletions where evaluation_id = dupe_id),
+    'FAIL: a pruned evaluation was not tombstoned, so phones would keep it';
+end $$;
+
 reset role;
 select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000c');
 do $$ begin
   perform pg_temp.expect_error($q$ select public.import_form_evaluations('[]', true) $q$,
     '42501', 'a mentor importing form responses');
+  perform pg_temp.expect_error($q$ select public.prune_duplicate_form_evaluations(true) $q$,
+    '42501', 'a mentor pruning imported evaluations');
 end $$;
 
 -- ---------- demote then re-approve: access follows the role ----------

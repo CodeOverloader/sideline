@@ -126,6 +126,37 @@ A response counts as already uploaded from the app when the app has an evaluatio
 
 Imported evaluations are credited to the name typed on the form, not to an account. Only admins can change or delete them. **Delete all records** on a referee removes them too.
 
+### Duplicate evaluations from the form import
+
+The league takes one evaluation per referee per day per mentor, and the app
+files a referee's whole day as a single evaluation. Because the form has only
+one Field, Time and Position, that evaluation can only name one of the games it
+covers — so the import decides a response is already in the app by **referee,
+date and mentor**, and deliberately ignores kickoff and position.
+
+Responses imported before that check existed can still be sitting beside a
+mentor's own upload. To find them, run this in the SQL Editor. On its own it
+only reports:
+
+```sql
+select * from public.prune_duplicate_form_evaluations();
+```
+
+Each row is a form-imported evaluation that duplicates an app one, and names
+the app evaluation it duplicates. Once the list looks right, remove them:
+
+```sql
+select * from public.prune_duplicate_form_evaluations(true);
+```
+
+It only ever deletes the imported copy, never the mentor's own — theirs carries
+their notes, and a form response can be imported again. Mentors' phones drop
+the removed copy on their next refresh.
+
+Two *form* responses duplicating each other are left alone: that means the form
+was submitted twice, and only a person can say which answers to keep. Delete
+the extra from the admin console.
+
 ### Handling a deletion request
 
 In the admin console, open the referee (from **Referees**, or **Clean-up → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. You can also run it from the SQL Editor:
