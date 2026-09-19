@@ -3487,13 +3487,27 @@
     }
     function formBlock(g) {return formText(recordFor(g));}
 
-    /* Matches on any entry the record was saved from, so selecting the referee
-       from their second game still finds the day's saved copy. */
-    function savedRecordFor(g) {
+    /* EVERY saved record this day covers, not just the first.
+
+       There is usually one, but there can be more: records written per game
+       before evaluations became per day, and records whose entry ids no longer
+       exist because the session was cleared and the schedule re-imported. Both
+       are the same referee on the same date, which the league counts once, so
+       saving has to fold them together rather than update one and leave the
+       others behind looking like extra evaluations.
+
+       Matched two ways: by the entry ids the record was saved from, and by
+       referee name plus date, which survives the ids changing. */
+    function savedRecordsFor(g) {
+      const lead = dayLead(g); if (!lead) return [];
       const ids = dayIds(g);
-      return HIST.find(h => ids.includes(h.refId)
-        || (Array.isArray(h.refIds) && h.refIds.some(id => ids.includes(id)))) || null;
+      const key = nameKey(lead.ref.name);
+      return HIST.filter(h =>
+        ids.includes(h.refId)
+        || (Array.isArray(h.refIds) && h.refIds.some(id => ids.includes(id)))
+        || (!!key && nameKey(h.referee) === key && h.date === S.date));
     }
+    function savedRecordFor(g) {return savedRecordsFor(g)[0] || null;}
     /* The save button says whether this referee is saved, and whether they
        have changed since - so a late edit is not silently left out of the record. */
     function paintSaveState(g) {
@@ -3542,11 +3556,21 @@
          stays as the lead's, which is what older records and the uploader use.
          Saving the same referee again updates their record instead of stacking
          a duplicate (which also listed them twice in the CSV). */
-      const prev = savedRecordFor(g);
+      /* Keep the oldest matching record's id so the league updates its copy
+         rather than gaining a second one, and clear away any others this day
+         now covers - including from the server, if they ever got there. */
+      const prevAll = savedRecordsFor(g).sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
+      const prev = prevAll[0] || null;
       const rec = {
         id: prev ? prev.id : uid(), refId: lead.ref.id, refIds: dayIds(g),
         savedAt: Date.now(), ...recordFor(g)
       };
+      const folded = prevAll.slice(1);
+      if (folded.length) {
+        folded.forEach(queueRemoteDelete);
+        const drop = new Set(folded.map(x => x.id));
+        HIST = HIST.filter(x => !drop.has(x.id));
+      }
       if (prev) HIST[HIST.indexOf(prev)] = rec; else HIST.unshift(rec);
 
       // Every game this evaluation covers is filed, not just the one on screen.
@@ -3562,9 +3586,10 @@
       save(); renderAll(); requestPersistence(); syncNow();
       const sharing = isApproved() && uploadConsent() === true;
       const covered = g.length > 1 ? ` (${plural(g.length, 'game')})` : '';
-      flash(prev ? (sharing ? `Saved copy updated${covered}; uploading` : `Saved copy updated${covered}`)
+      const merged = folded.length ? ` ${plural(folded.length, 'duplicate')} folded in.` : '';
+      flash((prev ? (sharing ? `Saved copy updated${covered}; uploading` : `Saved copy updated${covered}`)
         : newlyDone.length ? `Saved${covered}. ${plural(newlyDone.length, 'game')} marked done.`
-          : sharing ? `Saved${covered}; uploading for other mentors` : `Saved${covered} to this device`);
+          : sharing ? `Saved${covered}; uploading for other mentors` : `Saved${covered} to this device`) + merged);
     }
 
     function csvCell(v) {
@@ -4415,6 +4440,10 @@
     }
 
     let pullNext = null;
+    /* mode: undefined - routine, throttled to once every two minutes.
+              'force'   - pull now, skipping the throttle, but still only what
+                          changed since the cursor.
+              'full'    - throw the cache away and rebuild from the server. */
     function pullLeague(mode) {
       const c = sbc();
       if (!c || !isApproved()) return Promise.resolve();
@@ -4576,6 +4605,47 @@
         const key = refId ? 'r:' + refId : 'k:' + (nameKey(r.referee) || '#' + r.id);
         if (!groups.has(key)) groups.set(key, {key, refereeId: refId || '', records: []});
         groups.get(key).records.push(r);
+      });
+
+      /* Collapse copies of the SAME evaluation.
+
+         The league takes one evaluation per referee per day per mentor, so that
+         is the identity - and several things can produce a second copy of one:
+         an evaluation the mentor filed in the app that also arrives through the
+         Google Form import (those carry no mentor_id, so their dedup key can
+         never match the mentor's own upload), and records written per game
+         before evaluations became per day.
+
+         Counting both would inflate the referee's evaluation count and let one
+         game's ratings pull their average twice. The count of what was folded
+         is kept so the profile can say so: this makes the numbers right without
+         hiding that there is something to tidy up on the server. */
+      const copyRank = (r) => [
+        Array.isArray(r.games) ? r.games.length : 1,
+        (r.notes || []).length,
+        r.savedAt || 0
+      ];
+      const better = (a, b) => {
+        const x = copyRank(a), y = copyRank(b);
+        for (let i = 0; i < x.length; i++) {if (x[i] !== y[i]) return x[i] > y[i];}
+        return false;
+      };
+      groups.forEach(g => {
+        const byDay = new Map();
+        let dupes = 0;
+        g.records.forEach(r => {
+          // By the mentor's NAME, not their id: a form-imported row has no
+          // mentor_id at all, so the name is the only thing the two copies of
+          // one evaluation share.
+          const who = nameKey(r.mentor) || r.mentorId || '';
+          const k = `${r.date || ''}|${who}`;
+          const cur = byDay.get(k);
+          if (!cur) {byDay.set(k, r); return;}
+          dupes++;
+          if (better(r, cur)) byDay.set(k, r);
+        });
+        g.duplicates = dupes;
+        if (dupes) g.records = [...byDay.values()];
       });
 
       // Display name: the most common spelling; on a tie, the tidiest (no
@@ -4818,6 +4888,10 @@
       $('#sheetBody').innerHTML = `
     <p class="hint" style="margin-top:0">${plural(p.count, 'evaluation')} &middot; ${plural(p.mentors, 'mentor')}
       &middot; last seen ${esc(prettyDate(p.lastSeen) || '–')}<br>${esc(scopeText())}</p>
+    ${g.duplicates ? `<div class="warn">${plural(g.duplicates, 'extra copy')} of an evaluation already counted here
+      ${g.duplicates === 1 ? 'was' : 'were'} left out - same referee, same date, same mentor. The numbers below
+      count each evaluation once. This usually means a form import landed beside the mentor's own upload;
+      an admin can remove the extra from the admin console.</div>` : ''}
     <div class="card">
       <div class="profhead">
         <div><div class="bigavg">${fmtAvg(p.overall)}</div>
@@ -6108,7 +6182,13 @@
         case 'uploadOn': setUploadConsent(true); syncNow(); renderSaved(); return;
         case 'syncRetry': SYNC.backoff = 0; syncNow(); return;
         case 'refsRefresh':
-          pullLeague('force').then(() => flash(pullError || 'Profiles updated'));
+          /* 'full', not 'force'. This button is what someone taps when the
+             profiles look wrong - most often just after an admin merged two
+             spellings of a referee in the admin console. 'force' only skips the
+             two-minute throttle and still pulls incrementally from the cursor,
+             so it rebuilds nothing; the whole point of tapping Refresh is to
+             stop trusting what is already cached. */
+          pullLeague('full').then(() => flash(pullError || 'Profiles updated'));
           renderRefs();
           return;
         case 'doFetch': {
