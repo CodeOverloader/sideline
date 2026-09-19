@@ -2819,7 +2819,8 @@
        supabase/migrations/20260918140000_form_import.sql.
        ============================================================ */
     const IMPF = {link: store.get('sideline:adminFormSheet') || '', busy: '', error: '', items: null, status: null,
-      result: null, showAll: false};
+      result: null, showAll: false, schedLink: store.get('sideline:adminScheduleSheet') || '', sched: null, schedError: '',
+      suggest: new Map()};   // sheet row -> the full name the schedule gave it, kept while it is switched off
 
     // How the form's questions head the responses sheet, typos and all
     // ("Postion Referee was in"), after lower-casing and dropping punctuation.
@@ -2895,6 +2896,136 @@
       return isNaN(d) ? '' : d.toISOString();
     }
 
+    /* ---------- the schedule, for completing first names ----------
+       Mentors often type only a first name on the form. The league's schedule
+       sheet lists every game's field, kickoff and crew, so it can say who
+       "Jordan" on Field 4 at 9:00 was. The sheet only ever shows the current
+       week, so each fetch saves it to the database (save_schedule); older
+       weeks stay there for older responses. The server decides whether a
+       name can be completed - see
+       supabase/migrations/20260920120000_form_import_schedule_names.sql.
+
+       Field names, times and column guessing are COPIED from the mentor app's
+       schedule import (index.html), not shared: see the note on buildProfile.
+       Change them there, change them here. */
+    const FIELDS = ['Tigers - Field 1', 'Titans - Field 1', 'Broncos - Field 1', 'Field 2A', 'Field 2B',
+      'Field 2C', 'Field 3A', 'Field 3B', 'Field 3C', 'Field 4', 'Field 5', 'Field 6', 'Field 7', 'Field 8',
+      'Field 9', 'Field 10', 'Field 11A', 'Field 11B', 'Field 12A', 'Field 12B'];
+    // The schedule's field as the form's dropdown writes it, or '' when unsure.
+    function schedField(v) {
+      if (!v) return '';
+      const k = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const match = (key) => {
+        if (!key) return undefined;
+        const exact = FIELDS.find(f => k(f) === key || k(f) === 'field' + key);
+        if (exact) return exact;
+        if (key.length < 2) return undefined;
+        const one = (list) => (list.length === 1 ? list[0] : undefined);
+        const splitsNumber = (x, i) => /\d/.test(key[0]) && /\d/.test(x[i - 1] || '');
+        return one(FIELDS.filter(f => {const x = k(f); return x.endsWith(key) && !splitsNumber(x, x.length - key.length);}))
+          || one(FIELDS.filter(f => k(f).includes(key)))
+          || FIELDS.filter(f => key.includes(k(f))).sort((a, b) => k(b).length - k(a).length)[0];
+      };
+      let raw = String(v).trim().replace(/^legacy\s*park\s*/i, '').trim().replace(/^(?:f|fld\.?)\s*(?=\d)/i, 'Field ');
+      const paren = raw.match(/^field\s*1\s*\((tigers|titans|broncos)\)$/i);
+      if (paren) return `${paren[1][0].toUpperCase() + paren[1].slice(1).toLowerCase()} - Field 1`;
+      const direct = match(k(raw));
+      if (direct) return direct;
+      // "Tigers 2": the pitch number is not on the form.
+      const m = raw.match(/^(.*?)[\s\-#_]*([12ab])$/i);
+      return (m && match(k(m[1]))) || '';
+    }
+    // 6:30 PM, 18:30, 6:30p, 630, 930a, 8 -> "HH:MM"; a bare 1-6 is afternoon.
+    function schedTime(v) {
+      const t = String(v || '').trim();
+      if (!t) return '';
+      const m = t.match(/(\d{1,2})\s*[:.]\s*(\d{2})\s*(a|p)?/i) || t.match(/(?:^|\D)(\d{1,2})(\d{2})(?!\d)\s*(a|p)?/i)
+        || t.match(/(\d{1,2})()\s*(a|p)?/i);
+      if (!m) return '';
+      let h = Number(m[1]); const mi = m[2] ? Number(m[2]) : 0;
+      const ap = (m[3] || '').toLowerCase();
+      if (ap === 'p' && h < 12) h += 12;
+      if (ap === 'a' && h === 12) h = 0;
+      if (!ap && h >= 1 && h <= 6) h += 12;
+      if (h > 23 || mi > 59) return '';
+      return `${pad2(h)}:${pad2(mi)}`;
+    }
+    // 9/12/2026, 9/12/26, 2026-09-12, or 9/12 (this year) -> "YYYY-MM-DD".
+    function schedDate(v) {
+      const t = String(v || '').trim();
+      let m = t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+      m = t.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+      if (!m) return '';
+      let y = m[3] ? Number(m[3]) : new Date().getFullYear();
+      if (y < 100) y += 2000;
+      return `${y}-${pad2(m[1])}-${pad2(m[2])}`;
+    }
+    const SCHED_HEAD = /date|time|field|pitch|venue|division|age|level|grade|ref|center|centre|\bcr\b|\bar\d?\b|assistant|official|crew|home|away|team/i;
+    const NO_REF = /^(tbd|tba|open|none|n\/a|-+|\?+)$/i;
+    /* Sheet rows -> [{date, field, kickoff, position, referee_name}], one per
+       referee per game. Throws when the columns it needs are not there. */
+    function scheduleSlots(rows) {
+      // Schedules often start with a title row: take the row that looks most like headers.
+      let hr = 0, best = -1;
+      rows.slice(0, 8).forEach((r, i) => {
+        const filled = r.filter(c => String(c).trim()).length;
+        const score = r.filter(c => SCHED_HEAD.test(c)).length * 3 + filled;
+        if (filled >= 2 && score > best) {best = score; hr = i;}
+      });
+      const head = rows[hr].map(h => String(h).trim());
+      const find = (re) => head.findIndex(h => re.test(h));
+      const col = {
+        date: find(/date/i), time: find(/time|kick/i), field: find(/field|pitch|venue|location/i),
+        cr: find(/\bcr\s*#?1\b|^cr$|center|centre|ref(eree)?\s*#?1|official\s*#?1/i),
+        cr2: find(/\bcr\s*#?2\b|center\s*#?2|centre\s*#?2/i),
+        ar1: find(/\bar\s*#?1\b|assistant\s*#?1/i), ar2: find(/\bar\s*#?2\b|assistant\s*#?2/i),
+        crew: find(/crew|officials|referees|assignment/i), cancel: find(/cancel/i),
+      };
+      const seats = [['cr', 'CR'], ['cr2', 'CR'], ['ar1', 'AR'], ['ar2', 'AR']].filter(([c]) => col[c] >= 0);
+      const missing = [['date', 'Date'], ['time', 'Time'], ['field', 'Field']].filter(([c]) => col[c] < 0).map(([, l]) => l);
+      if (!seats.length && col.crew < 0) missing.push('referee (CR / AR or Crew)');
+      if (missing.length) {
+        throw new Error(`This does not look like the schedule: no ${missing.join(', ')} column.`);
+      }
+      const cell = (r, i) => (i >= 0 ? String(r[i] == null ? '' : r[i]).trim() : '');
+      const out = [];
+      rows.slice(hr + 1).forEach(r => {
+        if (col.cancel >= 0 && /^(true|yes|y|1|cancelled|canceled)$/i.test(cell(r, col.cancel))) return;
+        const date = schedDate(cell(r, col.date)), kickoff = schedTime(cell(r, col.time)), field = schedField(cell(r, col.field));
+        if (!date || !kickoff || !field) return;
+        const add = (name, position) => {
+          if (name && !NO_REF.test(name)) out.push({date, field, kickoff, position, referee_name: clip(name, 120)});
+        };
+        if (seats.length) seats.forEach(([c, pos]) => add(cell(r, col[c]), pos));
+        else cell(r, col.crew).split(/[\/,;&]|\s{2,}|\band\b/i).forEach(n => add(n.trim(), null));
+      });
+      return out;
+    }
+    /* Reads the schedule sheet and saves it. Returns what was saved, for the
+       page to report. */
+    async function saveSchedule(link) {
+      let text;
+      try {
+        // No headers=1 here: the schedule's header row is found above, and
+        // gviz would otherwise glue a title row onto it.
+        const res = await fetch(sheetCsvUrl(link).replace('&headers=1', ''), {cache: 'no-store'});
+        if (!res.ok) throw new Error();
+        text = await res.text();
+      } catch (e) {
+        throw new Error('Could not read the schedule sheet. Check the link, and that it is shared as "Anyone with the link" can view.');
+      }
+      if (/^\s*</.test(text)) throw new Error('Google sent a sign-in page instead of the schedule. Share it as "Anyone with the link" can view.');
+      const rows = parseCSV(text);
+      if (rows.length < 2) throw new Error('The schedule sheet is empty.');
+      const slots = scheduleSlots(rows);
+      if (!slots.length) throw new Error('No games with a date, kickoff, field and referee were found in the schedule.');
+      const {data, error} = await sbc().rpc('save_schedule', {p_rows: slots});
+      if (error) throw error;
+      const d = (data || [])[0] || {};
+      return {saved: d.out_saved || 0, dates: d.out_dates || 0};
+    }
+
     /* Sheet rows -> the items import_form_evaluations() takes. Throws when
        the columns it needs are not there. */
     function formItems(rows, sheetKey) {
@@ -2933,7 +3064,11 @@
       for (let i = 0; i < IMPF.items.length; i += 200) {
         const {data, error} = await sbc().rpc('import_form_evaluations', {p_items: IMPF.items.slice(i, i + 200), p_apply: apply});
         if (error) throw error;
-        (data || []).forEach(d => out.set(d.out_row, {status: d.out_status, error: d.out_error || ''}));
+        (data || []).forEach(d => {
+          out.set(d.out_row, {status: d.out_status, error: d.out_error || '',
+            referee: d.out_referee || '', fromSchedule: !!d.out_from_schedule});
+          if (d.out_from_schedule) IMPF.suggest.set(d.out_row, d.out_referee);
+        });
       }
       return out;
     }
@@ -2947,8 +3082,18 @@
       const link = String(IMPF.link || '').trim();
       if (!link) {flash('Paste the responses sheet link first'); return;}
       store.set('sideline:adminFormSheet', link);
-      Object.assign(IMPF, {busy: 'Fetching the sheet…', error: '', items: null, status: null, result: null});
+      const schedLink = String(IMPF.schedLink || '').trim();
+      store.set('sideline:adminScheduleSheet', schedLink);
+      Object.assign(IMPF, {busy: 'Fetching the sheet…', error: '', items: null, status: null, result: null,
+        sched: null, schedError: '', suggest: new Map()});
       paintView();
+      // The schedule first, so this week's games are there to complete names
+      // from. A schedule that cannot be read stops nothing: names stay as typed.
+      if (schedLink) {
+        IMPF.busy = 'Reading and saving the schedule…';
+        paintView();
+        try {IMPF.sched = await saveSchedule(schedLink);} catch (e) {IMPF.schedError = friendly(e);}
+      }
       try {
         let text;
         try {
@@ -2971,6 +3116,20 @@
       } catch (e) {
         IMPF.error = friendly(e); IMPF.items = null; IMPF.status = null;
       }
+      IMPF.busy = '';
+      paintView();
+    }
+
+    /* The admin turned a schedule completion off (or back on). The preview
+       runs again: without the full name, the response may no longer match an
+       app upload, and so may no longer be skipped. */
+    async function formUseSchedule(row, on) {
+      const it = IMPF.items && IMPF.items.find(x => x.row === row);
+      if (!it || IMPF.busy) return;
+      if (on) delete it.use_schedule; else it.use_schedule = false;
+      IMPF.busy = 'Checking the responses against the database…';
+      paintView();
+      try {IMPF.status = await formRun(false);} catch (e) {IMPF.error = friendly(e);}
       IMPF.busy = '';
       paintView();
     }
@@ -3011,14 +3170,41 @@
         <p class="hint">In the form’s Responses tab, open the linked sheet and copy its address. It has to be shared as
           <b>Anyone with the link can view</b> for this page to read it, which means anyone who gets hold of the link can read
           every response, so keep it among league leadership. The link is remembered in this browser only.</p>
+        <div class="formrow">
+          <label class="fld" style="flex:1 1 320px"><span>Link to the schedule sheet (optional)</span>
+            <input type="text" class="inp" id="fsSchedLink" value="${esc(IMPF.schedLink)}" autocomplete="off" spellcheck="false"
+              placeholder="https://docs.google.com/spreadsheets/d/…" /></label>
+        </div>
+        <p class="hint">When a mentor types only a first name, the schedule can say who it was: the referee on that game (date,
+          field and kickoff) with that first name. A name is completed only when exactly one referee on the game has it, and
+          you see every completion below before importing. Each fetch saves the week’s games, so last week’s responses can
+          still be completed after the sheet moves on.</p>
       </div>`;
       if (IMPF.busy) return top + `<div class="card"><div class="empty">${esc(IMPF.busy)}</div></div>`;
-      const err = IMPF.error ? `<div class="warn">${esc(IMPF.error)}</div>` : '';
+      const err = (IMPF.error ? `<div class="warn">${esc(IMPF.error)}</div>` : '')
+        + (IMPF.schedError ? `<div class="warn">Names were not completed from the schedule. ${esc(IMPF.schedError)}</div>` : '');
       if (!IMPF.items || !IMPF.status) return top + err;
 
       const n = formCounts(IMPF.status);
       const done = IMPF.result ? `<div class="banner"><span><b>Imported ${plural(IMPF.result.new, 'evaluation')}</b>
         and updated ${IMPF.result.changed}.</span></div>` : '';
+      const completed = [...IMPF.status.values()].filter(s => s.fromSchedule).length;
+      const sched = IMPF.sched ? `<p class="hint">Saved ${plural(IMPF.sched.saved, 'referee assignment')} from the schedule
+        (${plural(IMPF.sched.dates, 'day')}). ${completed ? `${plural(completed, 'first name')} completed from it.` : 'No first names needed completing.'}</p>` : '';
+      /* The referee as typed, and who it is filed under when that differs:
+         completed from the schedule (with a box to turn it off), or an
+         earlier import an admin merged. */
+      const refCell = (it, s) => {
+        const sug = IMPF.suggest.get(it.row);
+        if (sug && s.status !== 'error') {
+          const on = it.use_schedule !== false;
+          return `${esc(it.referee_name)} <label class="chk" style="display:flex;margin-top:2px;font-size:var(--fs-xs)">
+            <input type="checkbox" data-sched-row="${it.row}" ${on ? 'checked' : ''} ${IMPF.busy ? 'disabled' : ''} />
+            <span>${on ? '' : 'Not '}filed as <b>${esc(sug)}</b> (schedule)</span></label>`;
+        }
+        return esc(it.referee_name || '–') + (s.referee
+          ? `<div class="muted" style="font-size:var(--fs-xs)">filed under ${esc(s.referee)}</div>` : '');
+      };
       const order = {error: 0, new: 1, changed: 2, in_app: 3, same: 4};
       const rows = IMPF.items.map(it => ({it, s: IMPF.status.get(it.row) || {status: 'error', error: 'No answer from the server'}}))
         .filter(x => IMPF.showAll || !['same', 'in_app'].includes(x.s.status))
@@ -3030,13 +3216,13 @@
           ${shown.map(({it, s}) => {
             const [label, cls] = FORM_STATUS[s.status] || FORM_STATUS.error;
             return `<tr><td class="n">${it.row}</td><td class="num">${esc(prettyDate(ISO_RE.test(it.eval_date) ? it.eval_date : '') || it.eval_date || '–')}</td>
-              <td>${esc(it.referee_name || '–')}</td><td>${esc(it.position || '–')}</td><td class="hide-sm">${esc(it.mentor_name || '–')}</td>
+              <td>${refCell(it, s)}</td><td>${esc(it.position || '–')}</td><td class="hide-sm">${esc(it.mentor_name || '–')}</td>
               <td><span class="${cls}">${esc(label)}</span>${s.error ? `<div class="muted" style="font-size:var(--fs-xs)">${esc(s.error)}</div>` : ''}</td></tr>`;
           }).join('')}</tbody></table></div>
           ${rows.length > shown.length ? `<p class="hint">Showing the first ${shown.length} of ${rows.length}.</p>` : ''}`
         : '<div class="card"><div class="empty">Every response is already in the database.</div></div>';
       const hidden = n.same + n.in_app;
-      return top + err + done + `
+      return top + err + done + sched + `
       <div class="kpis">
         <div class="kpi"><div class="l">New</div><div class="v">${n.new}</div><div class="s">not in the database yet</div></div>
         <div class="kpi"><div class="l">Edited on the form</div><div class="v">${n.changed}</div><div class="s">imported before, changed since</div></div>
@@ -3050,7 +3236,7 @@
       </div>
       ${table}
       <p class="hint">A response counts as uploaded from the app when the app has an evaluation of the same referee, on the same date,
-        in the same position, by a mentor with the same name. The app’s copy is kept because it has the notes.</p>`;
+        by a mentor with the same name. The app’s copy is kept because it has the notes.</p>`;
     }
 
     /* ============================================================
@@ -3292,6 +3478,7 @@
       if (t.id === 'refQ') {UI.refQ = t.value; $('#refTable').innerHTML = refTableHTML(); return;}
       if (t.id === 'evalQ') {UI.evalQ = t.value; UI.evalLimit = 100; $('#evalTable').innerHTML = evalTableHTML(); return;}
       if (t.id === 'fsLink') {IMPF.link = t.value; return;}
+      if (t.id === 'fsSchedLink') {IMPF.schedLink = t.value; return;}
     });
 
     document.addEventListener('change', (e) => {
@@ -3308,6 +3495,7 @@
         case 'fsAll': IMPF.showAll = t.checked; paintView(); return;
         case 'refLow': UI.refLow = t.checked; $('#refTable').innerHTML = refTableHTML(); return;
       }
+      if (t.dataset.schedRow) formUseSchedule(Number(t.dataset.schedRow), t.checked);
     });
 
     // Coming back to the tab after a while fetches what mentors uploaded since.

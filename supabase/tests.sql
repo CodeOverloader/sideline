@@ -675,6 +675,186 @@ do $$ begin
     '42501', 'a mentor pruning imported evaluations');
 end $$;
 
+-- ---------- completing a first name from the schedule ----------
+-- Mentors type only "Jordan" on the form. The schedule says who was on that
+-- game; a completion happens only when exactly one referee there has that
+-- first name.
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+do $$ begin
+  perform pg_temp.expect_error($q$ select public.save_schedule('[]') $q$, '42501', 'a mentor saving the schedule');
+  perform pg_temp.expect_error($q$ select count(*) from public.schedule_slots $q$, '42501', 'a mentor reading the schedule');
+  -- Mentor 1 uploads their evaluation of Zedjo Ellis from the app.
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-sched-app', 'Zedjo Ellis') || '{"eval_date": "2026-10-10"}'));
+end $$;
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare
+  n int; dates int;
+  g jsonb := jsonb_build_array(
+    -- An earlier version of the day, replaced below.
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 4', 'kickoff', '09:00', 'position', 'CR', 'referee_name', 'Zedold Crew'));
+begin
+  perform public.save_schedule(g);
+  select out_saved, out_dates into n, dates from public.save_schedule(jsonb_build_array(
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 4', 'kickoff', '09:00', 'position', 'CR', 'referee_name', 'Zedjo Ellis'),
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 4', 'kickoff', '09:00', 'position', 'AR', 'referee_name', 'Zedkim Park'),
+    -- Two referees on one game with the same first name: no completion.
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 5', 'kickoff', '09:00', 'position', 'CR', 'referee_name', 'Zedam One'),
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 5', 'kickoff', '09:00', 'position', 'AR', 'referee_name', 'Zedam Two'),
+    -- Rows that can never match a response are dropped.
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 5', 'kickoff', '', 'referee_name', 'Zedno Time'),
+    jsonb_build_object('date', '', 'field', 'Field 5', 'kickoff', '10:00', 'referee_name', 'Zedno Date'),
+    jsonb_build_object('date', '2026-10-10', 'field', 'Field 6', 'kickoff', '10:00', 'referee_name', ' — ')));
+  assert n = 4 and dates = 1, format('FAIL: save_schedule saved %s rows over %s dates, expected 4 over 1', n, dates);
+end $$;
+
+reset role;
+do $$ begin
+  assert not exists (select 1 from public.schedule_slots where referee_name = 'Zedold Crew'),
+    'FAIL: saving a date again did not replace what was saved for it';
+end $$;
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare
+  resp jsonb := jsonb_build_array(
+    -- row 2: mentor 1's form copy of the evaluation they uploaded, first name only
+    jsonb_build_object('row', 2, 'source_key', 'test-sheet|sched', 'mentor_name', 'Zz Mentor One', 'eval_date', '2026-10-10',
+      'field', 'Field 4', 'kickoff', '09:00', 'referee_name', 'Zedjo', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-10-10T16:00:00Z'),
+    -- row 3: only on the form, the field typed another way
+    jsonb_build_object('row', 3, 'source_key', 'test-sheet|sched', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-10-10',
+      'field', 'FIELD  4', 'kickoff', '09:00', 'referee_name', 'zedkim', 'position', 'AR', 'appearance', '3',
+      'saved_at', '2026-10-10T16:01:00Z'),
+    -- row 4: two Zedams on that game
+    jsonb_build_object('row', 4, 'source_key', 'test-sheet|sched', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-10-10',
+      'field', 'Field 5', 'kickoff', '09:00', 'referee_name', 'Zedam', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-10-10T16:02:00Z'),
+    -- row 5: the admin turned the completion off
+    jsonb_build_object('row', 5, 'source_key', 'test-sheet|sched', 'mentor_name', 'Zz Mentor Two', 'eval_date', '2026-10-10',
+      'field', 'Field 4', 'kickoff', '09:00', 'referee_name', 'Zedkim', 'position', 'AR', 'appearance', '3',
+      'saved_at', '2026-10-10T16:03:00Z', 'use_schedule', false),
+    -- row 6: right name, wrong kickoff
+    jsonb_build_object('row', 6, 'source_key', 'test-sheet|sched', 'mentor_name', 'Zz Mentor Two', 'eval_date', '2026-10-10',
+      'field', 'Field 4', 'kickoff', '10:00', 'referee_name', 'Zedjo', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-10-10T16:04:00Z'));
+  st text[]; names text[]; sched boolean[];
+begin
+  select array_agg(out_status order by out_row), array_agg(coalesce(out_referee, '-') order by out_row),
+         array_agg(out_from_schedule order by out_row)
+  into st, names, sched from public.import_form_evaluations(resp);
+  assert st = array['in_app', 'new', 'new', 'new', 'new'], format('FAIL: schedule preview statuses were %s', st);
+  assert names = array['Zedjo Ellis', 'Zedkim Park', '-', '-', '-'], format('FAIL: schedule completions were %s', names);
+  assert sched = array[true, true, false, false, false], format('FAIL: completions not flagged: %s', sched);
+  assert not exists (select 1 from public.referees where display_name = 'Zedkim Park'),
+    'FAIL: a preview created a referee';
+
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st = array['in_app', 'new', 'new', 'new', 'new'], format('FAIL: schedule import statuses were %s', st);
+  assert not exists (select 1 from public.evaluations where source = 'form' and form_source_key = 'test-sheet|sched' and form_row = 2),
+    'FAIL: a first-name copy of an app evaluation was imported';
+  assert (select r.display_name from public.evaluations e join public.referees r on r.id = e.referee_id
+          where e.form_source_key = 'test-sheet|sched' and e.form_row = 3) = 'Zedkim Park',
+    'FAIL: a completed name was not filed under the full name';
+  assert (select referee_name from public.evaluations where form_source_key = 'test-sheet|sched' and form_row = 3) = 'zedkim',
+    'FAIL: the name the mentor typed was not kept on the row';
+  assert (select r.display_name from public.evaluations e join public.referees r on r.id = e.referee_id
+          where e.form_source_key = 'test-sheet|sched' and e.form_row = 4) = 'Zedam',
+    'FAIL: an ambiguous first name was completed';
+  assert (select r.display_name from public.evaluations e join public.referees r on r.id = e.referee_id
+          where e.form_source_key = 'test-sheet|sched' and e.form_row = 5) = 'Zedkim',
+    'FAIL: a completion the admin turned off was applied';
+
+  -- Importing again changes nothing.
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st = array['in_app', 'same', 'same', 'same', 'same'], format('FAIL: re-importing changed something: %s', st);
+end $$;
+
+-- ---------- a merge made by an admin survives re-importing ----------
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare
+  r jsonb := jsonb_build_object('row', 2, 'source_key', 'test-sheet|merge', 'mentor_name', 'Zz Test Mentor',
+    'eval_date', '2026-10-17', 'field', 'Field 9', 'kickoff', '09:00', 'referee_name', 'Zedmerge', 'position', 'CR',
+    'appearance', '3', 'saved_at', '2026-10-17T16:00:00Z');
+  st text[]; whole uuid; bare uuid; shown text;
+begin
+  perform public.import_form_evaluations(jsonb_build_array(r), true);
+  select referee_id into bare from public.evaluations where form_source_key = 'test-sheet|merge';
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-merge-app', 'Zedmerge Fullname') || '{"eval_date": "2026-10-18"}'));
+  select referee_id into whole from public.evaluations where client_id = 'zz-merge-app';
+  perform public.merge_referees(bare, whole);
+
+  -- The response is edited on the form afterwards.
+  r := r || '{"comments": "Edited later", "saved_at": "2026-10-18T08:00:00Z"}';
+  select array_agg(out_status), max(out_referee) into st, shown from public.import_form_evaluations(jsonb_build_array(r));
+  assert st = array['changed'] and shown = 'Zedmerge Fullname',
+    format('FAIL: the preview of a merged row said %s under %s', st, shown);
+  perform public.import_form_evaluations(jsonb_build_array(r), true);
+  assert (select referee_id from public.evaluations where form_source_key = 'test-sheet|merge') = whole,
+    'FAIL: re-importing an edited response undid the admin''s merge';
+  assert (select comments from public.evaluations where form_source_key = 'test-sheet|merge') = 'Edited later',
+    'FAIL: the edit was not imported';
+end $$;
+
+-- ---------- a first-name row imported before its schedule was saved ----------
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare
+  r jsonb := jsonb_build_object('row', 2, 'source_key', 'test-sheet|late', 'mentor_name', 'Zz Test Mentor',
+    'eval_date', '2026-10-24', 'field', 'Field 4', 'kickoff', '09:00', 'referee_name', 'Zedlate', 'position', 'CR',
+    'appearance', '3', 'saved_at', '2026-10-24T16:00:00Z');
+  st text[];
+begin
+  perform public.import_form_evaluations(jsonb_build_array(r), true);
+  perform public.save_schedule(jsonb_build_array(
+    jsonb_build_object('date', '2026-10-24', 'field', 'Field 4', 'kickoff', '09:00', 'referee_name', 'Zedlate Newton')));
+  select array_agg(out_status) into st from public.import_form_evaluations(jsonb_build_array(r), true);
+  assert st = array['changed'], format('FAIL: a completable first-name row was not re-filed: %s', st);
+  assert (select r2.display_name from public.evaluations e join public.referees r2 on r2.id = e.referee_id
+          where e.form_source_key = 'test-sheet|late') = 'Zedlate Newton',
+    'FAIL: a first-name row was not moved to the full name the schedule gives';
+  select array_agg(out_status) into st from public.import_form_evaluations(jsonb_build_array(r), true);
+  assert st = array['same'], format('FAIL: re-importing a re-filed row changed it again: %s', st);
+end $$;
+
+-- ---------- the prune matches the owning account ----------
+reset role;
+insert into public.evaluations (mentor_id, client_id, source, form_source_key, form_row, form_owner_mentor_id,
+                                referee_id, referee_name, mentor_name, eval_date, position, saved_at)
+select null, 'form:zz-owned', 'form', 'test-sheet|owned', 2, '5d1e0000-0000-4000-8000-00000000000b',
+       referee_id, 'Zedjo Ellis', 'Mentor One Nickname', '2026-10-10', 'CR', '2026-10-10T20:00:00Z'
+from public.evaluations where client_id = 'zz-sched-app';
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$ begin
+  assert exists (select 1 from public.prune_duplicate_form_evaluations() where form_client = 'form:zz-owned'),
+    'FAIL: the prune missed a copy owned by the uploading account under another typed name';
+end $$;
+
+-- ---------- a deletion request clears the schedule too ----------
+do $$
+declare rid uuid;
+begin
+  select referee_id into rid from public.evaluations where form_source_key = 'test-sheet|sched' and form_row = 3;
+  perform public.delete_referee_records(rid);
+end $$;
+reset role;
+do $$ begin
+  assert not exists (select 1 from public.schedule_slots where referee_name = 'Zedkim Park'),
+    'FAIL: deleting a referee''s records left their name in the saved schedule';
+  assert exists (select 1 from public.schedule_slots where referee_name = 'Zedjo Ellis'),
+    'FAIL: deleting one referee''s records removed someone else from the schedule';
+end $$;
+
 -- ---------- demote then re-approve: access follows the role ----------
 
 reset role;

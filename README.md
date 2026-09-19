@@ -117,7 +117,7 @@ The console keeps no copy of the league's data in the browser; it reads it fresh
 Some mentors only fill in the Referee Evaluation form. **Import** in the admin console brings those responses into the database, so they count in referee profiles like any other evaluation.
 
 1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. If the sheet has several tabs, copy the link while the responses tab is open, so it carries `#gid=…`.
-2. Paste the link into **Import** and choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
+2. Paste the link into **Import**, and paste the league's schedule sheet into **Link to the schedule sheet** below it (optional, but it is what completes the first names mentors type — see below). Choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
 3. Choose **Import**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
 
 **Never sort, delete or insert rows in the responses tab.** Imported evaluations are matched to their sheet row. If rows move, the import recognises each moved response by its time stamp and refuses it (with the reason) rather than overwrite another evaluation. You then have to put the rows back in their original order to go on. To hide or tidy responses, use a filter view or another tab instead.
@@ -155,6 +155,41 @@ Where the schedule only ever gives one name, two children called Jordan still
 share a profile until someone types more. The lasting fix is fuller names in
 the schedule.
 
+### First names on the form, completed from the schedule
+
+Mentors type the referee's name into the form by hand, and often type only a
+first name. "Jordan" and "Jordan Ellis" are two different referees, so the
+response used to import beside the mentor's own upload as a second copy of one
+evaluation.
+
+When the schedule sheet's link is filled in on **Import**, every fetch saves
+that week's games — date, field, kickoff and crew — to the database, and the
+import completes a one-word name from them: the referee on **that game** whose
+first name it is. The league's sheet only ever shows the current week, which is
+why each fetch saves it; older weeks stay behind for older responses.
+
+A name is completed **only when exactly one referee on that game has it**. Two
+Jordans on the same game, no schedule for that game, or a schedule that lists
+only "Jordan" itself: the name is left exactly as typed. Guessing would file one
+child's ratings and comments on another child's profile, which is worse than a
+duplicate.
+
+Every completion is shown in the preview before anything is saved — "Jordan,
+filed as Jordan Ellis (schedule)" — with a box you can clear to import that one
+response under the name as typed. The evaluation always keeps the mentor's own
+wording; it is the profile it counts towards that changes.
+
+Once an imported response is filed under a referee, it stays there while its
+name on the form is unchanged, including when you have merged it onto someone
+yourself. The exception is a response still filed under a bare first name: if
+the schedule can complete it later, the next import moves it.
+
+The schedule sheet is read exactly like the mentor app reads it (Date, Time,
+Field, and CR/AR or Crew columns, found by name), and needs the same
+**Anyone with the link can view** sharing. It holds referees' names, so keep the
+link among league leadership. **Delete all records** on a referee clears their
+schedule rows too.
+
 ### Duplicate evaluations from the form import
 
 The league takes one evaluation per referee per day per mentor, and the app
@@ -170,6 +205,23 @@ only reports:
 ```sql
 select * from public.prune_duplicate_form_evaluations();
 ```
+
+The SQL Editor is not signed in as anyone, so that call answers **"Only an
+admin can prune imported evaluations"**. Say which admin you are for the one
+transaction, and nothing is left behind afterwards:
+
+```sql
+begin;
+select set_config('request.jwt.claims',
+  json_build_object('sub', (select id from public.mentors where role = 'admin' limit 1),
+                    'role', 'authenticated')::text, true);
+select * from public.prune_duplicate_form_evaluations();
+rollback;
+```
+
+Run it again with `prune_duplicate_form_evaluations(true)` and `commit;` in
+place of `rollback;` once the list looks right. The same applies to any other
+admin-only function run from the SQL Editor.
 
 Each row is a form-imported evaluation that duplicates an app one, and names
 the app evaluation it duplicates. Once the list looks right, remove them:
