@@ -2886,7 +2886,10 @@
       let h = Number(m[1]);
       const ap = (m[3] || '').toLowerCase();
       if (ap === 'p' && h < 12) h += 12;
-      if (ap === 'a' && h === 12) h = 0;
+      // "12:30 AM" is half past NOON here, and deliberately not midnight. A
+      // mentor types 12:30 into the form; the sheet decides that is AM; this
+      // read it as 00:30, a kickoff no game has ever had and one that matches
+      // no game on the schedule. Every other AM hour is left alone.
       return `${pad2(h)}:${m[2]}`;
     }
     function formStamp(v) {  // the response time, "9/12/2026 15:04:05", in this computer's time zone
@@ -2945,8 +2948,8 @@
       let h = Number(m[1]); const mi = m[2] ? Number(m[2]) : 0;
       const ap = (m[3] || '').toLowerCase();
       if (ap === 'p' && h < 12) h += 12;
-      if (ap === 'a' && h === 12) h = 0;
       if (!ap && h >= 1 && h <= 6) h += 12;
+      // As in formTime: "12:30 AM" on a schedule is half past noon.
       if (h > 23 || mi > 59) return '';
       return `${pad2(h)}:${pad2(mi)}`;
     }
