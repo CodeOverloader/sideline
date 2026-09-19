@@ -1428,6 +1428,17 @@
     ];
     const CAT_SHORT = {...Object.fromEntries(RATED.map(c => [c.id, c.short])), general: 'General'};
     const DIVISIONS = ['PK', 'Kindergarten', '1st', '2nd', '3rd', '4th', '5th', '6th', 'Middle School', 'High School', 'Adult'];
+
+    /* Divisions refereed without assistant referees do not play offside, but
+       the Google Form still wants a 1 in the offside box for those games. That
+       1 describes the division, not the referee, so it must not reach any
+       average. Keep this list in step with DIVISION_RULES in the mentor app -
+       both answer the same question and the numbers have to agree. */
+    const NO_OFFSIDE = [/^pre-?k/i, /^pk$/i, /^kinder/i, /^1st/i, /^2nd/i];
+    const divisionHasOffside = (d) => !NO_OFFSIDE.some(re => re.test(String(d || '').trim()));
+    const ratedFor = (d) => (divisionHasOffside(d) ? RATED : RATED.filter(c => c.id !== 'offsides'));
+    // Does this category count for this evaluation?
+    const countsFor = (catId, division) => catId !== 'offsides' || divisionHasOffside(division);
     const POL = {1: ['+', 'p1', 'Strength'], '-1': ['−', 'm1', 'To work on'], 2: ['↑', 'up', 'Improved after being told']};
     const EVAL_COLS = 'id,mentor_id,referee_id,referee_name,mentor_name,eval_date,field,pitch,kickoff,' +
       'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at,client_id';
@@ -1443,7 +1454,7 @@
     const people = (n) => `${n.toLocaleString()} ${n === 1 ? 'person' : 'people'}`;
     const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
     const fmtAvg = (v) => (v == null ? '–' : v.toFixed(1));
-    const evalAvg = (r) => mean(RATED.map(c => r.ratings[c.id]).filter(v => typeof v === 'number'));
+    const evalAvg = (r) => mean(ratedFor(r.division).map(c => r.ratings[c.id]).filter(v => typeof v === 'number'));
     // Lookups keyed by values from the database: "constructor" is not a category.
     const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : undefined);
     const pad2 = (n) => String(n).padStart(2, '0');
@@ -1849,7 +1860,8 @@
       const evals = records.slice().sort((a, b) =>
         (b.date || '').localeCompare(a.date || '') || (b.savedAt || 0) - (a.savedAt || 0));
       const cats = RATED.map(c => {
-        const vals = evals.map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
+        const vals = evals.filter(r => countsFor(c.id, r.division))
+          .map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
         let trend = null;
         if (vals.length >= 4) {
           const d = mean(vals.slice(0, 3)) - mean(vals.slice(3));
@@ -2336,7 +2348,10 @@
       const {unit, buckets} = timeBuckets(evals, b);
       CHARTS.set('chWhen', (el) => columnChart(el, buckets));
       const skills = RATED.map(c => {
-        const vals = evals.map(e => e.ratings[c.id]).filter(v => typeof v === 'number');
+        // Without the filter, every Kindergarten and 1st-grade game's forced 1
+        // lands here and offside reads as the league's weakest skill.
+        const vals = evals.filter(e => countsFor(c.id, e.division))
+          .map(e => e.ratings[c.id]).filter(v => typeof v === 'number');
         return {...c, avg: mean(vals), n: vals.length};
       });
       CHARTS.set('chSkills', (el) => skillChart(el, skills));

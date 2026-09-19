@@ -2105,20 +2105,28 @@
        That is handled with a `sub` on each field entry: an internal A/B label
        used everywhere in the app and deliberately absent from the block you
        paste into the form. Default crew is 1, since each pitch has one official. */
+    /* `offside` says whether the division plays offside at all. It tracks the
+       crew size for a reason: offside arrives with the assistant referees who
+       judge it, so the divisions refereed without ARs are the ones that do not
+       play it. The form still wants a 1 in the offside box for those games -
+       but a 1 there is a note about the division, not about the referee, and
+       everything that averages or ranks referees has to know the difference.
+       If the league enforces offside lower down than this, change it here: it
+       is the only place the answer is written. */
     const DIVISION_RULES = [
       // Matched in order against the sheet's division name.
       // pitches:2 means two simultaneous games sharing one field, one official each.
-      {re: /^pre-?k/i, form: 'PK', pitches: 2, crew: 1},
-      {re: /^kinder/i, form: 'Kindergarten', pitches: 2, crew: 1},
-      {re: /^1st/i, form: '1st', pitches: 1, crew: 2},
-      {re: /^2nd/i, form: '2nd', pitches: 1, crew: 2},
-      {re: /^3rd/i, form: '3rd', pitches: 1, crew: 3},
-      {re: /^4th/i, form: '4th', pitches: 1, crew: 3},
-      {re: /^5th/i, form: '5th', pitches: 1, crew: 3},
-      {re: /^6th/i, form: '6th', pitches: 1, crew: 3},
-      {re: /^middle\s*school/i, form: 'Middle School', pitches: 1, crew: 3},
-      {re: /^high\s*school/i, form: 'High School', pitches: 1, crew: 3},
-      {re: /^adult/i, form: 'Adult', pitches: 1, crew: 3},
+      {re: /^pre-?k/i, form: 'PK', pitches: 2, crew: 1, offside: false},
+      {re: /^kinder/i, form: 'Kindergarten', pitches: 2, crew: 1, offside: false},
+      {re: /^1st/i, form: '1st', pitches: 1, crew: 2, offside: false},
+      {re: /^2nd/i, form: '2nd', pitches: 1, crew: 2, offside: false},
+      {re: /^3rd/i, form: '3rd', pitches: 1, crew: 3, offside: true},
+      {re: /^4th/i, form: '4th', pitches: 1, crew: 3, offside: true},
+      {re: /^5th/i, form: '5th', pitches: 1, crew: 3, offside: true},
+      {re: /^6th/i, form: '6th', pitches: 1, crew: 3, offside: true},
+      {re: /^middle\s*school/i, form: 'Middle School', pitches: 1, crew: 3, offside: true},
+      {re: /^high\s*school/i, form: 'High School', pitches: 1, crew: 3, offside: true},
+      {re: /^adult/i, form: 'Adult', pitches: 1, crew: 3, offside: true},
     ];
     /* The schedule fills CR 1 + CR 2 with no ARs for Pre-K, Kindergarten, 1st AND
        2nd grade - the rows are indistinguishable. Only the division says whether
@@ -2126,8 +2134,33 @@
        game with a dual-referee crew (1st, 2nd). So splitting keys off division,
        never off "there are no ARs". */
     function divisionRule(v) {
-      const t = String(v || '');
-      return DIVISION_RULES.find(r => r.re.test(t)) || null;
+      const t = String(v || '').trim();
+      if (!t) return null;
+      /* Two spellings reach this. The sheet's, which the patterns are written
+         for ("Pre-K Girls"), and the form's own value, which is what normDiv
+         stores and what every saved evaluation carries. Those are not always
+         the same string: "Pre-K Girls" normalises to "PK", and /^pre-?k/ does
+         not match "PK". Missing that made PK - the very youngest referees -
+         the one division the offside rule failed to recognise. */
+      return DIVISION_RULES.find(r => r.re.test(t))
+        || DIVISION_RULES.find(r => r.form.toLowerCase() === t.toLowerCase())
+        || null;
+    }
+
+    /* Does this division play offside? Anything we do not recognise - a blank
+       division, a typo, a new age group - answers yes, which is how the app
+       behaved before this existed. Guessing "no" would quietly delete a real
+       offside rating from a referee's record, and that is the worse mistake. */
+    function divisionHasOffside(division) {
+      const r = divisionRule(division);
+      return r ? r.offside !== false : true;
+    }
+
+    /* The categories a record can fairly be judged on. Offside drops out for
+       divisions that do not play it, so a Kindergarten referee is averaged over
+       the five things they were actually there to do. */
+    function ratedFor(division) {
+      return divisionHasOffside(division) ? RATED : RATED.filter(c => c.id !== 'offsides');
     }
 
     const SUBS = ['A', 'B', 'C', 'D'];
@@ -3089,7 +3122,11 @@
       if (work.length) parts.push('To work on: ' + work.join('; ') + '.');
       // The halftime story: what you corrected at the break and they fixed after.
       if (better.length) parts.push('Improved after halftime: ' + better.join('; ') + '.');
-      if (ref.noOffsides) parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
+      if (field && field.division && !divisionHasOffside(field.division)) {
+        parts.push(`${field.division} does not play offside, so offside is scored 1 per the form instructions.`);
+      } else if (ref.noOffsides) {
+        parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
+      }
       if (!parts.length) parts.push(`Watched ${refDisplay(ref)} at ${field.name || 'the field'}. `);
       return parts.join(' ');
     }
@@ -3098,26 +3135,46 @@
       const p = activePair();
       if (!p) {$('#scoreBody').innerHTML = '<div class="empty">Pick a referee first.</div>'; return;}
       const {field, ref} = p;
+
+      /* In a division that does not play offside, the form still wants a 1 in
+         that box. Fill it in and say why, rather than leaving the mentor to
+         find the checkbox and do it by hand every single game. Nothing here
+         counts towards the referee's average - see ratedFor(). */
+      const noOffsideDivision = !!field.division && !divisionHasOffside(field.division);
+      if (noOffsideDivision && ref.ratings.offsides !== 1) {
+        ref.ratings.offsides = 1;
+        save();
+      }
+
       if (!ref.comments && !ref.commentsEdited) ref.comments = buildComments(ref, field);
 
       const scales = RATED.map(c => {
         const t = catTally(ref, c.id);
-        const locked = c.id === 'offsides' && ref.noOffsides;
+        const locked = c.id === 'offsides' && (ref.noOffsides || noOffsideDivision);
         const bits = [];
         if (t.plus) bits.push(`${t.plus} strength${t.plus === 1 ? '' : 's'}`);
         if (t.minus) bits.push(`${t.minus} to work on`);
         if (t.better) bits.push(`${t.better} improved`);
         const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
+        /* In a division with no offside, the form's 1 would otherwise sit there
+           labelled "Needs work" - the exact thing this whole rule exists to
+           stop the app saying about a referee. It reads "Not played" instead. */
+        const wordFor = (v) => (c.id === 'offsides' && noOffsideDivision && v === 1)
+          ? 'Not played' : RATING_WORDS[v];
         const nums = [1, 2, 3, 4].map(v => `<button data-rate="${c.id}|${v}"
       aria-pressed="${ref.ratings[c.id] === v}"
-      aria-label="${v} - ${esc(RATING_WORDS[v])}" ${locked ? 'disabled style="opacity:.45"' : ''}>
-      <span class="rn">${v}</span><span class="rw">${esc(RATING_WORDS[v])}</span></button>`).join('');
+      aria-label="${v} - ${esc(wordFor(v))}" ${locked ? 'disabled style="opacity:.45"' : ''}>
+      <span class="rn">${v}</span><span class="rw">${esc(wordFor(v))}</span></button>`).join('');
         return `<div class="ratewrap">
       <div class="rlabel">${esc(c.label)}</div>
-      <div class="rhint">${esc(hint)}${c.id === 'offsides' ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
+      <div class="rhint">${esc(hint)}${c.id === 'offsides' && !noOffsideDivision
+          ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
       <div class="scale"><div class="nums">${nums}</div></div>
-      ${c.id === 'offsides' ? `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
-        No offside situations this game</label>` : ''}
+      ${c.id !== 'offsides' ? '' : noOffsideDivision
+          ? `<div class="okbox" style="margin-top:8px">${esc(field.division)} does not play offside, so the
+        form's 1 is filled in for you. It is not counted against ${esc(refDisplay(ref))}.</div>`
+          : `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
+        No offside situations this game</label>`}
     </div>`;
       }).join('');
 
@@ -4217,7 +4274,14 @@
     }
     const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
     const fmtAvg = (v) => (v == null ? '–' : v.toFixed(1));
-    function evalAvg(r) {return mean(RATED.map(c => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number'));}
+    /* Averages only the categories that apply to the division this evaluation
+       was written in. Reading it off r.division rather than off a stored flag
+       means evaluations saved before this fix - and every one pulled from the
+       league - are scored correctly too, with no migration. */
+    function evalAvg(r) {
+      return mean(ratedFor(r && r.division).map(c => r.ratings && r.ratings[c.id])
+        .filter(v => typeof v === 'number'));
+    }
 
     let profileCache = null;
     function invalidateProfiles() {profileCache = null;}
@@ -4295,7 +4359,11 @@
       const evals = records.slice().sort((a, b) =>
         (b.date || '').localeCompare(a.date || '') || (b.savedAt || 0) - (a.savedAt || 0));
       const cats = RATED.map(c => {
-        const vals = evals.map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
+        // Same rule per category: a division that does not play offside
+        // contributes nothing to the offside average, rather than contributing
+        // the 1 the form made the mentor write.
+        const vals = evals.filter(r => c.id !== 'offsides' || divisionHasOffside(r.division))
+          .map(r => r.ratings && r.ratings[c.id]).filter(v => typeof v === 'number');
         // Trend compares the three most recent ratings with everything before.
         let trend = null;
         if (vals.length >= 4) {
