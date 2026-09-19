@@ -1,0 +1,36 @@
+# Supabase pauses a free project after a week with little database activity,
+# and Sideline is used on Saturdays, with bye weeks and an off-season. This
+# asks the database a trivial question twice a day so it stays awake.
+#
+# If this job starts failing, the project is probably paused already:
+# resume it from the Supabase dashboard. GitHub emails the repo owner about
+# failed runs. It also switches scheduled jobs off in a public repo after
+# 60 days without commits, and emails about that too; re-enable the job
+# under Actions -> Keep Supabase awake.
+#
+# The URL and key are the same public values index.html carries. The key is
+# the publishable one, and keep_alive() reads nothing.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '17 9,21 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call keep_alive()
+        env:
+          SUPABASE_URL: https://kgilrxcboicdxjbxldgw.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_VuoFX_hWHaODI-BBWa0uiQ_Uduxp-TQ
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 30 --retry 3 --retry-delay 20 \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/keep_alive" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'

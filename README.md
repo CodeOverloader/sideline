@@ -47,6 +47,10 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
    The app asks for the code rather than using a link because, on an iPhone, email links open in Safari instead of the installed app.
 
+   **Make the code short-lived.** Under **Authentication → Providers → Email**, set **Email OTP Expiration** to `600` seconds (the default is an hour), and consider an **Email OTP Length** of `8` (the app accepts 6 to 10 digits). The short lifetime is what stops someone guessing an admin's code: with an hour to try, guesses from many addresses add up. Under **Authentication → Rate Limits**, keep the limits on sign-in emails and code checks at their defaults or lower. Don't raise them to work around email delivery.
+
+   **Turn on bot protection before inviting people.** Anyone can ask the app for a code for any address, which adds a waiting account to your list and sends an email from your SMTP account. Supabase's CAPTCHA option (**Authentication → Attack Protection**) stops scripts doing that, but the app has to send a CAPTCHA token first, so ask for that change before switching it on. Switching it on without that change blocks every sign-in.
+
 4. **Set the site URL.** Under **Authentication → URL Configuration**, set it to `https://sideline.codeoverload.dev/`.
 
 5. **Create the database.** Either way below works, and running both is harmless:
@@ -70,7 +74,9 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
    From then on you approve other mentors, and make other leaders admins, in the [admin console](#the-admin-console).
 
-9. **Keep the project awake.** Supabase pauses free projects after a period without activity, and a Saturday-only app can hit that. Check the current policy on Supabase's pricing page, then either use a paid plan or set up a scheduled request that keeps the project active.
+9. **Keep the project awake, and back it up.** Sideline runs on Supabase's free plan, which pauses a project after a week with little database activity and keeps no backups.
+   - **Pausing.** The GitHub job `.github/workflows/keep-supabase-awake.yml` calls the database twice a day, which is enough to stop it. If a run fails, GitHub emails you: the project is probably paused, so resume it from the Supabase dashboard. GitHub switches scheduled jobs off in a public repo after 60 days without commits (it emails about that too). Switch it back on under **Actions → Keep Supabase awake**. While the project is paused, note-taking still works, but signing in, uploading and referee profiles do not.
+   - **Backups.** Every week or two, open the admin console's **Evaluations** page and use its CSV export. Keep the file somewhere private, never in this repository: it holds evaluations of named minors. It is the league's copy if a **Delete all records** or a bad change ever has to be undone by hand. Supabase's Pro plan ($25 a month) adds daily backups and never pauses, if the league ever wants that instead.
 
 10. **Get sign-off before inviting others.** Evaluations are written assessments of named referees, many of them minors. Make sure the league knows where they are stored and who can read them before other mentors start uploading.
 
@@ -86,6 +92,8 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 Only *saved* evaluations are uploaded. Games and notes you are still working on stay on the phone.
 
 Admin is for league leadership, such as the assignor, not for mentors. The app itself looks the same for an admin as for a mentor, apart from a link to the console on the Account sheet.
+
+An uploaded evaluation is credited to its account's name, which follows the name the mentor types in the app. The phone cannot claim someone else's name, and two accounts cannot share one: the second is asked to add a middle initial. An imported form evaluation belongs to the account that had its mentor name when it was first imported, and only that account's upload of the same game replaces it. Renaming later, or taking a removed mentor's name, does not change who it belongs to.
 
 ## The admin console
 
@@ -112,6 +120,8 @@ Some mentors only fill in the Referee Evaluation form. **Import** in the admin c
 2. Paste the link into **Import** and choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
 3. Choose **Import**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
 
+**Never sort, delete or insert rows in the responses tab.** Imported evaluations are matched to their sheet row. If rows move, the import recognises each moved response by its time stamp and refuses it (with the reason) rather than overwrite another evaluation. You then have to put the rows back in their original order to go on. To hide or tidy responses, use a filter view or another tab instead.
+
 A response counts as already uploaded from the app when the app has an evaluation of the same referee, on the same date, in the same position (and kickoff, when both have one), by a mentor with the same name. It is skipped, because the app's copy has the notes. If a mentor uploads from the app after their form response was imported, the imported copy is replaced by the app's.
 
 Imported evaluations are credited to the name typed on the form, not to an account. Only admins can change or delete them. **Delete all records** on a referee removes them too.
@@ -125,3 +135,13 @@ select public.delete_referee_records('<referee id>');
 ```
 
 Removing a mentor's account keeps their evaluations, attributed by the name they entered on the form. In the admin console, **Revoke** their access, then **Reject** them from the waiting list. If that fails, delete the user under **Authentication → Users** instead.
+
+### A lost or stolen phone
+
+A signed-in phone stays signed in, and keeps a copy of the league's evaluations for use without signal. If one goes missing:
+
+1. **Revoke** that mentor's access in the admin console straight away. The database stops answering that account at once, and the phone deletes its copy of other mentors' evaluations the next time it connects.
+2. The mentor signs in on another phone or computer and chooses **Sign out on all devices** on the Account sheet. That ends the lost phone's login too, within the hour.
+3. The mentor signs in again, and you approve them again. Approve them only after step 2: the lost phone would otherwise get its access back with them.
+
+On a paid Supabase plan you can also set **Authentication → Sessions → Inactivity timeout** (for example 30 days), so a forgotten phone signs itself out.
