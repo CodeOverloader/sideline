@@ -50,11 +50,19 @@ returns trigger
 language plpgsql security definer
 set search_path = ''
 as $$
+declare
+  nk text;
 begin
   new.display_name := btrim(coalesce(new.display_name, ''));
-  if public.name_key(new.display_name) <> '' and exists (
+  nk := public.name_key(new.display_name);
+  if nk <> '' then
+    -- Serialize by normalized name so two concurrent renames/inserts cannot
+    -- both pass the uniqueness check.
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('mentor-name:' || nk, 0));
+  end if;
+  if nk <> '' and exists (
       select 1 from public.mentors m
-      where m.id <> new.id and public.name_key(m.display_name) = public.name_key(new.display_name)) then
+      where m.id <> new.id and public.name_key(m.display_name) = nk) then
     raise exception 'Another mentor account already uses the name "%". Add a middle initial or similar so the two of you can be told apart.',
       new.display_name using errcode = '23505';
   end if;
@@ -70,6 +78,9 @@ create trigger mentors_name_check
 -- ------------------------------------------------------------
 -- 1b. save_evaluations: the account's name, and only its own form rows
 -- ------------------------------------------------------------
+alter table public.evaluations
+  add column if not exists form_owner_mentor_id uuid;
+
 create or replace function public.save_evaluations(p_items jsonb)
 returns table (out_client_id text, out_referee_id uuid, out_updated_at timestamptz, out_error text)
 language plpgsql security definer
@@ -166,9 +177,9 @@ begin
       if public.name_key(my_name) <> '' then
         delete from public.evaluations f
         where f.source = 'form' and f.referee_id = rid
+          and f.form_owner_mentor_id = me
           and f.eval_date = nullif(it ->> 'eval_date', '')::date
           and f.position = it ->> 'position'
-          and public.name_key(f.mentor_name) = public.name_key(my_name)
           and (f.kickoff is null or nullif(it ->> 'kickoff', '') is null
                or f.kickoff = nullif(it ->> 'kickoff', '')::time);
       end if;
@@ -204,6 +215,8 @@ declare
   pos text;
   source_key text;
   row_no integer;
+  owner_id uuid;
+  incoming_saved_at timestamptz;
   cur public.evaluations%rowtype;
   have boolean;
 begin
@@ -246,8 +259,16 @@ begin
       end if;
       d := nullif(it ->> 'eval_date', '')::date;
       k := nullif(it ->> 'kickoff', '')::time;
+      incoming_saved_at := nullif(it ->> 'saved_at', '')::timestamptz;
       cid := public.form_client_id(source_key, row_no);
       rid := public.find_referee(nm);
+      owner_id := null;
+      if public.name_key(mentor) <> '' then
+        select m.id into owner_id
+        from public.mentors m
+        where public.name_key(m.display_name) = public.name_key(mentor)
+        limit 1;
+      end if;
 
       -- Already uploaded from the app by the mentor named on the form. The
       -- name is the evaluation's account's name, which its owner cannot set
@@ -280,12 +301,13 @@ begin
           end if;
         end if;
 
-        -- A row that now holds a different referee in a different game than
-        -- the response imported from it means rows were deleted or sorted
-        -- in the sheet. Updating would overwrite another evaluation.
-        if have and public.name_key(cur.referee_name) <> public.name_key(nm)
-           and (cur.eval_date is distinct from d or cur.kickoff is distinct from k or cur.position <> pos
-                or public.name_key(cur.mentor_name) <> public.name_key(mentor)) then
+        -- Each form response keeps its original saved_at. If the same sheet
+        -- row now has a different saved_at, rows were sorted/deleted and this
+        -- row now points at a different response.
+        if have then
+          incoming_saved_at := coalesce(incoming_saved_at, cur.saved_at);
+        end if;
+        if have and incoming_saved_at is distinct from cur.saved_at then
           raise exception 'Row % no longer holds the response imported from it (that was % by %). Rows in the responses sheet may have been deleted or sorted: put them back in their original order, then import again.',
             row_no, cur.referee_name, cur.mentor_name using errcode = '22023';
         end if;
@@ -309,24 +331,25 @@ begin
         if p_apply and out_status in ('new', 'changed') then
           rid := public.ensure_referee(nm);
           insert into public.evaluations as e (
-            mentor_id, client_id, source, form_source_key, form_row,
+            mentor_id, client_id, source, form_source_key, form_row, form_owner_mentor_id,
             referee_id, referee_name, mentor_name, eval_date, field, pitch, kickoff, division, position,
             appearance, workrate, commands, teamwork, fouls, offsides, move_up, comments, notes, saved_at)
           values (
-            null, cid, 'form', source_key, row_no,
+            null, cid, 'form', source_key, row_no, owner_id,
             rid, nm, mentor, d, coalesce(it ->> 'field', ''), '', k, coalesce(it ->> 'division', ''), pos,
             (it ->> 'appearance')::smallint, (it ->> 'workrate')::smallint, (it ->> 'commands')::smallint,
             (it ->> 'teamwork')::smallint, (it ->> 'fouls')::smallint, (it ->> 'offsides')::smallint,
             nullif(it ->> 'move_up', ''), coalesce(it ->> 'comments', ''), '[]'::jsonb,
-            coalesce(nullif(it ->> 'saved_at', '')::timestamptz, now()))
+            coalesce(incoming_saved_at, now()))
           on conflict (client_id) where source = 'form' do update set
             form_source_key = excluded.form_source_key, form_row = excluded.form_row,
+            form_owner_mentor_id = coalesce(e.form_owner_mentor_id, excluded.form_owner_mentor_id),
             referee_id = excluded.referee_id, referee_name = excluded.referee_name, mentor_name = excluded.mentor_name,
             eval_date = excluded.eval_date, field = excluded.field, pitch = excluded.pitch, kickoff = excluded.kickoff,
             division = excluded.division, position = excluded.position, appearance = excluded.appearance,
             workrate = excluded.workrate, commands = excluded.commands, teamwork = excluded.teamwork,
             fouls = excluded.fouls, offsides = excluded.offsides, move_up = excluded.move_up,
-            comments = excluded.comments, saved_at = excluded.saved_at;
+            comments = excluded.comments;
         end if;
       end if;
     exception

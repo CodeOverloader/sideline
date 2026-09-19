@@ -328,6 +328,7 @@ declare
     jsonb_build_object('row', 6, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '08:00',
       'referee_name', 'Zed Legacy', 'position', 'CR', 'saved_at', '2026-09-12T14:00:00Z'));
   sorted jsonb;
+  shifted_same_ref jsonb;
   st text[];
 begin
   perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-10', 'Zed Twin')));
@@ -362,6 +363,16 @@ begin
      and (select referee_name from public.evaluations where source = 'form' and form_row = 5) = 'Zed Spoofed',
     'FAIL: a sorted sheet overwrote an evaluation';
 
+  -- Row 3 now points at another response for the same referee: still refuse it.
+  shifted_same_ref := jsonb_set(resp, '{1,eval_date}', '"2026-09-14"');
+  shifted_same_ref := jsonb_set(shifted_same_ref, '{1,kickoff}', '"12:30"');
+  shifted_same_ref := jsonb_set(shifted_same_ref, '{1,saved_at}', '"2026-09-14T18:45:00Z"');
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(shifted_same_ref, true);
+  assert st[2] = 'error', format('FAIL: a shifted row for the same referee was not refused: %s', st);
+  assert (select eval_date from public.evaluations where source = 'form' and form_row = 3) = '2026-09-12'::date
+     and (select kickoff from public.evaluations where source = 'form' and form_row = 3) = '10:15'::time,
+    'FAIL: a shifted row for the same referee overwrote an evaluation';
+
   resp := jsonb_set(resp, '{1,comments}', '"Edited on the form"');
   resp := jsonb_set(resp, '{1,eval_date}', '"2026-09-13"');
   resp := jsonb_set(resp, '{1,kickoff}', '"11:15"');
@@ -373,7 +384,29 @@ begin
     'FAIL: an edited response date did not update in place';
   assert (select kickoff from public.evaluations where source = 'form' and form_row = 3) = '11:15'::time,
     'FAIL: an edited response kickoff did not update in place';
+  assert (select form_owner_mentor_id from public.evaluations where source = 'form' and form_row = 3)
+         = '5d1e0000-0000-4000-8000-00000000000a',
+    'FAIL: a form row did not keep its imported owner';
 end $$;
+
+-- Historical ownership survives account deletion and same-name reuse.
+reset role;
+insert into auth.users (id, email) values
+  ('5d1e0000-0000-4000-8000-00000000000e', 'oldname@sideline-test.invalid'),
+  ('5d1e0000-0000-4000-8000-00000000000f', 'newname@sideline-test.invalid');
+update public.mentors set role = 'mentor', approved_at = now(),
+  display_name = 'Zz Reused Name' where id = '5d1e0000-0000-4000-8000-00000000000e';
+update public.mentors set role = 'pending', display_name = 'Zz Someone Else'
+  where id = '5d1e0000-0000-4000-8000-00000000000f';
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+select public.import_form_evaluations(jsonb_build_array(
+  jsonb_build_object('row', 7, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Reused Name',
+    'eval_date', '2026-09-12', 'kickoff', '07:00', 'referee_name', 'Zed Reuse', 'position', 'CR',
+    'appearance', '3', 'saved_at', '2026-09-12T13:00:00Z')), true);
+select public.remove_mentor('5d1e0000-0000-4000-8000-00000000000e');
+select public.set_mentor_role('5d1e0000-0000-4000-8000-00000000000f', 'mentor');
+update public.mentors set display_name = 'Zz Reused Name' where id = '5d1e0000-0000-4000-8000-00000000000f';
 
 -- Mentor 1 uploads the admin's form games claiming the admin's name: the
 -- imported evaluations stay.
@@ -383,8 +416,18 @@ do $$ begin
   perform public.save_evaluations(jsonb_build_array(
     pg_temp.item('zz-test-13', 'Zed Formonly') || '{"position": "AR", "eval_date": "2026-09-13", "kickoff": "11:15"}',
     pg_temp.item('zz-test-12', 'Zed Spoofed', 'again')));
-  assert (select count(*) from public.evaluations where source = 'form') = 3,
+  assert (select count(*) from public.evaluations where source = 'form') = 4,
     'FAIL: a mentor''s upload removed evaluations imported under someone else''s name';
+end $$;
+
+-- A new account reusing a historical name cannot replace the old account's row.
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000f');
+do $$ begin
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-test-14', 'Zed Reuse') || '{"eval_date": "2026-09-12", "kickoff": "07:00"}'));
+  assert exists (select 1 from public.evaluations where source = 'form' and form_row = 7),
+    'FAIL: reusing a historical name replaced another account''s imported row';
 end $$;
 
 -- The admin uploads the same evaluation from the app afterwards: the app copy wins.
