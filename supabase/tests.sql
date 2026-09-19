@@ -152,7 +152,7 @@ do $$
 declare gavin uuid;
 begin
   assert (select count(*) from public.evaluations where client_id = 'zz-test-1') = 1,
-    'FAIL: an approved mentor cannot read another mentor''s evaluation';
+    'FAIL: an approved mentor cannot read shared evaluations';
 
   select referee_id into gavin from public.evaluations where client_id = 'zz-test-1';
   perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-2', '  zed   TESTREF ')));
@@ -285,12 +285,12 @@ do $$
 declare
   resp jsonb := jsonb_build_array(
     -- also uploaded from the app below, typed a little differently on the form
-    jsonb_build_object('row', 2, 'mentor_name', 'test mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
+    jsonb_build_object('row', 2, 'source_key', 'test-sheet|123', 'mentor_name', 'test mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
       'referee_name', 'Twin, Zed', 'position', 'CR', 'appearance', '3', 'move_up', 'No'),
-    jsonb_build_object('row', 3, 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '10:15',
+    jsonb_build_object('row', 3, 'source_key', 'test-sheet|123', 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '10:15',
       'referee_name', 'Zed Formonly', 'position', 'AR', 'appearance', '2', 'workrate', '4', 'move_up', 'Yes',
       'comments', 'From the form', 'field', 'Field 4', 'division', '5th', 'saved_at', '2026-09-12T16:00:00Z'),
-    jsonb_build_object('row', 4, 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12',
+    jsonb_build_object('row', 4, 'source_key', 'test-sheet|123', 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12',
       'referee_name', 'Zed Badrating', 'position', 'CR', 'fouls', '7'));
   st text[];
 begin
@@ -313,10 +313,16 @@ begin
   assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: re-import duplicated a row';
 
   resp := jsonb_set(resp, '{1,comments}', '"Edited on the form"');
+  resp := jsonb_set(resp, '{1,eval_date}', '"2026-09-13"');
+  resp := jsonb_set(resp, '{1,kickoff}', '"11:15"');
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
   assert st[2] = 'changed', 'FAIL: an edited response was not seen as changed';
   assert (select comments from public.evaluations where source = 'form') = 'Edited on the form',
     'FAIL: an edited response did not update in place';
+  assert (select eval_date from public.evaluations where source = 'form') = '2026-09-13'::date,
+    'FAIL: an edited response date did not update in place';
+  assert (select kickoff from public.evaluations where source = 'form') = '11:15'::time,
+    'FAIL: an edited response kickoff did not update in place';
 
   -- The mentor uploads the same evaluation from the app afterwards: the app copy wins.
   perform public.save_evaluations(jsonb_build_array(

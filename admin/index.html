@@ -2788,6 +2788,12 @@
       return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(m ? m[1] : str)}/gviz/tq?tqx=out:csv&headers=1` +
         (gid ? '&gid=' + gid[1] : '');
     }
+    function formSheetKey(idOrUrl) {
+      const str = String(idOrUrl || '').trim();
+      const m = str.match(/\/d\/([a-zA-Z0-9\-_]{20,})/);
+      const gid = str.match(/[#&?]gid=(\d+)/);
+      return `${m ? m[1] : str}|${gid ? gid[1] : ''}`;
+    }
     /* RFC 4180 CSV: comments hold commas, quotes and line breaks. */
     function parseCSV(text) {
       const rows = [];
@@ -2836,7 +2842,7 @@
 
     /* Sheet rows -> the items import_form_evaluations() takes. Throws when
        the columns it needs are not there. */
-    function formItems(rows) {
+    function formItems(rows, sheetKey) {
       const head = rows[0].map(h => String(h).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
       const col = {};
       FORM_COLS.forEach(([k, re]) => {
@@ -2856,7 +2862,7 @@
         .map(({r, row}) => {
           const mv = get(r, 'moveup');
           const item = {
-            row, mentor_name: clip(get(r, 'mentor'), 80), eval_date: formDate(get(r, 'date')), kickoff: formTime(get(r, 'time')),
+            row, source_key: sheetKey, mentor_name: clip(get(r, 'mentor'), 80), eval_date: formDate(get(r, 'date')), kickoff: formTime(get(r, 'time')),
             field: clip(get(r, 'field'), 80), division: clip(get(r, 'division'), 40), referee_name: clip(get(r, 'referee'), 120),
             position: get(r, 'position').toUpperCase(), move_up: /^y/i.test(mv) ? 'Yes' : /^n/i.test(mv) ? 'No' : mv,
             comments: clip(get(r, 'comments'), 20000), saved_at: formStamp(get(r, 'timestamp'))
@@ -2903,7 +2909,7 @@
         if (/^\s*</.test(text)) throw new Error('Google sent a sign-in page instead of the sheet. Share it as "Anyone with the link" can view.');
         const rows = parseCSV(text);
         if (rows.length < 2) throw new Error('The sheet has no responses yet.');
-        IMPF.items = formItems(rows);
+        IMPF.items = formItems(rows, formSheetKey(link));
         IMPF.busy = 'Checking the responses against the database…';
         paintView();
         IMPF.status = await formRun(false);

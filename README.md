@@ -51,7 +51,7 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
 5. **Create the database.** Either way below works, and running both is harmless:
    - **Through GitHub (recommended once the repo is linked).** Under **Project Settings → Integrations → GitHub**, check that the Supabase directory points at the folder containing `supabase/`, and switch on **Deploy to production** for `main`. From then on, every file in `supabase/migrations/` is applied when it is merged into `main`. Future schema changes arrive the same way, as new migration files.
-   - **By hand.** Open **SQL Editor**, then paste and run each file in `supabase/migrations/`, oldest first (the file names start with their date). Each one is safe to run again.
+   - **By hand.** Open **SQL Editor**, then paste and run each file in `supabase/migrations/`, oldest first (the file names start with their date). Run each migration once; do not replay an older file after later migrations have been applied.
 
 6. **Check the access rules.** In a new SQL Editor tab, paste `supabase/tests.sql` and run it. The final result should read `ALL SIDELINE ACCESS TESTS PASSED`. The script cleans up after itself.
 
@@ -110,7 +110,7 @@ Some mentors only fill in the Referee Evaluation form. **Import** in the admin c
 
 1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. If the sheet has several tabs, copy the link while the responses tab is open, so it carries `#gid=…`.
 2. Paste the link into **Import** and choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
-3. Choose **Import**. Run it again whenever you like: responses already imported are left alone, and edited ones are updated in place.
+3. Choose **Import**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
 
 A response counts as already uploaded from the app when the app has an evaluation of the same referee, on the same date, in the same position (and kickoff, when both have one), by a mentor with the same name. It is skipped, because the app's copy has the notes. If a mentor uploads from the app after their form response was imported, the imported copy is replaced by the app's.
 
