@@ -775,6 +775,76 @@ begin
   assert st = array['in_app', 'same', 'same', 'same', 'same'], format('FAIL: re-importing changed something: %s', st);
 end $$;
 
+-- ---------- a first name matched to the mentor's own uploads ----------
+-- The real case: a mentor writes up their Saturday on the form typing only
+-- "Zedbrad", weeks after that schedule sheet moved on. Their own uploads for
+-- the day name exactly one Zedbrad, so the response is theirs and is skipped.
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+select public.save_evaluations(jsonb_build_array(
+  pg_temp.item('zz-own-1', 'Zedbrad Shull')    || '{"eval_date": "2026-11-21", "kickoff": "11:40"}',
+  pg_temp.item('zz-own-2', 'Zedjudah Steele')  || '{"eval_date": "2026-11-21", "kickoff": "11:40"}',
+  -- Two referees share this first name on the same day: never guessed.
+  pg_temp.item('zz-own-3', 'Zedtwin Alpha')    || '{"eval_date": "2026-11-21", "kickoff": "09:10"}',
+  pg_temp.item('zz-own-4', 'Zedtwin Beta')     || '{"eval_date": "2026-11-21", "kickoff": "12:30"}'));
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare
+  resp jsonb := jsonb_build_array(
+    -- row 2: mentor 1's own write-up of Zedbrad Shull, first name only, no schedule saved
+    jsonb_build_object('row', 2, 'source_key', 'test-sheet|own', 'mentor_name', 'Zz Mentor One', 'eval_date', '2026-11-21',
+      'field', 'Field 4', 'kickoff', '11:40', 'referee_name', 'Zedbrad', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-11-28T16:00:00Z'),
+    -- row 3: two Zedtwins that day - left as typed
+    jsonb_build_object('row', 3, 'source_key', 'test-sheet|own', 'mentor_name', 'Zz Mentor One', 'eval_date', '2026-11-21',
+      'field', 'Field 4', 'kickoff', '09:10', 'referee_name', 'Zedtwin', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-11-28T16:01:00Z'),
+    -- row 4: ANOTHER mentor's form response naming a first name only. Mentor 1's
+    -- uploads say nothing about whose evaluation this is.
+    jsonb_build_object('row', 4, 'source_key', 'test-sheet|own', 'mentor_name', 'Zz Mentor Two', 'eval_date', '2026-11-21',
+      'field', 'Field 4', 'kickoff', '11:40', 'referee_name', 'Zedjudah', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-11-28T16:02:00Z'),
+    -- row 5: a first name nobody that mentor evaluated that day has
+    jsonb_build_object('row', 5, 'source_key', 'test-sheet|own', 'mentor_name', 'Zz Mentor One', 'eval_date', '2026-11-21',
+      'field', 'Field 4', 'kickoff', '11:40', 'referee_name', 'Zednobody', 'position', 'CR', 'appearance', '3',
+      'saved_at', '2026-11-28T16:03:00Z'));
+  st text[]; names text[]; sched boolean[];
+begin
+  select array_agg(out_status order by out_row), array_agg(coalesce(out_referee, '-') order by out_row),
+         array_agg(out_from_schedule order by out_row)
+  into st, names, sched from public.import_form_evaluations(resp);
+  assert st = array['in_app', 'new', 'new', 'new'],
+    format('FAIL: a first name matched to the mentor''s own uploads gave %s', st);
+  assert names = array['Zedbrad Shull', '-', '-', '-'], format('FAIL: the names matched were %s', names);
+  -- It came from the uploads, not the schedule: the console must not offer to
+  -- turn a completion off when nothing was completed on the row it writes.
+  assert sched = array[false, false, false, false], format('FAIL: an upload match claimed to be from the schedule: %s', sched);
+
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
+  assert st = array['in_app', 'new', 'new', 'new'], format('FAIL: importing changed the statuses: %s', st);
+  assert not exists (select 1 from public.evaluations where source = 'form' and form_source_key = 'test-sheet|own' and form_row = 2),
+    'FAIL: a first-name response the mentor had already uploaded was imported anyway';
+  assert not exists (select 1 from public.referees where display_name = 'Zedbrad'),
+    'FAIL: a bare first name became a referee of its own';
+  assert (select count(*) from public.evaluations where form_source_key = 'test-sheet|own') = 3,
+    'FAIL: the responses that cannot be matched did not import';
+end $$;
+
+-- A one-word name is never matched to a LAST name, and a full name typed on
+-- the form is left alone even when someone shares its first name.
+reset role;
+do $$ begin
+  assert public.upload_first_name_match('2026-11-21', '5d1e0000-0000-4000-8000-00000000000b', 'Zz Mentor One', 'Shull') is null,
+    'FAIL: a one-word name matched a referee''s last name';
+  assert public.upload_first_name_match('2026-11-21', '5d1e0000-0000-4000-8000-00000000000b', 'Zz Mentor One', 'Zedbrad Other') is null,
+    'FAIL: a full name typed on the form was completed anyway';
+  assert public.upload_first_name_match('2026-11-20', '5d1e0000-0000-4000-8000-00000000000b', 'Zz Mentor One', 'Zedbrad') is null,
+    'FAIL: a first name matched an upload from another day';
+end $$;
+
 -- ---------- a merge made by an admin survives re-importing ----------
 reset role;
 select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');

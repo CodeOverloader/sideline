@@ -168,6 +168,16 @@ import completes a one-word name from them: the referee on **that game** whose
 first name it is. The league's sheet only ever shows the current week, which is
 why each fetch saves it; older weeks stay behind for older responses.
 
+**When no schedule was saved for that game**, the mentor's own uploads answer
+the same question. A mentor filling in the form is writing up a referee they
+watched that day, and their app evaluations for that date name the referees they
+watched in full — so if the form says "Bradley" and that mentor's uploads for
+that day name exactly one Bradley, the response is about him, and it is skipped
+as already uploaded from the app instead of importing as a new referee called
+"Bradley". This is what catches responses from weeks whose schedule was never
+saved. It only ever skips a response; it never files a new one under a guessed
+name.
+
 A name is completed **only when exactly one referee on that game has it**. Two
 Jordans on the same game, no schedule for that game, or a schedule that lists
 only "Jordan" itself: the name is left exactly as typed. Guessing would file one
