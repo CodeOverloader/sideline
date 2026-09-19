@@ -1752,6 +1752,16 @@
       position: relative;
     }
 
+    .avatar .who {
+      width: 22px;
+      height: 22px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round
+    }
+
     .avatar[data-acct] {
       background: var(--primary);
       border-color: var(--primary);
@@ -3397,7 +3407,7 @@
     const ACCT_BLANK = {status: 'signedOut', id: '', email: '', name: ''};
     let ACCT = ACCOUNTS_ON ? {...ACCT_BLANK, ...(store.get('sideline:acct') || {})}
       : {...ACCT_BLANK, status: 'off'};
-    const acctUI = {step: 'email', email: '', code: '', busy: false, error: '', notice: '', offline: false};
+    const acctUI = {step: 'email', email: '', code: '', busy: false, error: '', notice: '', offline: false, sentAt: 0};
     let sb = null, sbLoading = null, acctStarted = false, mentorLoading = null;
 
     const isApproved = () => ACCT.status === 'mentor' || ACCT.status === 'admin';
@@ -3520,10 +3530,10 @@
           const row = data || {id: session.user.id, email: session.user.email, display_name: '', role: 'pending'};
           acctUI.offline = false;
           setAcct({status: row.role, id: row.id, email: row.email || session.user.email || '', name: row.display_name || ''});
-          if (!row.display_name && S.mentor.trim()) {
-            c.from('mentors').update({display_name: S.mentor.trim().slice(0, 80)}).eq('id', row.id)
-              .then(() => { }, () => { });
-          }
+          // A new phone takes the account's name; otherwise the account takes
+          // the name typed here.
+          if (row.display_name && !S.mentor.trim()) {S.mentor = row.display_name; save(); renderQuietly();}
+          else pushMentorName();
           if (isApproved()) {offerFirstUpload(); syncNow(); pullLeague();}
         } catch (e) {
           // Offline, or the project is paused: keep the cached status.
@@ -3533,6 +3543,27 @@
         }
       });
       return mentorLoading;
+    }
+
+    /* The server credits every uploaded evaluation to the account's name, so
+       the account's name follows the name typed in the app. It refuses a name
+       another account already has; the Account sheet then says so. */
+    let nameTimer = null;
+    function pushMentorName(delay) {
+      clearTimeout(nameTimer);
+      nameTimer = setTimeout(async () => {
+        const c = sbc(), want = clip(S.mentor.trim(), 80);
+        if (!c || ACCT.status === 'signedOut' || !ACCT.id || !want || want === ACCT.name) return;
+        let error = null;
+        try {({error} = await c.from('mentors').update({display_name: want}).eq('id', ACCT.id));} catch (e) {error = e;}
+        if (error) {
+          if (!isNetErr(error)) {acctUI.error = friendly(error); paintAcctCard(true);}
+          return;
+        }
+        ACCT = {...ACCT, name: want};
+        store.set('sideline:acct', ACCT);
+        if (acctUI.error) {acctUI.error = ''; paintAcctCard(true);}
+      }, delay || 0);
     }
 
     function setAcct(next) {
@@ -3561,10 +3592,13 @@
       if (!av || !ini) return;
       const on = ACCOUNTS_ON && ACCT.status !== 'signedOut';
       if (on) av.setAttribute('data-acct', ACCT.status); else av.removeAttribute('data-acct');
-      // textContent, so a bullet not an HTML entity: with no name to work
-      // from the avatar shows a neutral dot rather than "??".
-      const who = initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
-      ini.textContent = who || '\u25CF';
+      // Signed out, the avatar is the generic person glyph every app uses for
+      // "sign in"; local initials there read as if someone were signed in.
+      // Signed in, or with accounts off, it shows the mentor's initials.
+      const who = ACCOUNTS_ON && !on ? '' : initialsFor(ACCT.name || S.mentor, on ? ACCT.email : '');
+      if (who) ini.textContent = who;
+      else ini.innerHTML = '<svg class="who" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6"/></svg>';
       const label = !ACCOUNTS_ON ? 'Your name and this device'
         : !on ? 'Account - not signed in'
           : ACCT.status === 'pending' ? 'Account - waiting for approval'
@@ -3612,8 +3646,9 @@
         initAccounts();
         const {error} = await c.auth.signInWithOtp({email, options: {shouldCreateUser: true}});
         if (error) throw error;
-        Object.assign(acctUI, {step: 'code', code: '', email,
+        Object.assign(acctUI, {step: 'code', code: '', email, sentAt: Date.now(),
           notice: `We emailed a code to ${email}. It can take a minute to arrive; check spam too.`});
+        tickResend();
       } catch (e) {
         acctUI.error = friendly(e);
       }
@@ -3646,6 +3681,25 @@
         });
     }
 
+    /* For a lost or stolen phone: ends this account's login on every device,
+       this one included. The lost phone keeps working until its current token
+       runs out (an hour at most), because the server then refuses a new one. */
+    function signOutEverywhere() {
+      askConfirm('Sign out on every phone and computer signed in to this account? Use this if a phone was lost. ' +
+        'Your notes and saved evaluations on this device stay.', 'Sign out everywhere', async () => {
+          try {
+            const c = sbc(); if (!c) throw new Error('Sign-in is not available right now.');
+            const {error} = await c.auth.signOut({scope: 'global'});
+            if (error) throw error;
+          } catch (e) {
+            acctUI.error = friendly(e); paintAcctCard(true);
+            return;
+          }
+          setAcct({status: 'signedOut'});
+          flash('Signed out on every device');
+        });
+    }
+
     function accountCardInner() {
       // No heading: this renders inside the Account sheet, which is already
       // titled "Account". Repeating it was pure noise.
@@ -3662,7 +3716,7 @@
         <button class="btn sm primary" id="acctVerify" style="margin-top:10px" ${acctUI.busy ? 'disabled' : ''}>
           ${acctUI.busy ? 'Checking&hellip;' : 'Sign in'}</button>
         <div class="row" style="margin-top:8px">
-          <button class="btn sm ghost" id="acctResend" ${acctUI.busy ? 'disabled' : ''}>Send a new code</button>
+          <button class="btn sm ghost" id="acctResend" ${acctUI.busy || resendWait() ? 'disabled' : ''}>${resendLabel()}</button>
           <button class="btn sm ghost" id="acctBack">Different email</button>
         </div>${err}`;
         }
@@ -3677,7 +3731,8 @@
       }
       const role = s === 'admin' ? 'Admin' : s === 'mentor' ? 'Mentor' : 'Waiting for approval';
       const body = s === 'pending'
-        ? `<div class="warn">An admin has to approve this account before it can upload or read shared evaluations.</div>
+        ? `<div class="warn">An admin has to approve this account before it can upload or read shared evaluations.
+          Ask your assignor or a league admin to approve <b>${esc(ACCT.email)}</b>.</div>
         <button class="btn sm" id="acctCheck">Check again</button>`
         : `<label class="switchrow"><input type="checkbox" id="acctUpload" ${uploadConsent() === true ? 'checked' : ''} />
           Upload my saved evaluations</label>
@@ -3688,8 +3743,26 @@
       return `${head}
         <div class="acctline"><b>${esc(ACCT.email)}</b><span class="pill">${role}</span>
           ${acctUI.offline ? '<span class="pill">offline</span>' : ''}</div>
-        ${body}
-        <button class="btn sm ghost" id="acctSignOut" style="margin-top:8px">Sign out</button>`;
+        ${body}${err}
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm ghost" id="acctSignOut">Sign out</button>
+          <button class="btn sm ghost" id="acctSignOutAll">Sign out on all devices</button>
+        </div>`;
+    }
+
+    /* Supabase sends one code per address a minute, so "Send a new code"
+       waits that minute out instead of answering with an error. */
+    const RESEND_MS = 60000;
+    let resendTick = null;
+    const resendWait = () => Math.max(0, Math.ceil((acctUI.sentAt + RESEND_MS - Date.now()) / 1000));
+    const resendLabel = () => (resendWait() ? `Send a new code (${resendWait()}s)` : 'Send a new code');
+    function tickResend() {
+      clearInterval(resendTick);
+      resendTick = setInterval(() => {
+        const b = $('#acctResend');
+        if (b) {b.disabled = acctUI.busy || resendWait() > 0; b.textContent = resendLabel();}
+        if (!resendWait()) clearInterval(resendTick);
+      }, 1000);
     }
     function paintAcctCard(force) {
       const box = $('#acctCard');
@@ -5701,6 +5774,7 @@
             : acctUI.offline ? 'No connection' : 'Still waiting for approval'));
           return;
         case 'acctSignOut': signOut(); return;
+        case 'acctSignOutAll': signOutEverywhere(); return;
         case 'uploadOn': setUploadConsent(true); syncNow(); renderSaved(); return;
         case 'syncRetry': SYNC.backoff = 0; syncNow(); return;
         case 'refsRefresh':
@@ -5825,7 +5899,9 @@
       if (t.hasAttribute && t.hasAttribute('data-mentor')) {
         // Repaint the avatar as they type, so the initials appear straight away.
         // Only the avatar: anything more rebuilt the field being typed in.
-        S.mentor = t.value; save(); paintAvatar(); return;
+        S.mentor = t.value; save(); paintAvatar();
+        if (ACCOUNTS_ON) pushMentorName(1500);
+        return;
       }
       if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
       if (t.id === 'acctCode') {acctUI.code = t.value; return;}

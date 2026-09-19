@@ -17,6 +17,14 @@
       }
     })();
 
+    /* No other site may show the console inside a frame, where a hidden page
+       could trick an admin into clicking "Make admin" or "Delete all records".
+       GitHub Pages cannot send the X-Frame-Options header that would say so. */
+    if (window.top !== window.self) {
+      document.documentElement.style.display = 'none';
+      try { window.top.location = window.location.href; } catch (e) { }
+    }
+
     /* Theme before first paint. The console follows the computer's setting
        unless someone picks one; the mentor app's own choice is left alone
        (its 'sideline:theme' is about reading a phone in the sun). */
@@ -1669,13 +1677,27 @@
         // mentors sign up from the mentor app and are approved here.
         const {error} = await sbc().auth.signInWithOtp({email, options: {shouldCreateUser: false}});
         if (error) throw error;
-        Object.assign(LOGIN, {step: 'code', email, notice: `We emailed a code to ${email}. It can take a minute to arrive; check spam too.`});
+        Object.assign(LOGIN, {step: 'code', email, sentAt: Date.now(), notice: `We emailed a code to ${email}. It can take a minute to arrive; check spam too.`});
+        tickResend();
       } catch (e) {
         LOGIN.error = /signups? not allowed|not found|otp_disabled/i.test(String(e && e.message))
           ? 'There is no Sideline account for that email. Sign in once from the mentor app first.' : friendly(e);
       }
       LOGIN.busy = false; render();
       const i = $('#loginCode'); if (i) i.focus();
+    }
+    /* Supabase sends one code per address a minute, so "Send a new code"
+       waits that minute out instead of answering with an error. */
+    let resendTick = null;
+    const resendWait = () => Math.max(0, Math.ceil(((LOGIN.sentAt || 0) + 60000 - Date.now()) / 1000));
+    const resendLabel = () => (resendWait() ? `Send a new code (${resendWait()}s)` : 'Send a new code');
+    function tickResend() {
+      clearInterval(resendTick);
+      resendTick = setInterval(() => {
+        const b = $('#resendBtn');
+        if (b) {b.disabled = LOGIN.busy || resendWait() > 0; b.textContent = resendLabel();}
+        if (!resendWait()) clearInterval(resendTick);
+      }, 1000);
     }
     async function verifyCode() {
       const token = ($('#loginCode') ? $('#loginCode').value : '').replace(/\s+/g, '');
@@ -3118,7 +3140,7 @@
               <label class="fld"><span>Sign-in code</span><input type="text" id="loginCode" inputmode="numeric"
                 autocomplete="one-time-code" maxlength="10" placeholder="123456" /></label>
               <button class="btn primary" id="verifyBtn" ${LOGIN.busy ? 'disabled' : ''}>${LOGIN.busy ? 'Checking…' : 'Sign in'}</button>
-              <div class="stack"><button class="btn ghost" id="resendBtn" ${LOGIN.busy ? 'disabled' : ''}>Send a new code</button>
+              <div class="stack"><button class="btn ghost" id="resendBtn" ${LOGIN.busy || resendWait() ? 'disabled' : ''}>${resendLabel()}</button>
               <button class="btn ghost" id="backBtn">Different email</button></div>${err}`);
           }
           return box(`<h1>Admin console</h1>

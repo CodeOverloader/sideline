@@ -44,7 +44,7 @@ end $$;
 create function pg_temp.item(p_client text, p_referee text, p_comments text default 'ok')
 returns jsonb language sql as $$
   select jsonb_build_object(
-    'client_id', p_client, 'referee_name', p_referee, 'mentor_name', 'Test Mentor',
+    'client_id', p_client, 'referee_name', p_referee, 'mentor_name', 'Zz Test Mentor',
     'eval_date', '2026-09-12', 'field', 'Field 4', 'pitch', '', 'kickoff', '09:00',
     'division', '5th', 'position', 'CR',
     'appearance', 3, 'workrate', 2, 'commands', 3, 'teamwork', 4, 'fouls', 2, 'offsides', 1,
@@ -74,6 +74,10 @@ update public.mentors set role = 'mentor' where role = 'admin';
 update public.mentors set role = 'admin'  where id = '5d1e0000-0000-4000-8000-00000000000a';
 update public.mentors set role = 'mentor' where id in ('5d1e0000-0000-4000-8000-00000000000b',
                                                        '5d1e0000-0000-4000-8000-00000000000c');
+-- The admin's account name is the name they type on the form.
+update public.mentors set display_name = 'Zz Test Mentor' where id = '5d1e0000-0000-4000-8000-00000000000a';
+update public.mentors set display_name = 'Zz Mentor One'  where id = '5d1e0000-0000-4000-8000-00000000000b';
+update public.mentors set display_name = 'Zz Mentor Two'  where id = '5d1e0000-0000-4000-8000-00000000000c';
 
 -- ---------- name keys (as the owner: clients cannot call name_key) ----------
 
@@ -114,6 +118,9 @@ begin
           where client_id = 'zz-test-1') = 'updated', 'FAIL: re-saving did not update the row';
   assert (select mentor_id from public.evaluations where client_id = 'zz-test-1')
          = '5d1e0000-0000-4000-8000-00000000000b', 'FAIL: mentor_id not stamped';
+  -- The payload says "Zz Test Mentor"; the account is "Zz Mentor One".
+  assert (select mentor_name from public.evaluations where client_id = 'zz-test-1') = 'Zz Mentor One',
+    'FAIL: an upload kept a mentor name other than the account''s';
 
   assert (select display_name from public.referees r join public.evaluations e on e.referee_id = r.id
           where e.client_id = 'zz-test-1') = 'Testref, Zed', 'FAIL: referee not created';
@@ -183,8 +190,12 @@ begin
     'FAIL: mentor 2 deleted mentor 1''s evaluation';
 
   assert (select count(*) from public.mentors) = 1, 'FAIL: a mentor can list other accounts';
-  update public.mentors set display_name = 'Renamed' where id = '5d1e0000-0000-4000-8000-00000000000c';
-  assert (select display_name from public.mentors) = 'Renamed', 'FAIL: a mentor cannot rename themselves';
+  update public.mentors set display_name = 'Zz Renamed' where id = '5d1e0000-0000-4000-8000-00000000000c';
+  assert (select display_name from public.mentors) = 'Zz Renamed', 'FAIL: a mentor cannot rename themselves';
+  perform pg_temp.expect_error($q$ update public.mentors set display_name = ' zz  MENTOR one'
+    where id = '5d1e0000-0000-4000-8000-00000000000c' $q$,
+    '23505', 'a mentor taking another account''s name');
+  update public.mentors set display_name = 'Zz Mentor Two' where id = '5d1e0000-0000-4000-8000-00000000000c';
   perform pg_temp.expect_error($q$ update public.mentors set role = 'admin' $q$,
     '42501', 'a mentor changing their own role');
 
@@ -223,6 +234,8 @@ do $$ begin
   perform pg_temp.expect_error($q$ select count(*) from public.evaluations $q$, '42501', 'anon reading evaluations');
   perform pg_temp.expect_error($q$ select count(*) from public.mentors $q$, '42501', 'anon reading mentors');
   perform pg_temp.expect_error($q$ select public.save_evaluations('[]') $q$, '42501', 'anon calling save_evaluations');
+  -- The keep-awake job's call, the one thing anonymous callers may run.
+  assert public.keep_alive(), 'FAIL: anon cannot call keep_alive';
 end $$;
 
 -- ---------- admin: approve, merge, delete, guards ----------
@@ -278,56 +291,109 @@ end $$;
 
 -- ---------- admin: importing the form's responses ----------
 
+-- Mentor 1 uploads a game the admin also sent on the form, with the admin's
+-- name in the payload. It is still mentor 1's evaluation, not the admin's.
 reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+select public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-12', 'Zed Spoofed')));
+
+-- A form row imported before rows were keyed by sheet row (inserted as the owner).
+reset role;
+insert into public.referees (display_name, name_key) values ('Zed Legacy', public.name_key('Zed Legacy'));
+insert into public.evaluations (mentor_id, client_id, source, referee_id, referee_name, mentor_name,
+                                eval_date, kickoff, position, saved_at)
+select null, public.form_client_id('Zz Test Mentor', '2026-09-12'::date, '08:00'::time, 'Zed Legacy', 'CR'), 'form',
+       id, 'Zed Legacy', 'Zz Test Mentor', '2026-09-12', '08:00', 'CR', '2026-09-12T14:00:00Z'
+from public.referees where name_key = public.name_key('Zed Legacy');
+
 select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
 
 do $$
 declare
   resp jsonb := jsonb_build_array(
-    -- also uploaded from the app below, typed a little differently on the form
-    jsonb_build_object('row', 2, 'source_key', 'test-sheet|123', 'mentor_name', 'test mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
+    -- row 2: also uploaded from the app below, typed a little differently on the form
+    jsonb_build_object('row', 2, 'source_key', 'test-sheet|123', 'mentor_name', 'zz test mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
       'referee_name', 'Twin, Zed', 'position', 'CR', 'appearance', '3', 'move_up', 'No'),
-    jsonb_build_object('row', 3, 'source_key', 'test-sheet|123', 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '10:15',
+    -- row 3: only on the form
+    jsonb_build_object('row', 3, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '10:15',
       'referee_name', 'Zed Formonly', 'position', 'AR', 'appearance', '2', 'workrate', '4', 'move_up', 'Yes',
       'comments', 'From the form', 'field', 'Field 4', 'division', '5th', 'saved_at', '2026-09-12T16:00:00Z'),
-    jsonb_build_object('row', 4, 'source_key', 'test-sheet|123', 'mentor_name', 'Test Mentor', 'eval_date', '2026-09-12',
-      'referee_name', 'Zed Badrating', 'position', 'CR', 'fouls', '7'));
+    -- row 4: cannot be imported
+    jsonb_build_object('row', 4, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12',
+      'referee_name', 'Zed Badrating', 'position', 'CR', 'fouls', '7'),
+    -- row 5: the game mentor 1 uploaded under the admin's name - not the admin's upload
+    jsonb_build_object('row', 5, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '09:00',
+      'referee_name', 'Zed Spoofed', 'position', 'CR', 'comments', 'The admin''s own'),
+    -- row 6: imported before rows were keyed by sheet row
+    jsonb_build_object('row', 6, 'source_key', 'test-sheet|123', 'mentor_name', 'Zz Test Mentor', 'eval_date', '2026-09-12', 'kickoff', '08:00',
+      'referee_name', 'Zed Legacy', 'position', 'CR', 'saved_at', '2026-09-12T14:00:00Z'));
+  sorted jsonb;
   st text[];
 begin
   perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-10', 'Zed Twin')));
 
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp);
-  assert st = array['in_app', 'new', 'error'], format('FAIL: preview statuses were %s', st);
-  assert not exists (select 1 from public.evaluations where source = 'form'), 'FAIL: a preview saved something';
+  assert st = array['in_app', 'new', 'error', 'new', 'same'], format('FAIL: preview statuses were %s', st);
+  assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: a preview saved something';
+  assert (select form_source_key is null from public.evaluations where source = 'form'),
+    'FAIL: a preview adopted the old imported row';
   assert not exists (select 1 from public.referees where display_name = 'Zed Formonly'),
     'FAIL: a preview created a referee';
 
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
-  assert st = array['in_app', 'new', 'error'], format('FAIL: import statuses were %s', st);
-  assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: import did not save exactly one row';
+  assert st = array['in_app', 'new', 'error', 'new', 'same'], format('FAIL: import statuses were %s', st);
+  assert (select count(*) from public.evaluations where source = 'form') = 3, 'FAIL: import did not leave three form rows';
+  assert (select form_row from public.evaluations where source = 'form' and referee_name = 'Zed Legacy') = 6,
+    'FAIL: an old imported row was not adopted by its sheet row';
   assert (select mentor_id is null and comments = 'From the form' and saved_at = '2026-09-12T16:00:00Z'
-          from public.evaluations where source = 'form'), 'FAIL: the imported row is wrong';
+          from public.evaluations where source = 'form' and form_row = 3), 'FAIL: the imported row is wrong';
 
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
-  assert st[2] = 'same', 'FAIL: importing the same sheet again changed something';
-  assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: re-import duplicated a row';
+  assert st[2] = 'same' and st[4] = 'same' and st[5] = 'same',
+    format('FAIL: importing the same sheet again changed something: %s', st);
+  assert (select count(*) from public.evaluations where source = 'form') = 3, 'FAIL: re-import duplicated a row';
+
+  -- Rows 3 and 5 trade places, as if the sheet had been sorted: both are
+  -- refused, and neither evaluation is overwritten.
+  sorted := jsonb_set(jsonb_set(resp, '{1,row}', '5'), '{3,row}', '3');
+  select array_agg(out_status order by out_row) into st from public.import_form_evaluations(sorted, true);
+  assert st[2] = 'error' and st[4] = 'error', format('FAIL: a sorted sheet was not refused: %s', st);
+  assert (select referee_name from public.evaluations where source = 'form' and form_row = 3) = 'Zed Formonly'
+     and (select referee_name from public.evaluations where source = 'form' and form_row = 5) = 'Zed Spoofed',
+    'FAIL: a sorted sheet overwrote an evaluation';
 
   resp := jsonb_set(resp, '{1,comments}', '"Edited on the form"');
   resp := jsonb_set(resp, '{1,eval_date}', '"2026-09-13"');
   resp := jsonb_set(resp, '{1,kickoff}', '"11:15"');
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
   assert st[2] = 'changed', 'FAIL: an edited response was not seen as changed';
-  assert (select comments from public.evaluations where source = 'form') = 'Edited on the form',
+  assert (select comments from public.evaluations where source = 'form' and form_row = 3) = 'Edited on the form',
     'FAIL: an edited response did not update in place';
-  assert (select eval_date from public.evaluations where source = 'form') = '2026-09-13'::date,
+  assert (select eval_date from public.evaluations where source = 'form' and form_row = 3) = '2026-09-13'::date,
     'FAIL: an edited response date did not update in place';
-  assert (select kickoff from public.evaluations where source = 'form') = '11:15'::time,
+  assert (select kickoff from public.evaluations where source = 'form' and form_row = 3) = '11:15'::time,
     'FAIL: an edited response kickoff did not update in place';
+end $$;
 
-  -- The mentor uploads the same evaluation from the app afterwards: the app copy wins.
+-- Mentor 1 uploads the admin's form games claiming the admin's name: the
+-- imported evaluations stay.
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+do $$ begin
   perform public.save_evaluations(jsonb_build_array(
-    pg_temp.item('zz-test-11', 'Zed Formonly') || '{"position": "AR", "kickoff": "10:15"}'));
-  assert not exists (select 1 from public.evaluations where source = 'form'),
+    pg_temp.item('zz-test-13', 'Zed Formonly') || '{"position": "AR", "eval_date": "2026-09-13", "kickoff": "11:15"}',
+    pg_temp.item('zz-test-12', 'Zed Spoofed', 'again')));
+  assert (select count(*) from public.evaluations where source = 'form') = 3,
+    'FAIL: a mentor''s upload removed evaluations imported under someone else''s name';
+end $$;
+
+-- The admin uploads the same evaluation from the app afterwards: the app copy wins.
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$ begin
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-test-11', 'Zed Formonly') || '{"position": "AR", "eval_date": "2026-09-13", "kickoff": "11:15"}'));
+  assert not exists (select 1 from public.evaluations where source = 'form' and form_row = 3),
     'FAIL: an app upload did not replace the imported copy';
   assert exists (select 1 from public.evaluations where client_id = 'zz-test-11'), 'FAIL: the app copy is missing';
 end $$;
