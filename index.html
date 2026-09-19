@@ -2767,8 +2767,8 @@
       return roles.length ? roles.join(' and ') : '';
     }
 
-    /* "Field 2A 8:00 AM (Kindergarten, CR)" - how a game reads in the block and
-       in the comments when a referee worked more than one. */
+    /* "Field 2A 8:00 AM (Kindergarten, CR)" - how a game reads in the list on
+       the Score tab when a referee worked more than one. */
     function dayGameLabel(x) {
       const bits = [fullPitchLabel(x.field)];
       if (x.field.time) bits.push(pretty12(x.field.time));
@@ -3285,23 +3285,17 @@
         });
         return out;
       };
+      /* Only the feedback. This used to open with a list of the games worked
+         and close with a sentence explaining why offside was scored 1. Both
+         were about how the app works rather than about the referee, and the
+         referee is the only one who reads this. The games are on screen on the
+         Score tab, and the offside 1 is the form's own instruction. */
       const good = group(1), work = group(-1), better = group(2);
       const parts = [];
-      /* The form has one Field, one Time and one Division, but this evaluation
-         can cover several games. Say so first, so the reader knows the ratings
-         below are the day rather than the one game named at the top. */
-      if (g.length > 1) parts.push(`${plural(g.length, 'game')} today: ${g.map(dayGameLabel).join('; ')}.`);
       if (good.length) parts.push('Strengths: ' + good.join('; ') + '.');
       if (work.length) parts.push('To work on: ' + work.join('; ') + '.');
       // The halftime story: what you corrected at the break and they fixed after.
       if (better.length) parts.push('Improved after halftime: ' + better.join('; ') + '.');
-      const divs = dayDivisions(g);
-      if (divs.length && !dayHasOffside(g)) {
-        parts.push(`${divs.join(' and ')} ${divs.length > 1 ? 'do' : 'does'} not play offside, ` +
-          'so offside is scored 1 per the form instructions.');
-      } else if (ref.noOffsides) {
-        parts.push('No offside situations occurred, so offside is scored 1 per the form instructions.');
-      }
       if (!parts.length) parts.push(`Watched ${refDisplay(ref)} at ${field.name || 'the field'}. `);
       return parts.join(' ');
     }
@@ -3467,20 +3461,13 @@
       };
     }
     function formText(r) {
-      // More than one game means the form's single Field/Time/Division answer
-      // cannot tell the whole story, so the block spells the rest out above the
-      // ratings as well as inside the comments.
-      const extra = Array.isArray(r.games) && r.games.length > 1
-        ? ['', `Games covered (${r.games.length}):`,
-          ...r.games.map(x => `  - ${[x.field, x.sub].filter(Boolean).join(' ')}` +
-            `${x.time ? ' ' + pretty12(x.time) : ''}` +
-            `${[x.division, x.slot].filter(Boolean).length ? ' (' + [x.division, x.slot].filter(Boolean).join(', ') + ')' : ''}`)]
-        : [];
+      // The block is what gets typed and pasted into the form, so it holds what
+      // the form asks for and nothing else. Which games an evaluation covers is
+      // on the Score tab and on the saved card; it is not a form question.
       return [
         `Mentor/Monitor name: ${r.mentor}`, `Date: ${prettyDate(r.date)}`, `Field: ${r.field}`,
         `Time: ${pretty12(r.time)}`, `Division: ${r.division}`, `Referee being mentored: ${r.referee}`,
-        `Position: ${r.position}`,
-        ...extra, '',
+        `Position: ${r.position}`, '',
         ...RATED.map(c => `${c.label}: ${r.ratings[c.id] == null ? '-' : r.ratings[c.id]}`),
         `Should they move up: ${r.moveUp || '-'}`, '', 'COMMENTS:', r.comments
       ].join('\n');
