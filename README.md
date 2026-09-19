@@ -126,6 +126,35 @@ A response counts as already uploaded from the app when the app has an evaluatio
 
 Imported evaluations are credited to the name typed on the form, not to an account. Only admins can change or delete them. **Delete all records** on a referee removes them too.
 
+### Merging two spellings of one referee
+
+**Clean-up** lists names that may be one referee typed two ways. Merging moves
+every evaluation from the losing spelling to the surviving one.
+
+What happens to *later* saves depends on the losing name:
+
+- **A misspelling** — "Jon Smyth" folded into "Jon Smith" — stays wired to the
+  survivor. Every later save under the wrong spelling lands on the right
+  referee. That is what merging is for.
+- **A single name** — "Jordan" folded into "Jordan Ellis" — does not. The
+  records already there move, because the admin doing the merge knows whose
+  they are, but the spelling is retired. The next referee the schedule lists
+  only as "Jordan" starts a referee of their own.
+
+The second rule exists because a first name is not an identity. Before it, a
+merged "Jordan" kept catching saves, so a different child listed the same way
+had their ratings and comments filed onto Jordan Ellis's profile weeks later,
+with nothing on screen to say so. Merge them again if you know it is the same
+person.
+
+Names written without spaces because that is how the script works — Chinese,
+Japanese and Korean — count as complete names, not single ones.
+
+This does not make two referees who share a first name safe to tell apart.
+Where the schedule only ever gives one name, two children called Jordan still
+share a profile until someone types more. The lasting fix is fuller names in
+the schedule.
+
 ### Duplicate evaluations from the form import
 
 The league takes one evaluation per referee per day per mentor, and the app

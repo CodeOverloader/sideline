@@ -456,6 +456,116 @@ do $$ begin
   assert exists (select 1 from public.evaluations where client_id = 'zz-test-11'), 'FAIL: the app copy is missing';
 end $$;
 
+-- ---------- a one-word name is not an identity ----------
+-- Merging keeps a misspelling wired to the right person, which is the point.
+-- A bare first name is not a misspelling of anything, so merging it must move
+-- the records that are already there WITHOUT leaving the spelling pointed at
+-- the survivor - otherwise the next child the schedule lists only as "Jordan"
+-- is silently filed under Jordan Ellis.
+
+-- as the owner: clients cannot call name_is_one_word, as with name_key
+reset role;
+do $$ begin
+  assert public.name_is_one_word('Jordan'), 'FAIL: a bare first name is not one word';
+  assert public.name_is_one_word('  jordan  '), 'FAIL: spacing changed the answer';
+  assert public.name_is_one_word('Иван'), 'FAIL: a bare Cyrillic first name is not one word';
+  assert not public.name_is_one_word('Jordan Ellis'), 'FAIL: a full name counted as one word';
+  assert not public.name_is_one_word('Ellis, Jordan'), 'FAIL: "Last, First" counted as one word';
+  assert not public.name_is_one_word('Jordan-Ellis'), 'FAIL: a hyphenated name counted as one word';
+  assert not public.name_is_one_word(''), 'FAIL: an empty name counted as one word';
+  -- Written without spaces and complete as they stand.
+  assert not public.name_is_one_word('张伟'), 'FAIL: a Chinese name counted as one word';
+  assert not public.name_is_one_word('田中太郎'), 'FAIL: a Japanese name counted as one word';
+  assert not public.name_is_one_word('김민수'), 'FAIL: a Korean name counted as one word';
+end $$;
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+select public.save_evaluations(jsonb_build_array(
+  pg_temp.item('zz-word-1', 'Zedbare')         || '{"eval_date": "2026-10-03"}',
+  pg_temp.item('zz-word-2', 'Zedbare Fullname')|| '{"eval_date": "2026-10-04"}',
+  pg_temp.item('zz-word-3', 'Zedmiss Smyth')   || '{"eval_date": "2026-10-05"}',
+  pg_temp.item('zz-word-4', 'Zedmiss Smith')   || '{"eval_date": "2026-10-06"}'));
+
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000a');
+do $$
+declare bare uuid; whole uuid; miss uuid; right_one uuid;
+begin
+  select referee_id into bare      from public.evaluations where client_id = 'zz-word-1';
+  select referee_id into whole     from public.evaluations where client_id = 'zz-word-2';
+  select referee_id into miss      from public.evaluations where client_id = 'zz-word-3';
+  select referee_id into right_one from public.evaluations where client_id = 'zz-word-4';
+
+  perform public.merge_referees(bare, whole);
+  perform public.merge_referees(miss, right_one);
+
+  -- Both merges move what was already filed.
+  assert (select referee_id from public.evaluations where client_id = 'zz-word-1') = whole,
+    'FAIL: merging a one-word name did not move its evaluations';
+  assert (select referee_id from public.evaluations where client_id = 'zz-word-3') = right_one,
+    'FAIL: merging a misspelling did not move its evaluations';
+
+  -- The one-word spelling is retired; the misspelling stays wired up.
+  -- (read as the owner - name_key and retired_name_key are not client calls)
+  reset role;
+  assert (select name_key from public.referees where id = bare) = public.retired_name_key(bare),
+    'FAIL: a merged one-word name kept a live key and will catch other people''s evaluations';
+  assert (select name_key from public.referees where id = miss) = public.name_key('Zedmiss Smyth'),
+    'FAIL: merging a misspelling retired it, so it will stop finding the right person';
+  assert (select display_name from public.referees where id = bare) = 'Zedbare',
+    'FAIL: retiring a key changed the display name';
+end $$;
+
+reset role;
+select pg_temp.act_as('5d1e0000-0000-4000-8000-00000000000b');
+do $$
+declare whole uuid; right_one uuid;
+begin
+  select referee_id into whole     from public.evaluations where client_id = 'zz-word-2';
+  select referee_id into right_one from public.evaluations where client_id = 'zz-word-4';
+
+  -- A different child, listed only by the same first name, weeks later.
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-word-5', 'Zedbare') || '{"eval_date": "2026-11-07"}'));
+  assert (select referee_id from public.evaluations where client_id = 'zz-word-5') <> whole,
+    'FAIL: a later one-word name was filed under the referee it was merged into';
+
+  -- A later save under the misspelling still reaches the right person.
+  perform public.save_evaluations(jsonb_build_array(
+    pg_temp.item('zz-word-6', 'Zedmiss Smyth') || '{"eval_date": "2026-11-08"}'));
+  assert (select referee_id from public.evaluations where client_id = 'zz-word-6') = right_one,
+    'FAIL: a later save under a merged misspelling stopped following the merge';
+end $$;
+
+-- The backfill statement the migration runs, on a spelling merged before it.
+reset role;
+do $$
+declare bare uuid; whole uuid; n int;
+begin
+  select id into whole from public.referees where name_key = public.name_key('Zedold Fullname');
+  if whole is null then
+    insert into public.referees (display_name, name_key)
+    values ('Zedold Fullname', public.name_key('Zedold Fullname')) returning id into whole;
+  end if;
+  insert into public.referees (display_name, name_key, merged_into)
+  values ('Zedold', public.name_key('Zedold'), whole) returning id into bare;
+
+  update public.referees
+  set name_key = public.retired_name_key(id)
+  where merged_into is not null
+    and public.name_is_one_word(display_name)
+    and name_key <> public.retired_name_key(id);
+  get diagnostics n = row_count;
+  assert n >= 1, 'FAIL: the backfill retired nothing';
+  assert (select name_key from public.referees where id = bare) = public.retired_name_key(bare),
+    'FAIL: the backfill left a one-word merged name live';
+  assert not exists (
+    select 1 from public.referees
+    where merged_into is not null and public.name_is_one_word(display_name)
+      and name_key <> public.retired_name_key(id)),
+    'FAIL: a one-word merged name is still catching saves after the backfill';
+end $$;
+
 -- ---------- one evaluation per referee per day per mentor ----------
 -- The app files a referee's whole day as one evaluation and can only put one
 -- of its games in the form's single Time and Position answers, so the import

@@ -1500,6 +1500,16 @@
     const fold = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
+    /* Is this name a single word, and so not enough to tell two people apart?
+       Mirrors name_is_one_word() in the database and nameIsOneWord() in the
+       mentor app, including the exception: a Chinese, Japanese or Korean name
+       is written without spaces and is complete as it stands. */
+    const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]/;
+    const isOneWord = (name) => {
+      const k = fold(name);
+      return !!k && !k.includes(' ') && !CJK_RE.test(k);
+    };
+
     const store = {
       get(k) {try {const v = localStorage.getItem(k); return v == null ? null : JSON.parse(v);} catch (e) {return null;}},
       set(k, v) {try {localStorage.setItem(k, JSON.stringify(v));} catch (e) { }}
@@ -2756,8 +2766,16 @@
       const nm = (id) => (all.get(id) || {}).name || (DATA.referees.get(id) || {}).display_name || 'that referee';
       const n = all.has(fromId) ? all.get(fromId).profile.count : 0;
       const ok = await confirmBox({title: `Merge into ${nm(intoId)}?`,
-        message: `“${nm(fromId)}” and its ${plural(n, 'evaluation')} become part of “${nm(intoId)}”. Later saves under either ` +
-          'spelling land there too. This cannot be split apart again from here.', confirm: 'Merge'});
+        message: `“${nm(fromId)}” and its ${plural(n, 'evaluation')} become part of “${nm(intoId)}”. ` +
+          (isOneWord(nm(fromId))
+            /* A one-word losing name is retired rather than left pointing at
+               the survivor - see the 20260919160000 migration. Say so, because
+               the opposite used to be true and an admin may be expecting it. */
+            ? `Because “${nm(fromId)}” is only one name, later saves under it will NOT come here: there is no ` +
+              'way to tell one referee with that name from another, so the next one starts a referee of their ' +
+              'own. Merge them again if you know it is the same person. '
+            : 'Later saves under either spelling land there too. ') +
+          'This cannot be split apart again from here.', confirm: 'Merge'});
       if (!ok) return;
       try {
         const {error} = await sbc().rpc('merge_referees', {p_from: fromId, p_into: intoId});

@@ -4545,6 +4545,17 @@
     }
     /* "Ref, Alice" / "alice  REF" -> "Alice Ref". Words already in mixed case
        ("McDonald") are left alone. */
+    /* Is this name a single word, and so not enough to tell two people apart?
+       "Jordan" is; "Jordan Ellis" and "Ellis, Jordan" are not. Mirrors
+       name_is_one_word() in the database, including the exception: a Chinese,
+       Japanese or Korean name is written without spaces and is complete as it
+       stands, so it does not count as one word. */
+    const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]/;
+    function nameIsOneWord(name) {
+      const k = nameKey(name);
+      return !!k && !k.includes(' ') && !CJK_RE.test(k);
+    }
+
     function tidyName(s) {
       let t = String(s || '').trim().replace(/\s+/g, ' ');
       const m = t.match(/^([^,]+),([^,]+)$/);
@@ -4583,7 +4594,19 @@
       // app's own nameKey, not the server's name_key, so matching a local copy to
       // its referee never depends on the two functions agreeing letter for letter.
       const keyToRef = new Map();
-      LEAGUE.referees.forEach(x => {const k = nameKey(x.display_name); if (k) keyToRef.set(k, canonicalRef(x.id));});
+      LEAGUE.referees.forEach(x => {
+        const k = nameKey(x.display_name);
+        if (!k) return;
+        /* A merged spelling normally keeps pulling records to the referee it
+           was folded into - that is what merging a misspelling is for. A
+           one-word name is not a misspelling of anything, though: it is an
+           incomplete name other people share, so it must not drag the next
+           "Jordan" into Jordan Ellis's profile. The database retires these
+           keys on its side; this is the same rule applied here, so it holds
+           even for records that were never uploaded. */
+        if (x.merged_into && nameIsOneWord(x.display_name)) return;
+        keyToRef.set(k, canonicalRef(x.id));
+      });
 
       // One record per (mentor, evaluation). A local copy that is newer than
       // the league's (edited, not re-uploaded yet) wins.
