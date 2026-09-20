@@ -1651,8 +1651,15 @@
       try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
     }
 
+    function clearImportPreview() {
+      Object.assign(IMPF, {items: null, status: null, result: null, sched: null, error: '', busy: '', suggest: new Map()});
+    }
+
     async function onSession(event, session) {
+      const generation = ++authGeneration; ++loadGeneration; ST.loading = false;
+      if (!session || (ST.me && ST.me.id !== session.user.id)) clearImportPreview();
       if (!session && event !== 'SIGNED_OUT' && storedLogin()) {
+        DATA = null; ST.me = null; ST.drawer = '';
         // supabase-js retries on its own (and holds a failed try for a minute),
         // so this page comes back by itself once the connection does.
         ST.auth = 'error'; ST.authError = 'No connection, so the sign-in could not be checked. This page reconnects ' +
@@ -1666,26 +1673,27 @@
         render();
         return;
       }
-      // Token refreshes, and the SIGNED_IN some browsers repeat when a tab
-      // comes back, change nothing for someone already checked.
-      if (ST.me && ST.me.id === session.user.id && ST.auth === 'admin' && event !== 'USER_UPDATED') return;
-      await checkRole(session.user);
+      // Recheck approval even for token refreshes and repeated sign-in events.
+      if (ST.me && ST.me.id !== session.user.id) {DATA = null; ST.me = null; ST.drawer = ''; ST.auth = 'loading'; render();}
+      if (await checkRole(session.user, generation)) await loadAll();
     }
 
-    async function checkRole(user) {
+    async function checkRole(user, generation = ++authGeneration) {
       try {
         const {data, error} = await sbc().from('mentors')
           .select('id,email,display_name,role').eq('id', user.id).maybeSingle();
         if (error) throw error;
+        if (generation !== authGeneration) return false;
         const row = data || {id: user.id, email: user.email || '', display_name: '', role: 'pending'};
         ST.me = {id: row.id, email: row.email || user.email || '', name: row.display_name || '', role: row.role};
-        const was = ST.auth;
         ST.auth = row.role === 'admin' ? 'admin' : 'notAdmin';
-        if (ST.auth !== 'admin') {DATA = null; ST.drawer = '';}   // demoted: the league's data goes with the role
+        if (ST.auth !== 'admin') {DATA = null; ST.drawer = ''; clearImportPreview();}   // demoted: the league's data goes with the role
         render();
-        if (ST.auth === 'admin' && (was !== 'admin' || !DATA)) loadAll();
+        return ST.auth === 'admin';
       } catch (e) {
-        ST.auth = 'error'; ST.authError = friendly(e); render();
+        if (generation !== authGeneration) return false;
+        DATA = null; ST.drawer = ''; clearImportPreview(); ++loadGeneration;
+        ST.auth = 'error'; ST.authError = friendly(e); render(); return false;
       }
     }
 
@@ -1738,6 +1746,7 @@
       const ok = await confirmBox({title: 'Sign out?',
         message: 'This also signs out the mentor app in this browser. Nothing is deleted.', confirm: 'Sign out'});
       if (!ok) return;
+      ++authGeneration; ++loadGeneration;
       try {await sbc().auth.signOut({scope: 'local'});} catch (e) { }
       ST.me = null; DATA = null; ST.auth = 'signedOut'; closeDrawer(true); render();
     }
@@ -1750,7 +1759,7 @@
        this browser, so a shared or borrowed computer keeps no copy of other
        people's evaluations once the tab is closed.
        ============================================================ */
-    let DATA = null, dataVersion = 0;
+    let DATA = null, dataVersion = 0, authGeneration = 0, loadGeneration = 0;
 
     async function pageAll(build) {
       const out = [], size = 1000;   // PostgREST returns at most 1000 rows per request
@@ -1763,14 +1772,17 @@
     }
 
     async function loadAll() {
-      const c = sbc(); if (!c) return;
+      const c = sbc(); if (!c || ST.auth !== 'admin' || !ST.me) return;
+      const generation = authGeneration, request = ++loadGeneration, owner = ST.me.id;
+      const current = () => generation === authGeneration && request === loadGeneration && ST.auth === 'admin' && ST.me?.id === owner;
       ST.loading = true; ST.error = ''; paintBusy();
       try {
         const [mentors, refs, rows] = await Promise.all([
-          pageAll(() => c.from('mentors').select('id,email,display_name,role,created_at,approved_at').order('created_at').order('id')),
-          pageAll(() => c.from('referees').select('id,display_name,name_key,merged_into').order('id')),
-          pageAll(() => c.from('evaluations').select(EVAL_COLS).order('id'))
+          pageAll(() => c.from('mentors').select('*').order('created_at').order('id')),
+          pageAll(() => c.from('referees').select('*').order('id')),
+          pageAll(() => c.from('evaluations').select('*').order('id'))
         ]);
+        if (!current()) return;
         const referees = new Map(refs.map(x => [x.id, x]));
         const canon = (id) => {
           let cur = id;
@@ -1782,25 +1794,28 @@
           return cur;
         };
         const evals = rows.map(row => ({
-          id: row.id, mentorId: row.mentor_id || '', mentor: row.mentor_name || '',
+          id: row.id, mentorId: row.mentor_id || '', formOwnerMentorId: row.form_owner_mentor_id || '', mentor: row.mentor_name || '',
           refereeId: canon(row.referee_id), referee: row.referee_name || '',
           date: ISO_RE.test(row.eval_date || '') ? row.eval_date : '',
           field: row.field || '', sub: row.pitch || '', time: String(row.kickoff || '').slice(0, 5),
           division: row.division || '', position: row.position || '',
           ratings: Object.fromEntries(RATED.map(c => [c.id, typeof row[c.id] === 'number' ? row[c.id] : null])),
           moveUp: row.move_up || '', comments: row.comments || '',
-          // Imported from the form's responses (see the Import page). Read from the id
-          // rather than the source column, so this works before that migration runs.
-          fromForm: /^form:/.test(row.client_id || ''),
-          notes: Array.isArray(row.notes) ? row.notes.filter(n => n && typeof n === 'object') : [],
+          // Use the server's source, never a client-chosen id prefix.
+          fromForm: row.source === 'form',
+          notes: Array.isArray(row.notes) ? row.notes.filter(n => n && typeof n === 'object' && !Array.isArray(n))
+            .map(n => ({...n, text: typeof n.text === 'string' ? n.text : '',
+              cat: typeof n.cat === 'string' ? n.cat : '', pol: [1, -1, 2].includes(n.pol) ? n.pol : 0})) : [],
           savedAt: Date.parse(row.saved_at) || 0
         }));
         evals.forEach(e => {e.avg = evalAvg(e);});
-        DATA = {mentors, referees, evals, at: Date.now()};
+        DATA = {mentors, referees, evals, rawEvaluations: rows, at: Date.now()};
         dataVersion++;
       } catch (e) {
+        if (!current()) return;
         ST.error = friendly(e);
       }
+      if (!current()) return;
       ST.loading = false;
       render();
     }
@@ -1808,12 +1823,13 @@
     async function refresh() {
       const c = sbc(); if (!c) return;
       let session = null;
+      const generation = authGeneration;
       try {({data: {session}} = await c.auth.getSession());} catch (e) {ST.error = friendly(e); render(); return;}
+      if (generation !== authGeneration) return;
       // Not 'SIGNED_OUT': a refresh that could not reach the server keeps the
       // stored login, and onSession tells the two apart.
       if (!session) {onSession('NO_SESSION', null); return;}
-      await checkRole(session.user);   // an admin demoted elsewhere loses the console here
-      if (ST.auth === 'admin') await loadAll();
+      if (await checkRole(session.user)) await loadAll();
     }
 
     /* ============================================================
@@ -1947,6 +1963,18 @@
       return tidyScore(best[0]) === 3 ? best[0] : tidyName(best[0]);
     }
 
+    function profileRecords(records) {
+      const kept = new Map();
+      records.forEach(r => {
+        const owner = r.mentorId || r.formOwnerMentorId;
+        const key = owner && r.date ? JSON.stringify([r.refereeId, r.date, owner]) : 'record:' + r.id;
+        const prev = kept.get(key);
+        if (!prev || (prev.fromForm && !r.fromForm) || (prev.fromForm === r.fromForm &&
+          (r.savedAt > prev.savedAt || (r.savedAt === prev.savedAt && r.notes.length > prev.notes.length)))) kept.set(key, r);
+      });
+      return [...kept.values()];
+    }
+
     function groupRefs(evals) {
       const groups = new Map();
       evals.forEach(e => {
@@ -1957,6 +1985,7 @@
         const row = DATA.referees.get(g.id);
         g.name = bestName(g.records, row && row.display_name);
         g.spellings = [...new Set(g.records.map(r => fold(r.referee)))].join(' ');
+        g.records = profileRecords(g.records);
         g.profile = buildProfile(g.records);
       });
       return groups;
@@ -1969,7 +1998,7 @@
       const key = `${dataVersion}|${JSON.stringify(F)}|${todayISO()}`;
       if (memo && memo.key === key) return memo;
       const b = rangeBounds();
-      const dims = DATA.evals.filter(matchDims);
+      const dims = profileRecords(DATA.evals).filter(matchDims);
       const evals = dims.filter(e => inRange(e, b));
       memo = {
         key, b, evals, dims,
@@ -2535,6 +2564,7 @@
         <input type="search" class="inp" id="evalQ" placeholder="Search by referee or mentor" aria-label="Search evaluations" value="${esc(UI.evalQ)}" autocomplete="off" />
         <div class="spacer"></div>
         <button class="btn" id="exportEvals">Export CSV</button>
+        <button class="btn" id="exportRecovery" title="All fetched records, notes and merge links, independent of filters. Database schema and Auth accounts require a database backup.">Export recovery JSON</button>
       </div>
       <div id="evalTable">${evalTableHTML()}</div>`;
     }
@@ -2578,6 +2608,18 @@
       </table></div>
       ${list.length > shown.length ? `<div class="more">Showing ${shown.length.toLocaleString()} of ${list.length.toLocaleString()}
         <button class="btn sm" id="evalMore">Show ${Math.min(100, list.length - shown.length)} more</button></div>` : ''}`;
+    }
+    // Record recovery export; Auth users, schedules and database schema require a database backup.
+    function exportRecovery() {
+      if (ST.auth !== 'admin' || !DATA) return;
+      const payload = {format: 'sideline-recovery', version: 1, scope: 'All fetched mentor, referee and evaluation records; excludes Auth users, schedules, deletion records and database schema', exported_at: new Date().toISOString(),
+        fetched_at: new Date(DATA.at).toISOString(), mentors: DATA.mentors,
+        referees: [...DATA.referees.values()], evaluations: DATA.rawEvaluations};
+      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'}));
+      const a = document.createElement('a'); a.href = url; a.download = 'sideline-recovery-' + todayISO() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      flash('Recovery export requested; check your downloads.');
     }
     function exportEvals() {
       const list = evalList(), byId = mentorById();
@@ -2848,7 +2890,8 @@
       const str = String(idOrUrl || '').trim();
       const m = str.match(/\/d\/([a-zA-Z0-9\-_]{20,})/);
       const gid = str.match(/[#&?]gid=(\d+)/);
-      return `${m ? m[1] : str}|${gid ? gid[1] : ''}`;
+      if (!gid) throw new Error('Open the responses tab and copy its full link, including #gid= and the tab number. A spreadsheet-only link cannot safely identify imported responses.');
+      return `${m ? m[1] : str}|${gid[1].replace(/^0+(?=\d)/, '')}`;
     }
     /* RFC 4180 CSV: comments hold commas, quotes and line breaks. */
     function parseCSV(text) {
@@ -2892,11 +2935,23 @@
       // no game on the schedule. Every other AM hour is left alone.
       return `${pad2(h)}:${m[2]}`;
     }
-    function formStamp(v) {  // the response time, "9/12/2026 15:04:05", in this computer's time zone
-      const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    // Google Forms timestamps have no offset. Use the league sheet's timezone,
+    // never the importing computer's timezone. Reject invalid/nonexistent wall times.
+    const FORM_TIME_ZONE = 'America/Chicago';
+    function formStamp(v) {
+      const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
       if (!m) return '';
-      const d = new Date(+m[3], m[1] - 1, +m[2], +m[4], +m[5], +(m[6] || 0));
-      return isNaN(d) ? '' : d.toISOString();
+      let h = +m[4];
+      if (m[7]) {if (h < 1 || h > 12) return ''; h = h % 12 + (/pm/i.test(m[7]) ? 12 : 0);}
+      const parts = [+m[3], +m[1], +m[2], h, +m[5], +(m[6] || 0)];
+      const wall = Date.UTC(parts[0], parts[1] - 1, parts[2], h, parts[4], parts[5]);
+      const formatter = new Intl.DateTimeFormat('en-US', {timeZone: FORM_TIME_ZONE, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23'});
+      // Chicago's two offsets; the earlier instant resolves the repeated fall hour consistently.
+      for (const offset of [5, 6]) {
+        const d = new Date(wall + offset * 3600000), p = Object.fromEntries(formatter.formatToParts(d).map(x => [x.type, x.value]));
+        if (['year', 'month', 'day', 'hour', 'minute', 'second'].every((k, i) => +p[k] === parts[i])) return d.toISOString();
+      }
+      return '';
     }
 
     /* ---------- the schedule, for completing first names ----------
@@ -3056,6 +3111,7 @@
             position: get(r, 'position').toUpperCase(), move_up: /^y/i.test(mv) ? 'Yes' : /^n/i.test(mv) ? 'No' : mv,
             comments: clip(get(r, 'comments'), 20000), saved_at: formStamp(get(r, 'timestamp'))
           };
+          if (get(r, 'timestamp') && !item.saved_at) throw new Error(`Response row ${row} has an invalid timestamp for ${FORM_TIME_ZONE}. Check the sheet timezone and timestamp. Date formats must be M/D/YYYY and include a time.`);
           RATED.forEach(c => {item[c.id] = rating(get(r, c.id));});
           return item;
         });
@@ -3063,9 +3119,13 @@
 
     /* Preview (apply = false) or import. The server takes 200 at a time. */
     async function formRun(apply) {
+      const generation = authGeneration, owner = ST.me?.id, items = IMPF.items;
+      const assertSession = () => {if (generation !== authGeneration || ST.auth !== 'admin' || ST.me?.id !== owner || !owner) throw new Error('Your session changed. Fetch the responses again before importing.');};
       const out = new Map();
-      for (let i = 0; i < IMPF.items.length; i += 200) {
-        const {data, error} = await sbc().rpc('import_form_evaluations', {p_items: IMPF.items.slice(i, i + 200), p_apply: apply});
+      for (let i = 0; i < items.length; i += 200) {
+        assertSession();
+        const {data, error} = await sbc().rpc('import_form_evaluations', {p_items: items.slice(i, i + 200), p_apply: apply});
+        assertSession();
         if (error) throw error;
         (data || []).forEach(d => {
           out.set(d.out_row, {status: d.out_status, error: d.out_error || '',
@@ -3082,9 +3142,13 @@
     }
 
     async function formFetch() {
+      const generation = authGeneration;
+      const current = () => generation === authGeneration && ST.auth === 'admin';
+      if (!current()) return;
       const link = String(IMPF.link || '').trim();
       if (!link) {flash('Paste the responses sheet link first'); return;}
       store.set('sideline:adminFormSheet', link);
+      try {formSheetKey(link);} catch (e) {flash(e.message); return;}
       const schedLink = String(IMPF.schedLink || '').trim();
       store.set('sideline:adminScheduleSheet', schedLink);
       Object.assign(IMPF, {busy: 'Fetching the sheet…', error: '', items: null, status: null, result: null,
@@ -3095,7 +3159,7 @@
       if (schedLink) {
         IMPF.busy = 'Reading and saving the schedule…';
         paintView();
-        try {IMPF.sched = await saveSchedule(schedLink);} catch (e) {IMPF.schedError = friendly(e);}
+        try {const schedule = await saveSchedule(schedLink); if (!current()) return; IMPF.sched = schedule;} catch (e) {IMPF.schedError = friendly(e);}
       }
       try {
         let text;
@@ -3109,14 +3173,16 @@
           throw new Error('Could not read that sheet. Check the link, and that the sheet is shared as ' +
             '"Anyone with the link" can view.');
         }
+        if (!current()) return;
         if (/^\s*</.test(text)) throw new Error('Google sent a sign-in page instead of the sheet. Share it as "Anyone with the link" can view.');
         const rows = parseCSV(text);
         if (rows.length < 2) throw new Error('The sheet has no responses yet.');
         IMPF.items = formItems(rows, formSheetKey(link));
         IMPF.busy = 'Checking the responses against the database…';
         paintView();
-        IMPF.status = await formRun(false);
+        const status = await formRun(false); if (!current()) return; IMPF.status = status;
       } catch (e) {
+        if (!current()) return;
         IMPF.error = friendly(e); IMPF.items = null; IMPF.status = null;
       }
       IMPF.busy = '';
@@ -3140,11 +3206,11 @@
     async function formImport() {
       if (!IMPF.status) return;
       const n = formCounts(IMPF.status);
-      if (!n.new && !n.changed) {flash('Nothing new to import'); return;}
+      if (!n.new && !n.changed && !n.in_app) {flash('Nothing new to import'); return;}
       const ok = await confirmBox({title: 'Import these responses?',
         message: `${plural(n.new, 'new evaluation')} and ${plural(n.changed, 'edited one')} go into the database, credited ` +
           'to the mentor named on the form, and every approved mentor sees them in referee profiles. Responses already ' +
-          'uploaded from the app are skipped.', confirm: 'Import'});
+          'uploaded from the app are kept, and matching imported duplicates are removed.', confirm: 'Import'});
       if (!ok) return;
       IMPF.busy = 'Importing…'; IMPF.error = '';
       paintView();
@@ -3233,7 +3299,7 @@
         <div class="kpi"><div class="l">Cannot import</div><div class="v">${n.error}</div><div class="s">the reason is on each row</div></div>
       </div>
       <div class="toolbar">
-        <button class="btn primary" id="fsImport" ${n.new + n.changed ? '' : 'disabled'}>Import ${plural(n.new + n.changed, 'response')}</button>
+        <button class="btn primary" id="fsImport" ${n.new + n.changed + n.in_app ? '' : 'disabled'}>Apply ${plural(n.new + n.changed + n.in_app, 'response')}</button>
         <div class="spacer"></div>
         ${hidden ? `<label class="chk"><input type="checkbox" id="fsAll" ${IMPF.showAll ? 'checked' : ''} /> Show the ${hidden} already in</label>` : ''}
       </div>
@@ -3457,6 +3523,7 @@
           applyTheme(); paintAcct(); return;
         case 'exportRefs': exportRefs(); return;
         case 'exportEvals': exportEvals(); return;
+        case 'exportRecovery': exportRecovery(); return;
         case 'evalMore': UI.evalLimit += 100; $('#evalTable').innerHTML = evalTableHTML(); return;
         case 'resetNotSame': UI.notSame.clear(); store.set('sideline:adminNotSame', []); paintView(); return;
         case 'mGo': doMerge($('#mFrom').value, $('#mInto').value); return;
@@ -3503,7 +3570,7 @@
 
     // Coming back to the tab after a while fetches what mentors uploaded since.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && ST.auth === 'admin' && DATA && !ST.loading && Date.now() - DATA.at > 5 * 60000) loadAll();
+      if (document.visibilityState === 'visible' && ST.auth === 'admin' && !ST.loading) refresh();
     });
 
     render();

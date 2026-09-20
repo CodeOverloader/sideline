@@ -168,7 +168,7 @@ begin
 
   -- a forged mentor_id in the payload is ignored
   perform public.save_evaluations(jsonb_build_array(
-    pg_temp.item('zz-test-1', 'Testref, Zed', 'forged') || '{"mentor_id":"5d1e0000-0000-4000-8000-00000000000b"}'));
+    pg_temp.item('zz-test-1', 'Testref, Zed', 'forged') || '{"eval_date":"2026-09-13","mentor_id":"5d1e0000-0000-4000-8000-00000000000b"}'));
   assert (select comments from public.evaluations
           where client_id = 'zz-test-1' and mentor_id = '5d1e0000-0000-4000-8000-00000000000b') = 'updated',
     'FAIL: mentor 2 overwrote mentor 1''s evaluation';
@@ -334,7 +334,7 @@ begin
   perform public.save_evaluations(jsonb_build_array(pg_temp.item('zz-test-10', 'Zed Twin')));
 
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp);
-  assert st = array['in_app', 'new', 'error', 'new', 'same'], format('FAIL: preview statuses were %s', st);
+  assert st = array['in_app', 'new', 'error', 'new', 'changed'], format('FAIL: preview statuses were %s', st);
   assert (select count(*) from public.evaluations where source = 'form') = 1, 'FAIL: a preview saved something';
   assert (select form_source_key is null from public.evaluations where source = 'form'),
     'FAIL: a preview adopted the old imported row';
@@ -342,7 +342,7 @@ begin
     'FAIL: a preview created a referee';
 
   select array_agg(out_status order by out_row) into st from public.import_form_evaluations(resp, true);
-  assert st = array['in_app', 'new', 'error', 'new', 'same'], format('FAIL: import statuses were %s', st);
+  assert st = array['in_app', 'new', 'error', 'new', 'changed'], format('FAIL: import statuses were %s', st);
   assert (select count(*) from public.evaluations where source = 'form') = 3, 'FAIL: import did not leave three form rows';
   assert (select form_row from public.evaluations where source = 'form' and referee_name = 'Zed Legacy') = 6,
     'FAIL: an old imported row was not adopted by its sheet row';

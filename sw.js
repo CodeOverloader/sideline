@@ -28,7 +28,7 @@
 //     morning silently never arrived.
 // ============================================================
 
-const CACHE_NAME = 'sideline-shell-v3';
+const CACHE_NAME = 'sideline-shell-v4';
 const SHELL_ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 // The sign-in library, only when accounts are configured. The URL names an
