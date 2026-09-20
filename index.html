@@ -2528,6 +2528,11 @@
        backup file are only checked for a ratings object, and a number where a
        date or name belongs threw in the Saved list and the CSV, while a bad
        savedAt threw in toISOString and stopped every upload, not just its own. */
+    const cleanNotes = (notes) => Array.isArray(notes) ? notes
+      .filter(n => n && typeof n === 'object' && !Array.isArray(n))
+      .map(n => ({...n, text: typeof n.text === 'string' ? n.text : '',
+        cat: typeof n.cat === 'string' ? n.cat : '', pol: [1, -1, 2].includes(n.pol) ? n.pol : 0})) : [];
+
     function tidyRecord(h) {
       const r = {...h, id: safeId(h.id)};
       ['mentor', 'date', 'field', 'sub', 'time', 'division', 'referee', 'comments']
@@ -2536,7 +2541,7 @@
       if (r.moveUp !== 'Yes' && r.moveUp !== 'No') r.moveUp = null;
       const rt = r.ratings && typeof r.ratings === 'object' ? r.ratings : {};
       r.ratings = Object.fromEntries(RATED.map(c => [c.id, [1, 2, 3, 4].includes(rt[c.id]) ? rt[c.id] : null]));
-      r.notes = Array.isArray(r.notes) ? r.notes.filter(n => n && typeof n === 'object') : [];
+      r.notes = cleanNotes(r.notes);
       const t = Number(r.savedAt);
       r.savedAt = Number.isFinite(t) && t > 0 && t < 8.64e15 ? t : Date.now();
       return r;
@@ -2588,7 +2593,7 @@
        saves carried last week's date. An empty session just rolls forward; one
        holding games gets a banner on the Fields tab asking what to do. */
     function sessionHasData() {
-      return S.fields.some(f => f.name || f.refs.some(r => r.name.trim() || r.notes.length));
+      return S.fields.some(f => f.name || f.refs.some(r => r.name.trim() || refHasAssessment(r)));
     }
     if (S.date !== todayISO() && !sessionHasData()) S.date = todayISO();
 
@@ -3489,10 +3494,11 @@
       const lead = dayLead(g); if (!lead) return [];
       const ids = dayIds(g);
       const key = nameKey(lead.ref.name);
-      return HIST.filter(h =>
-        ids.includes(h.refId)
-        || (Array.isArray(h.refIds) && h.refIds.some(id => ids.includes(id)))
-        || (!!key && nameKey(h.referee) === key && h.date === S.date));
+      return HIST.filter(h => h.date === S.date
+        && (!h.syncedBy || !ACCT.id || h.syncedBy === ACCT.id)
+        && (ids.includes(h.refId)
+          || (Array.isArray(h.refIds) && h.refIds.some(id => ids.includes(id)))
+          || (!!key && nameKey(h.referee) === key)));
     }
     function savedRecordFor(g) {return savedRecordsFor(g)[0] || null;}
     /* The save button says whether this referee is saved, and whether they
@@ -3550,7 +3556,10 @@
       const prev = prevAll[0] || null;
       const rec = {
         id: prev ? prev.id : uid(), refId: lead.ref.id, refIds: dayIds(g),
-        savedAt: Date.now(), ...recordFor(g)
+        savedAt: Date.now(), ...recordFor(g),
+        syncedBy: prev && prev.syncedBy || '',
+        serverRefereeId: prev && nameKey(prev.referee) === nameKey(lead.ref.name) ? prev.serverRefereeId || '' : '',
+        serverUpdatedAt: prev && prev.serverUpdatedAt || ''
       };
       const folded = prevAll.slice(1);
       if (folded.length) {
@@ -3729,6 +3738,7 @@
       : {...ACCT_BLANK, status: 'off'};
     const acctUI = {step: 'email', email: '', code: '', busy: false, error: '', notice: '', offline: false, sentAt: 0};
     let sb = null, sbLoading = null, acctStarted = false, mentorLoading = null;
+    let accountEpoch = 0;
 
     const isApproved = () => ACCT.status === 'mentor' || ACCT.status === 'admin';
     const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -3827,7 +3837,6 @@
       }
       // A refresh that finally got through after a spell without signal is the
       // moment to catch up: re-check approval, upload, pull.
-      if (event === 'TOKEN_REFRESHED' && ACCT.id === session.user.id && !acctUI.offline) return;
       if (ACCT.id !== session.user.id) {
         clearLeague();
         setAcct({status: 'pending', id: session.user.id, email: session.user.email || ''});
@@ -3839,59 +3848,92 @@
       const c = sbc();
       if (!c) return Promise.resolve();
       if (mentorLoading) return mentorLoading;
-      // Next tick, for the same reason as syncNow().
-      mentorLoading = Promise.resolve().then(async () => {
+      const epoch = accountEpoch, me = ACCT.id;
+      const task = Promise.resolve().then(async () => {
         try {
           const {data: {session}} = await c.auth.getSession();
-          if (!session) return;
+          if (!session || epoch !== accountEpoch || session.user.id !== me) return;
           const {data, error} = await c.from('mentors')
-            .select('id,email,display_name,role').eq('id', session.user.id).maybeSingle();
+            .select('id,email,display_name,role').eq('id', me).maybeSingle();
           if (error) throw error;
-          const row = data || {id: session.user.id, email: session.user.email, display_name: '', role: 'pending'};
+          if (epoch !== accountEpoch || ACCT.id !== me) return;
+          const row = data || {id: me, email: session.user.email, display_name: '', role: 'pending'};
           acctUI.offline = false;
           setAcct({status: row.role, id: row.id, email: row.email || session.user.email || '', name: row.display_name || ''});
-          // A new phone takes the account's name; otherwise the account takes
-          // the name typed here.
           if (row.display_name && !S.mentor.trim()) {S.mentor = row.display_name; save(); renderQuietly();}
-          else pushMentorName();
-          if (isApproved()) {offerFirstUpload(); syncNow(); pullLeague();}
+          if (isApproved()) {
+            if (S.mentor.trim()) {
+              try {await updateMentorName();}
+              catch (e) {acctUI.error = friendly(e); paintAcctCard(true);}
+            }
+            if (epoch !== accountEpoch || ACCT.id !== me) return;
+            offerFirstUpload(); syncNow(); pullLeague();
+          }
         } catch (e) {
-          // Offline, or the project is paused: keep the cached status.
-          acctUI.offline = isNetErr(e);
+          if (epoch === accountEpoch) acctUI.offline = isNetErr(e);
         } finally {
-          mentorLoading = null;
+          if (mentorLoading === task) mentorLoading = null;
         }
       });
-      return mentorLoading;
+      mentorLoading = task;
+      return task;
+    }
+
+    // Refresh permissions before using cached approval for a network operation.
+    // A failed connection preserves offline notes; a confirmed revocation clears league data.
+    async function checkAccess(c, me, epoch) {
+      const current = () => epoch === accountEpoch && me === ACCT.id && isApproved();
+      if (!current()) return false;
+      const {data: {session}, error: sessionError} = await c.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!current() || !session || session.user.id !== me) return false;
+      const {data, error} = await c.from('mentors').select('role').eq('id', me).maybeSingle();
+      if (error) throw error;
+      if (!current()) return false;
+      if (!data || !['mentor', 'admin'].includes(data.role)) {
+        setAcct({...ACCT, status: 'pending'});
+        return false;
+      }
+      return true;
     }
 
     /* The server credits every uploaded evaluation to the account's name, so
        the account's name follows the name typed in the app. It refuses a name
        another account already has; the Account sheet then says so. */
     let nameTimer = null;
+    async function updateMentorName() {
+      const c = sbc(), me = ACCT.id, epoch = accountEpoch, want = clip(S.mentor.trim(), 80);
+      if (!c || !me || !isApproved()) return false;
+      if (!want) throw new Error('Enter your mentor name before uploading.');
+      if (want === ACCT.name) return true;
+      const {error} = await c.from('mentors').update({display_name: want}).eq('id', me);
+      if (error) throw error;
+      if (epoch !== accountEpoch || me !== ACCT.id) return false;
+      ACCT = {...ACCT, name: want};
+      store.set('sideline:acct', ACCT);
+      acctUI.error = ''; paintAcctCard(true);
+      return true;
+    }
     function pushMentorName(delay) {
       clearTimeout(nameTimer);
+      const epoch = accountEpoch;
       nameTimer = setTimeout(async () => {
-        const c = sbc(), want = clip(S.mentor.trim(), 80);
-        if (!c || ACCT.status === 'signedOut' || !ACCT.id || !want || want === ACCT.name) return;
-        let error = null;
-        try {({error} = await c.from('mentors').update({display_name: want}).eq('id', ACCT.id));} catch (e) {error = e;}
-        if (error) {
-          if (!isNetErr(error)) {acctUI.error = friendly(error); paintAcctCard(true);}
-          return;
-        }
-        ACCT = {...ACCT, name: want};
-        store.set('sideline:acct', ACCT);
-        if (acctUI.error) {acctUI.error = ''; paintAcctCard(true);}
+        if (epoch !== accountEpoch) return;
+        try {if (await updateMentorName()) syncNow();}
+        catch (e) {if (epoch === accountEpoch) {acctUI.error = friendly(e); paintAcctCard(true);}}
       }, delay || 0);
     }
 
     function setAcct(next) {
-      const wasApproved = isApproved();
+      const wasApproved = isApproved(), previousId = ACCT.id;
       ACCT = {...ACCT_BLANK, ...next};
+      if (previousId !== ACCT.id || (wasApproved && !isApproved())) {
+        accountEpoch++; mentorLoading = null;
+        clearTimeout(nameTimer); clearTimeout(SYNC.retryTimer);
+      }
       store.set('sideline:acct', ACCT);
-      if (wasApproved && !isApproved()) clearLeague();
-      if (!wasApproved && isApproved()) loadLeagueCache().then(renderQuietly);
+      if (previousId !== ACCT.id || (wasApproved && !isApproved())) clearLeague();
+      if ((!wasApproved || previousId !== ACCT.id) && isApproved()) loadLeagueCache().then(renderQuietly);
       invalidateProfiles();
       paintAccount();
     }
@@ -4102,8 +4144,8 @@
        ------------------------------------------------------------
        Only saved evaluations travel; games and notes in progress stay on
        the phone. Each HIST record remembers when, and for which account,
-       it was last uploaded (syncedAt / syncedBy). saveEval() replaces the
-       record, which clears both, so an edited evaluation goes up again.
+       it was last uploaded (syncedAt / syncedBy). An edit clears syncedAt
+       but retains ownership and the server version for conflict checks.
        The server matches on the record's own id, so repeats and restored
        backups update in place instead of duplicating.
        ============================================================ */
@@ -4139,6 +4181,8 @@
       const cut = (v, n) => clip(String(v == null ? '' : v).trim(), n);
       const out = {
         client_id: r.id,
+        expected_mentor_id: ACCT.id,
+        ...(r.serverUpdatedAt && r.syncedBy === ACCT.id ? {expected_updated_at: r.serverUpdatedAt} : {}),
         referee_name: cut(r.referee, 120),
         mentor_name: cut(r.mentor, 80),
         eval_date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') ? r.date : '',
@@ -4201,31 +4245,46 @@
       // finishes without awaiting, and its `finally` (which clears
       // SYNC.running) would then run BEFORE this assignment - leaving a
       // finished promise parked in SYNC.running and every later sync skipped.
+      const me = ACCT.id, epoch = accountEpoch;
+      const current = () => epoch === accountEpoch && me === ACCT.id && isApproved();
       SYNC.running = Promise.resolve().then(async () => {
-        const me = ACCT.id;
         try {
+          if (!await checkAccess(c, me, epoch)) return;
           const mine = pendingDeletes().filter(d => d.by === me);
           if (mine.length) {
             const ids = mine.map(d => d.id);
             const {error} = await c.from('evaluations').delete().eq('mentor_id', me).in('client_id', ids);
             if (error) throw error;
+            if (!current()) return;
             store.set('sideline:pendingDeletes', pendingDeletes().filter(d => !(d.by === me && ids.includes(d.id))));
           }
+          if (!current()) return;
           const todo = uploadConsent() === true ? HIST.filter(needsUpload) : [];
+          if (todo.length && !await updateMentorName()) return;
+          if (!current()) return;
           for (let i = 0; i < todo.length; i += 50) {
+            if (!current() || uploadConsent() !== true) return;
             const batch = todo.slice(i, i + 50);
             const sent = new Map(batch.map(r => [r.id, r.savedAt]));
             const {data, error} = await c.rpc('save_evaluations', {p_items: batch.map(toPayload)});
+            if (!current()) return;
             if (error) throw error;
             (data || []).forEach(row => {
               const r = HIST.find(h => h.id === row.out_client_id);
               if (!r) return;
               // Saved again while this batch was on its way: the newer version goes next pass.
-              if (r.savedAt !== sent.get(r.id)) {resaved = true; return;}
+              if (r.savedAt !== sent.get(r.id)) {
+                if (!row.out_error) {
+                  r.serverUpdatedAt = row.out_updated_at; r.syncedBy = me;
+                  r.serverRefereeId = row.out_referee_id;
+                }
+                resaved = true; return;
+              }
               // The server refused this one and saved the rest of the batch.
               if (row.out_error) {r.uploadError = {msg: row.out_error, savedAt: r.savedAt, by: me}; return;}
               delete r.uploadError;
               r.syncedAt = Date.now(); r.syncedBy = me; r.serverRefereeId = row.out_referee_id;
+              r.serverUpdatedAt = row.out_updated_at;
             });
             histChanged(); save();
           }
@@ -4233,12 +4292,13 @@
           SYNC.lastOk = Date.now(); store.set('sideline:lastSync', SYNC.lastOk);
           if (todo.length || mine.length) pullLeague('force');
         } catch (e) {
+          if (!current()) return;
           SYNC.error = friendly(e);
           SYNC.backoff = Math.min((SYNC.backoff || 15000) * 2, 10 * 60000);
           if (navigator.onLine) SYNC.retryTimer = setTimeout(syncNow, SYNC.backoff);
         } finally {
           SYNC.running = null;
-          if ((resaved || SYNC.again) && !SYNC.error) setTimeout(syncNow, 500);
+          if (((resaved || SYNC.again) && !SYNC.error) || (!current() && isApproved())) setTimeout(syncNow, 500);
           paintSync();
         }
       });
@@ -4379,7 +4439,7 @@
           if (LEAGUE.account === v.account && LEAGUE.pulledAt >= (v.pulledAt || 0)) return;
           LEAGUE = {
             ...v,
-            evals: new Map((v.evals || []).map(r => [r.serverId, r])),
+            evals: new Map((v.evals || []).map(r => [r.serverId, {...r, notes: cleanNotes(r.notes)}])),
             referees: new Map((v.referees || []).map(x => [x.id, x]))
           };
           invalidateProfiles();
@@ -4398,7 +4458,7 @@
     }
 
     const EVAL_COLS = 'id,mentor_id,client_id,referee_id,referee_name,mentor_name,eval_date,field,pitch,kickoff,' +
-      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at,updated_at';
+      'division,position,appearance,workrate,commands,teamwork,fouls,offsides,move_up,comments,notes,saved_at,updated_at,source,form_owner_mentor_id';
 
     /* PostgREST returns at most 1000 rows per request, so page through. */
     async function pageAll(build) {
@@ -4416,13 +4476,14 @@
     function fromRow(row) {
       return {
         id: row.client_id, serverId: row.id, mentorId: row.mentor_id, refereeId: row.referee_id,
+        source: row.source, formOwnerMentorId: row.form_owner_mentor_id,
         savedAt: Date.parse(row.saved_at) || 0, updatedAt: row.updated_at,
         mentor: row.mentor_name || '', date: row.eval_date || '', field: row.field || '', sub: row.pitch || '',
         time: String(row.kickoff || '').slice(0, 5), division: row.division || '',
         referee: row.referee_name || '', position: row.position,
         ratings: Object.fromEntries(RATED.map(c => [c.id, row[c.id]])),
         moveUp: row.move_up, comments: row.comments || '',
-        notes: Array.isArray(row.notes) ? row.notes : []
+        notes: cleanNotes(row.notes)
       };
     }
 
@@ -4444,10 +4505,11 @@
       }
       if (!mode && Date.now() - LEAGUE.pulledAt < 2 * 60000) return Promise.resolve();
       // Next tick, for the same reason as syncNow().
+      const me = ACCT.id, epoch = accountEpoch;
       pulling = Promise.resolve().then(async () => {
         try {
           await loadLeagueCache();
-          const me = ACCT.id;
+          if (!await checkAccess(c, me, epoch)) return;
           const full = mode === 'full' || LEAGUE.account !== me || !LEAGUE.fullAt || Date.now() - LEAGUE.fullAt > 864e5;
           // Five minutes before the cursor, or '' (fetch from the start) if this
           // browser cannot read the server's timestamp: Invalid Date would throw
@@ -4465,7 +4527,7 @@
             if (delSince) q = q.gt('deleted_at', delSince);
             return q;
           });
-          if (ACCT.id !== me || !isApproved()) return;   // signed out or demoted mid-pull
+          if (ACCT.id !== me || epoch !== accountEpoch || !isApproved()) return;   // signed out or demoted mid-pull
 
           const evals = full ? new Map() : new Map(LEAGUE.evals);
           rows.forEach(r => evals.set(r.id, fromRow(r)));
@@ -4483,7 +4545,7 @@
           leagueLoading = leagueLoading || Promise.resolve(); pullError = '';
           persistLeague(); invalidateProfiles();
         } catch (e) {
-          pullError = friendly(e);
+          if (epoch === accountEpoch) pullError = friendly(e);
         } finally {
           pulling = null;
           renderQuietly();
@@ -4604,7 +4666,7 @@
       HIST.forEach(h => {
         if (!h.referee || !h.referee.trim()) return;
         const owner = h.syncedBy || me;
-        put(`${owner}|${h.id}`, {...h, mentorId: owner, refereeId: h.serverRefereeId || '', local: true});
+        put(`${owner}|${h.id}`, {...h, mentorId: owner, refereeId: h.serverRefereeId || '', source: 'app', local: true});
       });
 
       const groups = new Map();
@@ -4617,24 +4679,9 @@
         groups.get(key).records.push(r);
       });
 
-      /* Collapse copies of the SAME evaluation.
-
-         The league takes one evaluation per referee per day per mentor, so that
-         is the identity - and several things can produce a second copy of one:
-         an evaluation the mentor filed in the app that also arrives through the
-         Google Form import (those carry no mentor_id, so their dedup key can
-         never match the mentor's own upload), and records written per game
-         before evaluations became per day.
-
-         Counting both would inflate the referee's evaluation count and let one
-         game's ratings pull their average twice. The count of what was folded
-         is kept so the profile can say so: this makes the numbers right without
-         hiding that there is something to tidy up on the server. */
-      const copyRank = (r) => [
-        Array.isArray(r.games) ? r.games.length : 1,
-        (r.notes || []).length,
-        r.savedAt || 0
-      ];
+      // Only a recorded account identity can prove two evaluations have the
+      // same author. Names can be reused; unowned form rows remain separate.
+      const copyRank = (r) => [r.source === 'form' ? 0 : 1, r.savedAt || 0, (r.notes || []).length];
       const better = (a, b) => {
         const x = copyRank(a), y = copyRank(b);
         for (let i = 0; i < x.length; i++) {if (x[i] !== y[i]) return x[i] > y[i];}
@@ -4644,11 +4691,8 @@
         const byDay = new Map();
         let dupes = 0;
         g.records.forEach(r => {
-          // By the mentor's NAME, not their id: a form-imported row has no
-          // mentor_id at all, so the name is the only thing the two copies of
-          // one evaluation share.
-          const who = nameKey(r.mentor) || r.mentorId || '';
-          const k = `${r.date || ''}|${who}`;
+          const owner = r.mentorId || r.formOwnerMentorId;
+          const k = owner && r.date ? `${r.date}|${owner}` : `record:${r.serverId || r.id}`;
           const cur = byDay.get(k);
           if (!cur) {byDay.set(k, r); return;}
           dupes++;
@@ -5703,8 +5747,19 @@
        Two rules that matter: a game already on the board is updated rather
        than duplicated (matched on field name plus kickoff), and a referee
        who already has notes is never renamed out from under those notes. */
+    function refHasAssessment(r) {
+      return !!((r.notes || []).length || r.comments || r.moveUp || r.submitted
+        || Object.values(r.ratings || {}).some(v => v != null));
+    }
+
     function applyGames(keys) {
       const games = rowsToGames().filter(g => keys.includes(g.key));
+      const dates = [...new Set(games.map(g => g.date).filter(Boolean))];
+      if (dates.length > 1 || (dates.length === 1 && dates[0] !== S.date && sessionHasData())) {
+        flash('Choose games for one day matching the session date. Change the date in settings or start a new session.');
+        return false;
+      }
+      if (dates.length === 1) S.date = dates[0];
       let added = 0, updated = 0, protectedRefs = 0;
 
       /* Group by field name + kickoff FIRST. Two rows for Tigers at 8:00 are two
@@ -5765,16 +5820,17 @@
             const roles = want === 1 ? ['CR']
               : want === 2 ? (dual ? ['CR', 'CR'] : ['CR', 'AR'])
                 : ['CR', 'AR', 'AR'];
+            const order = perRow === 1 && g.seats ? seatOrder(roles, g.seats) : mine;
             for (let i = 0; i < want; i++) {
               if (!f.refs[i]) f.refs.push(newRef('CR', roles[i]));
-              f.refs[i].role = roles[i];
+              if (!refHasAssessment(f.refs[i]) || !order[i] || nameKey(f.refs[i].name) === nameKey(order[i]))
+                f.refs[i].role = roles[i];
             }
-            // Keep any extra slot that already carries notes; drop empty leftovers.
-            f.refs = f.refs.filter((r, i) => i < want || r.notes.length);
-            const order = perRow === 1 && g.seats ? seatOrder(roles, g.seats) : mine;
+            // Keep any extra slot with an assessment; drop empty leftovers.
+            f.refs = f.refs.filter((r, i) => i < want || refHasAssessment(r));
             order.slice(0, f.refs.length).forEach((nm, i) => {
               const r = f.refs[i]; if (!r || !nm) return;
-              if (r.notes.length && r.name.trim() && r.name.trim() !== nm) {protectedRefs++; return;}
+              if (refHasAssessment(r) && r.name.trim() && nameKey(r.name) !== nameKey(nm)) {protectedRefs++; return;}
               r.name = nm;
             });
             f.crewSize = f.refs.length;
@@ -5805,7 +5861,7 @@
 
       save(); renderAll();
       let msg = `${added} added, ${updated} updated`;
-      if (protectedRefs) msg += `, ${protectedRefs} kept (already have notes)`;
+      if (protectedRefs) msg += `, ${protectedRefs} kept (already have assessments)`;
       flash(msg);
       return {added, updated, protectedRefs, pruned};
     }
@@ -6271,7 +6327,7 @@
           const chosen = [...new Set(rowsToGames().filter(g => IMP.picked.includes(g.key))
             .map(g => g.field || g.raw.field).filter(Boolean))];
           if (chosen.length) store.set('sideline:myfields', chosen);
-          applyGames(IMP.picked);
+          if (applyGames(IMP.picked) === false) return;
           closeSheet(); setTab('fields'); return;
         }
         case 'closeSheet': closeSheet(); return;
@@ -6433,8 +6489,12 @@
     window.addEventListener('online', () => {initAccounts().then(refreshMentor); paintSync();});
     window.addEventListener('offline', paintSync);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && isApproved()) {syncNow(); pullLeague();}
+      if (document.visibilityState === 'visible' && ACCT.id) refreshMentor();
     });
+
+    setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine && ACCT.id) refreshMentor();
+    }, 2 * 60000);
 
     /* The service worker earns its keep on GitHub Pages. Inside the Android
        shell the assets are already on the device, so registering it would

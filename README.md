@@ -76,7 +76,7 @@ You only do this once. Claude cannot create accounts for you, so the Supabase st
 
 9. **Keep the project awake, and back it up.** Sideline runs on Supabase's free plan, which pauses a project after a week with little database activity and keeps no backups.
    - **Pausing.** The GitHub job `.github/workflows/keep-supabase-awake.yml` calls the database twice a day, which is enough to stop it. If a run fails, GitHub emails you: the project is probably paused, so resume it from the Supabase dashboard. GitHub switches scheduled jobs off in a public repo after 60 days without commits (it emails about that too). Switch it back on under **Actions → Keep Supabase awake**. While the project is paused, note-taking still works, but signing in, uploading and referee profiles do not.
-   - **Backups.** Every week or two, open the admin console's **Evaluations** page and use its CSV export. Keep the file somewhere private, never in this repository: it holds evaluations of named minors. It is the league's copy if a **Delete all records** or a bad change ever has to be undone by hand. Supabase's Pro plan ($25 a month) adds daily backups and never pauses, if the league ever wants that instead.
+   - **Backups.** Use **Evaluations → Export recovery JSON** for an unfiltered copy of evaluation fields and notes, mentor records, and referee merge links. Keep it private, never in this repository. CSV is a filtered report, not a backup. The JSON supports manual record recovery but excludes Auth users, schedules, deletion records, and the database schema; use a complete database backup for disaster recovery. There is no automatic JSON restore button.
 
 10. **Get sign-off before inviting others.** Evaluations are written assessments of named referees, many of them minors. Make sure the league knows where they are stored and who can read them before other mentors start uploading.
 
@@ -116,13 +116,15 @@ The console keeps no copy of the league's data in the browser; it reads it fresh
 
 Some mentors only fill in the Referee Evaluation form. **Import** in the admin console brings those responses into the database, so they count in referee profiles like any other evaluation.
 
-1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. If the sheet has several tabs, copy the link while the responses tab is open, so it carries `#gid=…`.
+1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. Always copy the link while the responses tab is open, including its explicit `#gid=…` tab number. Spreadsheet-only links are refused because they do not reliably identify a tab.
 2. Paste the link into **Import**, and paste the league's schedule sheet into **Link to the schedule sheet** below it (optional, but it is what completes the first names mentors type — see below). Choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
-3. Choose **Import**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
+3. Choose **Apply**. Run it again whenever you like: responses are keyed by the spreadsheet tab and response row, so edited answers are updated in place instead of creating duplicates.
+
+The responses sheet must use the league timezone, **America/Chicago**, and timestamps formatted as `M/D/YYYY H:MM:SS` (24-hour or AM/PM). Imports interpret that timezone consistently on every computer. Older imports created in another timezone, or without a tab number, may require an administrator to reconcile the existing rows. Exact unchanged legacy rows are adopted; uncertain matches are refused instead of overwritten.
 
 **Never sort, delete or insert rows in the responses tab.** Imported evaluations are matched to their sheet row. If rows move, the import recognises each moved response by its time stamp and refuses it (with the reason) rather than overwrite another evaluation. You then have to put the rows back in their original order to go on. To hide or tidy responses, use a filter view or another tab instead.
 
-A response counts as already uploaded from the app when the app has an evaluation of the same referee, on the same date, in the same position (and kickoff, when both have one), by a mentor with the same name. It is skipped, because the app's copy has the notes. If a mentor uploads from the app after their form response was imported, the imported copy is replaced by the app's.
+A response counts as already uploaded when an app evaluation has the same referee, date, and recorded owner account. Kickoff and position do not participate: an evaluation covers the referee's day. The app copy wins in either arrival order. **Apply** also removes existing matching imported copies when there are no new responses. A known owner is never replaced by another account merely because its name matches.
 
 Imported evaluations are credited to the name typed on the form, not to an account. Only admins can change or delete them. **Delete all records** on a referee removes them too.
 
@@ -250,7 +252,7 @@ the extra from the admin console.
 
 ### Handling a deletion request
 
-In the admin console, open the referee (from **Referees**, or **Clean-up → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. You can also run it from the SQL Editor:
+In the admin console, open the referee (from **Referees**, or **Clean-up → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. New deletions also retain opaque record identities so the same phone record or spreadsheet response cannot recreate the deleted evaluation. This does not erase local phone copies or the Google Sheet, identify records deleted before this protection existed, or prohibit genuinely new evaluations with new identities. You can also run it from the SQL Editor:
 
 ```sql
 select public.delete_referee_records('<referee id>');
@@ -267,3 +269,25 @@ A signed-in phone stays signed in, and keeps a copy of the league's evaluations 
 3. The mentor signs in again, and you approve them again. Approve them only after step 2: the lost phone would otherwise get its access back with them.
 
 On a paid Supabase plan you can also set **Authentication → Sessions → Inactivity timeout** (for example 30 days), so a forgotten phone signs itself out.
+
+
+## Integrity fixes and regression checks
+
+Deploy `20260922120000_evaluation_integrity.sql` after the earlier migrations, before publishing the updated pages. The migration is repeatable. Existing duplicate app records are retained for review; new saves from another device for the same account/referee/date are refused instead of silently discarding either record. Older or conflicting edits also remain on the device with an upload error. Back up the local record, review the league copy, and have an admin reconcile conflicting records before retrying. A normal profile refresh does not overwrite local notes or automatically resolve a conflict.
+
+Referee profiles use recorded account ownership for duplicate detection. Distinct or unknown authors remain separate even when their typed names match. Changing a session's date creates a new daily save. Schedule import accepts one day at a time and protects existing assessments when a referee assignment changes.
+
+Offline JavaScript checks (Node.js, no application dependencies):
+
+```sh
+node tests/mentor-regressions.cjs
+node tests/admin-regressions.cjs
+```
+
+Database checks use an isolated PostgreSQL engine through PGlite 0.5.8. Extract that package outside the repository, set `PGLITE_MODULE` to its `dist/index.js`, then run:
+
+```sh
+node tests/run-database.mjs
+```
+
+The runner applies every migration, applies the newest twice, and runs `supabase/tests.sql` plus `supabase/integrity_tests.sql`. It supplies minimal Supabase Auth fixtures and never connects to production. The SQL suites can also run on an isolated Supabase/PostgreSQL test project. See `INTEGRITY_FIXES.md` for review coverage and remaining operational limits.
