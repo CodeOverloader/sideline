@@ -411,6 +411,14 @@
       margin: 2px 0 10px
     }
 
+    .app-version {
+      color: var(--mute);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: var(--fs-xs);
+      text-align: center;
+      margin: 18px 0 4px
+    }
+
     label.f {
       display: block;
       margin: 10px 0 0
@@ -5085,7 +5093,8 @@
     <button class="btn sm danger" id="newSession" style="margin-top:8px">Clear the whole session</button>
     <div class="hint" style="margin-top:8px">
       Clears every game and all in-progress notes. Saved evaluations stay.${persistent ? '' :
-          ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>`;
+          ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>
+    <p class="app-version" aria-label="App version 1.0.0">Sideline v1.0.0</p>`;
     }
 
     /* ---------- the import wizard ----------
