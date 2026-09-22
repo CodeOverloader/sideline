@@ -1,0 +1,11 @@
+{
+  "name": "sideline",
+  "version": "2.0.0-beta.1",
+  "private": true,
+  "description": "An offline-capable referee mentoring workspace",
+  "scripts": {
+    "test": "node tests/mentor-regressions.cjs && node tests/admin-regressions.cjs && node tests/beta-regressions.cjs",
+    "preview": "node tests/preview-server.cjs",
+    "build": "node scripts/build-pages.cjs"
+  }
+}

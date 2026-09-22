@@ -1,0 +1,118 @@
+/* Sideline's shared visual language. Component layouts live in mentor/admin.css. */
+:root {
+  color-scheme: dark;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --bg: #101820;
+  --panel: #18232e;
+  --panel2: #202e3b;
+  --line: #3a4a59;
+  --grid: #2b3946;
+  --ink: #f2f6fa;
+  --mute: #b3c1ce;
+  --primary: #7dcfff;
+  --plus: #76dfb5;
+  --minus: #ffb47c;
+  --danger: #ff9da4;
+  --danger-tint: #422830;
+  --grass: #182f29;
+  --chalk: #688e7e;
+  --on-primary: #102c40;
+  --on-plus: #123126;
+  --on-minus: #38200c;
+  --primary-faint: #182a38;
+  --primary-tint: #203b4e;
+  --primary-strong: #23475f;
+  --primary-line: #527f9b;
+  --minus-tint: #3e3028;
+  --minus-line: #b68a66;
+  --glass: #18232e;
+  --scrim: rgba(6, 15, 24, .6);
+  --marker-ring: #f2f6fa;
+  --bar-muted: #8b9faf;
+  --shadow: 0 12px 40px rgba(0, 0, 0, .22);
+  --r: 16px;
+  --pad: 20px;
+  --side: 244px;
+  --tap: 48px;
+  --fs-xs: .8125rem;
+  --fs-sm: .875rem;
+  --fs-md: .9375rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.625rem;
+  --fs-3xl: 1.875rem;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel2: #f0f3f6;
+  --line: #ccd5df;
+  --grid: #e4e9ef;
+  --ink: #142b3e;
+  --mute: #526478;
+  --primary: #075b91;
+  --plus: #176b49;
+  --minus: #9b460c;
+  --danger: #b3293c;
+  --danger-tint: #fff0f2;
+  --grass: #e3efe9;
+  --chalk: #688e7e;
+  --on-primary: #ffffff;
+  --on-plus: #ffffff;
+  --on-minus: #ffffff;
+  --primary-faint: #f3f8fc;
+  --primary-tint: #e6f1fa;
+  --primary-strong: #d7eaf7;
+  --primary-line: #8db7d2;
+  --minus-tint: #fff4e7;
+  --minus-line: #cd9b70;
+  --glass: #ffffff;
+  --scrim: rgba(13, 32, 49, .42);
+  --marker-ring: #142b3e;
+  --bar-muted: #8b9faf;
+  --shadow: 0 12px 40px rgba(20, 43, 62, .12);
+}
+body { font-family: var(--font-sans); }
+button, input, select, textarea { font-family: inherit; }
+button, a, input, select, textarea { touch-action: manipulation; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+button:disabled { cursor: not-allowed; }
+input::placeholder, textarea::placeholder { color: var(--mute); opacity: 1; }
+input[type=checkbox] { accent-color: var(--primary); }
+input, select, textarea { scroll-margin-top: 160px; }
+.brand { font-family: var(--font-sans); font-weight: 800; letter-spacing: -.055em; font-size: 1.5rem; line-height: 1.2; }
+.brand span { color: inherit; }
+.brandmark { width: 33px; height: 33px; flex: none; border-radius: 10px; background: var(--primary); padding: 7px; color: var(--on-primary); }
+.brandmark svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.brand .brandmark { color: var(--on-primary); }
+.beta-badge { font-size: .625rem; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); background: var(--primary-tint); border: 1px solid var(--primary-line); border-radius: 5px; padding: 3px 5px; font-weight: 750; line-height: 1; }
+h1, h2, h3, h2.sec, .sheethead h3 { font-family: var(--font-sans); letter-spacing: -.025em; font-weight: 750; }
+h2.sec { font-size: var(--fs-xl); margin: 24px 0 10px; }
+.btn { border-radius: 10px; font-weight: 650; line-height: 1.35; }
+.btn.primary, a.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn.danger { background: var(--danger-tint); color: var(--danger); border-color: var(--danger); }
+.pill { font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 600; border-radius: 6px; padding: 3px 7px; line-height: 1.4; }
+.pill.success { background: var(--primary-faint); color: var(--plus); }
+.pill.low { color: var(--minus); background: var(--minus-tint); }
+.eyebrow { color: var(--mute); text-transform: uppercase; font-size: .6875rem; font-weight: 750; letter-spacing: .1em; margin: 0 0 8px; }
+.page-heading { margin: 24px 0 20px; }
+.page-heading h1 { font-size: 1.875rem; line-height: 1.15; margin: 0 0 8px; }
+.page-heading p:last-child { margin: 0; color: var(--mute); font-size: var(--fs-sm); }
+.warn, .okbox { border-radius: 10px; line-height: 1.55; }
+.empty { padding: 30px 18px; }
+.empty b { color: var(--ink); }
+.skip-link { position: fixed; left: 16px; top: -100px; z-index: 150; padding: 12px 18px; background: var(--panel); border: 2px solid var(--primary); border-radius: 8px; color: var(--primary); }
+.skip-link:focus { top: 12px; }
+@media (hover: hover) {
+  .btn:not(:disabled):hover { filter: brightness(.96); border-color: var(--primary); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+@media (forced-colors: active) {
+  button[aria-pressed=true], button[aria-current=page], a[aria-current=page] { outline: 2px solid Highlight; }
+}

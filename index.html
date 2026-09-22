@@ -4,15 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Sideline — Referee Evaluation Notes</title>
+  <title>Sideline Beta · Referee mentoring</title>
+  <meta name="description" content="Your matchday workspace. Observe, review and save referee evaluations, even without a connection." />
+  <meta name="robots" content="noindex" />
 
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icon.svg" />
-  <meta name="theme-color" content="#0b0d10" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#f4f6f8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Sideline" />
+  <meta name="apple-mobile-web-app-title" content="Sideline Beta" />
 
   <script>
     /* The custom domain also answers on plain http, and GitHub Pages sends the
@@ -24,7 +26,7 @@
     (function () {
       if (location.protocol !== 'http:' || location.hostname !== 'sideline.codeoverload.dev') return;
       try {
-        if (localStorage.getItem('sideline:session') || localStorage.getItem('sideline:history')) return;
+        if (localStorage.getItem('sideline-beta:session') || localStorage.getItem('sideline-beta:history')) return;
       } catch (e) { }
       location.replace('https://' + location.host + location.pathname + location.search + location.hash);
     })();
@@ -33,1987 +35,33 @@
        never sees a flash of the dark UI. The full theme logic (and the toggle)
        lives in the main script; this only has to agree with it. */
     (function () {
-      var mode = 'dark';
-      try { mode = JSON.parse(localStorage.getItem('sideline:theme')) || 'dark'; } catch (e) { }
+      var mode = 'light';
+      try { mode = JSON.parse(localStorage.getItem('sideline-beta:theme')) || 'light'; } catch (e) { }
       var prefersDark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
       var light = mode === 'light' || (mode === 'auto' && !prefersDark);
       document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
     })();
   </script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
+  <link rel="stylesheet" href="assets/mentor.css?v=beta2" />
+  <link rel="stylesheet" href="assets/design-system.css?v=beta2" />
 
-  <style>
-    /* ============================================================
-   DESIGN TOKENS
-   A "token" is just a named value you use everywhere instead of
-   repeating a literal. Change --primary once and every button,
-   ring, and active marker follows. Whistle is amber; Sideline is
-   sky blue on purpose so the two home-screen icons and the two
-   apps never get confused at a glance.
-   ============================================================ */
-    :root {
-      /* color-scheme tells the browser to draw native controls (the date and
-         time pickers, scrollbars) for a dark page. Without it the calendar
-         icon in the date input is black on a near-black field. */
-      color-scheme: dark;
-      --bg: #0b0d10;
-      --panel: #14181d;
-      --panel2: #1b2127;
-      --line: #242c34;
-      --ink: #e9eef3;
-      --mute: #8b98a5;
-      --primary: #38bdf8;
-      /* structure, active selection */
-      --plus: #34d399;
-      /* a strength */
-      --minus: #fb923c;
-      /* something to work on (orange, not red: not an error) */
-      --grass: #0f1d17;
-      /* pitch fill */
-      --chalk: rgba(233, 238, 243, .22);
-      /* text sitting on a filled primary / plus / minus surface */
-      --on-primary: #06212e;
-      --on-plus: #04241a;
-      --on-minus: #251100;
-      /* translucent accents, so tints follow the theme too */
-      --primary-faint: rgba(56, 189, 248, .04);
-      --primary-tint: rgba(56, 189, 248, .1);
-      --primary-strong: rgba(56, 189, 248, .16);
-      --primary-line: rgba(56, 189, 248, .38);
-      --minus-tint: rgba(251, 146, 60, .1);
-      --minus-line: rgba(251, 146, 60, .38);
-      --glass: rgba(11, 13, 16, .94);
-      --scrim: rgba(0, 0, 0, .62);
-      --marker-ring: #e9eef3;
-      --r: 12px;
-      --pad: 14px;
-
-      /* ---------- TYPE SCALE ----------
-         Sizes are in rem, not px, on purpose. 1rem = whatever the phone's
-         browser has been told a "normal" letter is, so a mentor who has set
-         their phone to Large text gets larger text HERE too. Fixed px ignores
-         that setting entirely, which is exactly backwards for this audience.
-         Seven steps, and nothing below --fs-xs: a design "scale" just means a
-         short list of allowed sizes, so the app never drifts into 11.5px. */
-      --fs-xs: 0.8125rem;
-      /* 13px - the floor. Captions, counts, pills. */
-      --fs-sm: 0.875rem;
-      /* 14px - secondary text, hints */
-      --fs-md: 0.9375rem;
-      /* 15px - dense UI labels */
-      --fs-base: 1rem;
-      /* 16px - body. Also the iOS no-zoom floor for inputs. */
-      --fs-lg: 1.125rem;
-      /* 18px - card titles */
-      --fs-xl: 1.25rem;
-      /* 20px - section headings */
-      --fs-2xl: 1.625rem;
-      /* 26px - brand */
-      --fs-3xl: 1.875rem;
-      /* 30px - display */
-
-      /* Minimum comfortable touch target. Apple asks for 44px, Material for
-         48. Everything you can tap is held to this, because the app is used
-         one-handed, outdoors, often by someone wearing reading glasses. */
-      --tap: 44px;
-    }
-
-    /* SUNLIGHT theme. A dark screen washes out in direct sun, which is exactly
-       where this app gets used. Same structure with the ground inverted, and
-       every accent darkened until its text clears WCAG AA on white. */
-    :root[data-theme="light"] {
-      color-scheme: light;
-      --bg: #eef2f5;
-      --panel: #ffffff;
-      --panel2: #f4f7f9;
-      --line: #c5d0d9;
-      --ink: #0b1218;
-      --mute: #4a5764;
-      --primary: #0369a1;
-      --plus: #047857;
-      --minus: #c2410c;
-      --grass: #d7ecdf;
-      --chalk: rgba(11, 18, 24, .34);
-      --on-primary: #ffffff;
-      --on-plus: #ffffff;
-      --on-minus: #ffffff;
-      --primary-faint: rgba(3, 105, 161, .03);
-      --primary-tint: rgba(3, 105, 161, .08);
-      --primary-strong: rgba(3, 105, 161, .14);
-      --primary-line: rgba(3, 105, 161, .45);
-      --minus-tint: rgba(194, 65, 12, .07);
-      --minus-line: rgba(194, 65, 12, .4);
-      --glass: rgba(238, 242, 245, .95);
-      --scrim: rgba(11, 18, 24, .45);
-      --marker-ring: #0b1218;
-    }
-
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--ink);
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      font-size: var(--fs-base);
-      line-height: 1.5;
-      max-width: 600px;
-      margin: 0 auto;
-      padding-bottom: calc(84px + env(safe-area-inset-bottom));
-      -webkit-font-smoothing: antialiased;
-    }
-
-    button,
-    input,
-    select,
-    textarea {
-      font-family: inherit;
-      font-size: inherit;
-      color: inherit
-    }
-
-    button {
-      cursor: pointer;
-      border: none;
-      background: none
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px
-    }
-
-    @media (prefers-reduced-motion:reduce) {
-      * {
-        transition: none !important;
-        animation: none !important
-      }
-    }
-
-    /* ---------- app chrome ---------- */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 40;
-      background: var(--glass);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--line);
-      padding: calc(8px + env(safe-area-inset-top)) var(--pad) 0;
-    }
-
-    .brandrow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      /* Collapses on scroll - see header.tuck below. */
-      max-height: 56px;
-      overflow: hidden;
-      transition: max-height .18s ease, opacity .18s ease, margin .18s ease;
-    }
-
-    /* Scrolling down tucks the brand row away and leaves only the "now
-       watching" bar stuck to the top; scrolling up brings it back. This is the
-       same thing Twitter, Instagram and Reddit do, and it matters more here
-       than on any of them: the header was eating a third of the screen before
-       the first note chip, on the one screen you use while a game is running.
-       The watching bar itself never hides - it is the attribution safeguard. */
-    header.tuck .brandrow {
-      max-height: 0;
-      opacity: 0;
-      margin-top: -4px;
-    }
-
-    header.tuck .watching {
-      margin-top: 4px
-    }
-
-    .brand {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: var(--fs-2xl);
-      letter-spacing: .06em;
-      line-height: 1
-    }
-
-    .brand span {
-      color: var(--primary)
-    }
-
-    .brandrow .spacer {
-      flex: 1
-    }
-
-    .iconbtn {
-      width: var(--tap);
-      height: var(--tap);
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      display: grid;
-      place-items: center;
-      font-size: var(--fs-base);
-    }
-
-    /* the "now watching" bar: the single most important element in the app.
-   Two fields of simultaneous refs is exactly how notes end up on the
-   wrong person, so attribution is always on screen. */
-    .watching[hidden] {
-      display: none
-    }
-
-    .watching {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 10px 0;
-      padding: 9px 11px;
-      border-radius: var(--r);
-      background: linear-gradient(90deg, var(--primary-strong), var(--primary-faint));
-      border: 1px solid var(--primary-line);
-    }
-
-    .watching .who {
-      font-weight: 650;
-      font-size: var(--fs-md);
-      line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis
-    }
-
-    .watching .sub {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      line-height: 1.2
-    }
-
-    .watching .rolechip {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      font-weight: 700;
-      background: var(--primary);
-      color: var(--on-primary);
-      padding: 3px 7px;
-      border-radius: 6px;
-    }
-
-    .watching .clk {
-      margin-left: auto;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-sm);
-      font-weight: 700;
-      color: var(--primary);
-      white-space: nowrap;
-    }
-
-    /* "idle", not "empty": the generic .empty rule further down is for
-       empty-state messages and was centring and re-padding this bar. */
-    .watching.idle {
-      background: var(--panel);
-      border-color: var(--line)
-    }
-
-    .watching.idle .who {
-      color: var(--mute);
-      font-weight: 500
-    }
-
-    /* ---------- tabs / nav ---------- */
-    nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 50;
-      display: flex;
-      max-width: 600px;
-      margin: 0 auto;
-      background: var(--glass);
-      backdrop-filter: blur(10px);
-      border-top: 1px solid var(--line);
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-
-    nav button {
-      flex: 1;
-      padding: 8px 2px 10px;
-      min-height: var(--tap);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      color: var(--mute);
-      font-size: var(--fs-xs);
-      font-weight: 600;
-    }
-
-    nav button .ico {
-      width: 24px;
-      height: 24px;
-      display: block;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.7;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    /* The selected tab gets a heavier stroke as well as the accent colour, so
-       it still reads as selected for anyone who cannot separate the two hues. */
-    nav button[aria-current="page"] .ico {
-      stroke-width: 2.2
-    }
-
-    nav button[aria-current="page"] {
-      color: var(--primary)
-    }
-
-    main {
-      padding: 0 var(--pad)
-    }
-
-    .tab[hidden] {
-      display: none
-    }
-
-    /* ---------- generic bits ---------- */
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: var(--pad);
-      margin: 12px 0
-    }
-
-    h2.sec {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: var(--fs-xl);
-      letter-spacing: .04em;
-      margin: 18px 0 4px;
-      font-weight: 400
-    }
-
-    .hint {
-      color: var(--mute);
-      font-size: var(--fs-sm);
-      margin: 2px 0 10px
-    }
-
-    .app-version {
-      color: var(--mute);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      text-align: center;
-      margin: 18px 0 4px
-    }
-
-    label.f {
-      display: block;
-      margin: 10px 0 0
-    }
-
-    label.f>span {
-      display: block;
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      margin-bottom: 4px
-    }
-
-    input[type=text],
-    input[type=email],
-    input[type=search],
-    input[type=date],
-    input[type=time],
-    select,
-    textarea {
-      width: 100%;
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 11px;
-      min-height: var(--tap);
-      /* iOS Safari zooms the whole page into any input under 16px and does
-         not zoom back out, which throws the layout off mid-game. --fs-base is
-         1rem, so this stays at or above 16px however the phone is set. */
-      font-size: var(--fs-base);
-    }
-
-    textarea {
-      resize: vertical;
-      line-height: 1.5
-    }
-
-    .row {
-      display: flex;
-      gap: 8px
-    }
-
-    .row>* {
-      flex: 1;
-      min-width: 0
-    }
-
-    .btn {
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 12px 14px;
-      min-height: var(--tap);
-      font-weight: 600;
-      text-align: center;
-      display: block;
-      width: 100%;
-    }
-
-    .btn.primary {
-      background: var(--primary);
-      color: var(--on-primary);
-      border-color: var(--primary)
-    }
-
-    .btn.ghost {
-      background: transparent
-    }
-
-    .btn.danger {
-      color: var(--minus);
-      border-color: var(--minus-line)
-    }
-
-    .btn:disabled {
-      opacity: .45;
-      cursor: default
-    }
-
-    a.btn {
-      color: inherit;
-      text-decoration: none
-    }
-
-    .btn.sm {
-      /* "sm" is about visual weight, not about being hard to hit: the text and
-         padding are smaller, but min-height keeps the target at --tap. */
-      padding: 8px 12px;
-      min-height: var(--tap);
-      font-size: var(--fs-sm);
-      font-weight: 600
-    }
-
-    .pill {
-      display: inline-block;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      padding: 2px 6px;
-      border-radius: 5px;
-      background: var(--panel2);
-      color: var(--mute);
-    }
-
-    .divider {
-      height: 1px;
-      background: var(--line);
-      margin: 14px -14px
-    }
-
-    .empty {
-      color: var(--mute);
-      font-size: var(--fs-sm);
-      text-align: center;
-      padding: 22px 10px
-    }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: calc(96px + env(safe-area-inset-bottom));
-      transform: translateX(-50%);
-      z-index: 90;
-      background: var(--ink);
-      color: var(--bg);
-      font-weight: 650;
-      font-size: var(--fs-sm);
-      padding: 9px 15px;
-      border-radius: 20px;
-      box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: max-content;
-      max-width: calc(100vw - 32px);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .16s, transform .16s;
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(-4px)
-    }
-
-    /* With a sheet open, "bottom: 96px" lands in the middle of the sheet and
-       covers whatever button is there - during the import that is the one you
-       are meant to press next. Move it to the top while a sheet is up. */
-    body.locked .toast {
-      bottom: auto;
-      top: calc(12px + env(safe-area-inset-top))
-    }
-
-    body.locked .toast.show {
-      transform: translateX(-50%) translateY(4px)
-    }
-
-    /* Only a toast that carries an action (Undo) takes taps; a plain one must
-       not swallow touches on whatever sits under it. */
-    .toast.act.show {
-      pointer-events: auto
-    }
-
-    .toast button {
-      color: inherit;
-      font-weight: 800;
-      font-size: var(--fs-sm);
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      padding: 6px 2px 6px 12px;
-      margin: -6px 0;
-      border-left: 1px solid currentColor
-    }
-
-    /* ---------- pitch map ---------- */
-    .fieldblock {
-      margin: 12px 0 18px
-    }
-
-    .fieldhead {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px
-    }
-
-    .fieldhead .fname {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: var(--fs-lg);
-      letter-spacing: .03em
-    }
-
-    .fieldhead .fmeta {
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    .fieldhead .spacer {
-      flex: 1
-    }
-
-    svg.pitch {
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: var(--r);
-      background: var(--grass);
-      border: 1px solid var(--line);
-      touch-action: manipulation
-    }
-
-    svg.pitch .mk {
-      cursor: pointer
-    }
-
-    svg.pitch .mkbg {
-      fill: var(--panel2);
-      stroke: var(--mute);
-      stroke-width: 1.6
-    }
-
-    svg.pitch .mk.on .mkbg {
-      fill: var(--primary);
-      stroke: var(--marker-ring);
-      stroke-width: 2.4
-    }
-
-    svg.pitch .mk.unnamed .mkbg {
-      stroke-dasharray: 3 3
-    }
-
-    svg.pitch .mklabel {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      font-weight: 700;
-      fill: var(--ink);
-      text-anchor: middle;
-      pointer-events: none
-    }
-
-    svg.pitch .mk.on .mklabel {
-      fill: var(--on-primary)
-    }
-
-    svg.pitch .mkname {
-      font-family: Inter, sans-serif;
-      font-size: 10.5px;
-      fill: var(--ink);
-      text-anchor: middle;
-      pointer-events: none;
-      font-weight: 600
-    }
-
-    svg.pitch .cnt {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 9.5px;
-      font-weight: 700;
-      fill: var(--on-plus);
-      text-anchor: middle;
-      pointer-events: none
-    }
-
-    svg.pitch .cntbg {
-      fill: var(--plus)
-    }
-
-    /* crew rows under each pitch */
-    .crew {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px
-    }
-
-    .crewrow {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 7px 9px;
-    }
-
-    .crewrow.on {
-      border-color: var(--primary);
-      background: var(--primary-tint)
-    }
-
-    .crewrow .slot {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      font-weight: 700;
-      color: var(--primary);
-      width: 30px;
-      flex: none
-    }
-
-    .crewrow input {
-      background: transparent;
-      border: none;
-      padding: 4px 0;
-      font-weight: 600
-    }
-
-    .crewrow input::placeholder {
-      color: var(--mute);
-      font-weight: 400
-    }
-
-    .crewrow .prog {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      font-family: 'JetBrains Mono', monospace;
-      flex: none;
-      text-align: right;
-      line-height: 1.25
-    }
-
-    .crewrow .go {
-      flex: none;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      min-height: 36px;
-      padding: 0 12px;
-      font-size: var(--fs-sm);
-      font-weight: 700;
-      background: var(--panel2)
-    }
-
-    /* ---------- observe ---------- */
-    .minimap {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding: 2px 0 6px;
-      scrollbar-width: none
-    }
-
-    .minimap::-webkit-scrollbar {
-      display: none
-    }
-
-    .mini {
-      flex: none;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 9px;
-      padding: 6px 9px;
-      font-size: var(--fs-xs);
-      font-weight: 600;
-      white-space: nowrap;
-      color: var(--mute);
-    }
-
-    .mini.on {
-      border-color: var(--primary);
-      background: var(--primary-strong);
-      color: var(--ink)
-    }
-
-    .mini .m1 {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      font-weight: 700;
-      color: var(--primary)
-    }
-
-    /* These wrap rather than scroll sideways. There are seven categories and
-       the strip used to show three, hiding 322px of them off the right edge
-       with no arrow or fade to say so - so Offsides and General were, for most
-       people, simply not there. Two rows of chips costs a little height and
-       makes all seven visible at once. */
-    .cats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 4px 0 8px;
-    }
-
-    .cat {
-      flex: none;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 20px;
-      padding: 9px 14px;
-      min-height: var(--tap);
-      font-size: var(--fs-md);
-      font-weight: 600;
-      white-space: nowrap;
-      color: var(--mute);
-    }
-
-    /* Selected is the app's primary blue, like every other selected thing.
-       This was white-on-dark, which made "selected" mean two different
-       colours depending on which screen you were looking at. */
-    .cat.on {
-      background: var(--primary);
-      color: var(--on-primary);
-      border-color: var(--primary)
-    }
-
-    .cat .n {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      opacity: .85;
-      margin-left: 2px
-    }
-
-    /* ---------- rating scale ---------- */
-    .scale .nums button {
-      flex-direction: column;
-      gap: 1px;
-      padding: 7px 2px;
-      line-height: 1.15;
-    }
-
-    .scale .nums .rn {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-lg);
-      font-weight: 700;
-      display: block;
-    }
-
-    .scale .nums .rw {
-      font-size: var(--fs-xs);
-      font-weight: 600;
-      opacity: .85;
-      display: block;
-      text-align: center;
-    }
-
-    /* The games one evaluation covers, listed on the Score tab. */
-    ul.daygames {
-      list-style: none;
-      margin: 8px 0 0;
-      padding: 0
-    }
-
-    ul.daygames li {
-      padding: 5px 0 5px 16px;
-      position: relative;
-      font-size: var(--fs-sm);
-      border-top: 1px solid var(--line)
-    }
-
-    ul.daygames li::before {
-      content: '';
-      position: absolute;
-      left: 2px;
-      top: 13px;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--mute)
-    }
-
-    ul.daygames li.on {
-      font-weight: 650
-    }
-
-    ul.daygames li.on::before {
-      background: var(--primary)
-    }
-
-    ul.daygames .muted {
-      color: var(--mute)
-    }
-
-    /* ---------- the finish sequence ----------
-       Copy, open the form, save. It was four buttons of equal weight in a row,
-       so the order you had to do them in was something you had to already know. */
-    ol.finish {
-      list-style: none;
-      margin: 4px 0 0;
-      padding: 0
-    }
-
-    ol.finish li {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      margin-bottom: 14px
-    }
-
-    ol.finish li>div {
-      flex: 1;
-      min-width: 0
-    }
-
-    ol.finish .fn {
-      flex: none;
-      width: 26px;
-      height: 26px;
-      margin-top: 9px;
-      border-radius: 50%;
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      color: var(--mute);
-      display: grid;
-      place-items: center;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-sm);
-      font-weight: 700;
-    }
-
-    ol.finish .hint {
-      margin: 6px 0 0
-    }
-
-    .chipgrid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px
-    }
-
-    .chip {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 10px;
-      padding: 10px 12px;
-      min-height: var(--tap);
-      font-size: var(--fs-md);
-      text-align: left;
-      line-height: 1.25;
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-    }
-
-    .chip .m {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      flex: none
-    }
-
-    .chip.p {
-      border-left: 3px solid var(--plus)
-    }
-
-    .chip.p .m {
-      color: var(--plus)
-    }
-
-    .chip.m- {
-      border-left: 3px solid var(--minus)
-    }
-
-    .chip.m- .m {
-      color: var(--minus)
-    }
-
-    /* With the arrow selected every chip logs as "improved", so the chips say
-       so instead of still showing their own + or - */
-    .chip.b {
-      border-left: 3px solid var(--primary)
-    }
-
-    .chip.b .m {
-      color: var(--primary)
-    }
-
-    .chip:active {
-      background: var(--panel2)
-    }
-
-    .noteadd {
-      display: flex;
-      gap: 6px;
-      margin-top: 10px;
-      align-items: stretch
-    }
-
-    .noteadd input {
-      flex: 1
-    }
-
-    .polset {
-      display: flex;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      overflow: hidden;
-      flex: none
-    }
-
-    .polset button {
-      width: 40px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      font-size: var(--fs-base);
-      background: var(--panel2);
-      color: var(--mute)
-    }
-
-    .polset button[data-pol="1"][aria-pressed="true"] {
-      background: var(--plus);
-      color: var(--on-plus)
-    }
-
-    .polset button[data-pol="-1"][aria-pressed="true"] {
-      background: var(--minus);
-      color: var(--on-minus)
-    }
-
-    .polset button[data-pol="2"][aria-pressed="true"] {
-      background: var(--primary);
-      color: var(--on-primary)
-    }
-
-    .timeline {
-      margin-top: 12px;
-      border-left: 2px solid var(--line);
-      padding-left: 11px
-    }
-
-    .nrow {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      padding: 7px 0;
-      border-bottom: 1px solid var(--line)
-    }
-
-    .nrow:last-child {
-      border-bottom: none
-    }
-
-    .nrow .t {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      flex: none;
-      width: 48px;
-      padding-top: 2px
-    }
-
-    .nrow .bd {
-      flex: 1;
-      min-width: 0;
-      font-size: var(--fs-sm);
-      line-height: 1.35
-    }
-
-    .nrow .bd .cn {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      display: block
-    }
-
-    .nrow .mk2 {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      flex: none
-    }
-
-    .nrow.p .mk2 {
-      color: var(--plus)
-    }
-
-    .nrow.n .mk2 {
-      color: var(--minus)
-    }
-
-    .nrow.b .mk2 {
-      color: var(--primary)
-    }
-
-    .nrow.o .mk2 {
-      color: var(--mute)
-    }
-
-    /* Was a ~20px target sitting right beside the "improved" arrow. Deleting
-       is now undoable, but it should still be hard to hit by accident. */
-    .nrow .del {
-      flex: none;
-      color: var(--mute);
-      width: 36px;
-      height: 36px;
-      margin: -6px -4px -6px 0;
-      display: grid;
-      place-items: center;
-      border-radius: 8px;
-      font-size: var(--fs-base)
-    }
-
-    .nrow .del:active {
-      background: var(--panel2)
-    }
-
-    /* ---------- score ---------- */
-    .ratewrap {
-      margin: 14px 0
-    }
-
-    .ratewrap .rlabel {
-      font-size: var(--fs-sm);
-      font-weight: 600
-    }
-
-    .ratewrap .rhint {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      margin: 2px 0 7px
-    }
-
-    .scale {
-      display: flex;
-      gap: 6px;
-      align-items: center
-    }
-
-    .scale .end {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      flex: none;
-      width: 26px
-    }
-
-    .scale .end.r {
-      text-align: right
-    }
-
-    .scale .nums {
-      display: flex;
-      gap: 6px;
-      flex: 1
-    }
-
-    .scale .nums button {
-      flex: 1;
-      padding: 11px 0;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      border-radius: 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      font-size: var(--fs-md);
-    }
-
-    .scale .nums button[aria-pressed="true"] {
-      background: var(--primary);
-      color: var(--on-primary);
-      border-color: var(--primary)
-    }
-
-    .switchrow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 10px 0;
-      font-size: var(--fs-sm)
-    }
-
-    .switchrow input {
-      width: auto;
-      flex: none;
-      width: 20px;
-      height: 20px;
-      accent-color: var(--primary)
-    }
-
-    .yesno {
-      display: flex;
-      gap: 8px
-    }
-
-    .yesno button {
-      flex: 1;
-      padding: 12px;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      border-radius: 10px;
-      font-weight: 700
-    }
-
-    .yesno button[aria-pressed="true"][data-move="Yes"] {
-      background: var(--plus);
-      color: var(--on-plus);
-      border-color: var(--plus)
-    }
-
-    .yesno button[aria-pressed="true"][data-move="No"] {
-      background: var(--minus);
-      color: var(--on-minus);
-      border-color: var(--minus)
-    }
-
-    .charcount {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      text-align: right;
-      margin-top: 4px
-    }
-
-    /* ---------- confirm dialog ---------- */
-    .dlg {
-      position: fixed;
-      inset: 0;
-      z-index: 80;
-      display: grid;
-      place-items: center;
-      padding: 22px;
-      background: var(--scrim)
-    }
-
-    .dlg[hidden] {
-      display: none
-    }
-
-    .dlgbox {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 18px;
-      max-width: 340px;
-      width: 100%
-    }
-
-    .dlgbox p {
-      margin: 0 0 16px;
-      font-size: var(--fs-md);
-      line-height: 1.45
-    }
-
-    /* ---------- game picker ---------- */
-    .nowgame {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      width: 100%;
-      text-align: left;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 9px 11px;
-      margin: 10px 0
-    }
-
-    .nowgame .g1 {
-      font-weight: 650;
-      font-size: var(--fs-sm);
-      line-height: 1.2
-    }
-
-    .nowgame .g2 {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      line-height: 1.3
-    }
-
-    .nowgame .chev {
-      margin-left: auto;
-      color: var(--mute);
-      font-size: var(--fs-lg);
-      flex: none
-    }
-
-    /* Kickoff heading in the game picker. Was named .slot, which collided
-       with the crew-row .slot label and pushed a 14px margin onto it. */
-    .slothead {
-      margin: 14px 0 6px;
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: var(--fs-lg);
-      letter-spacing: .04em;
-      color: var(--primary)
-    }
-
-    .grow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 10px 11px;
-      margin: 6px 0
-    }
-
-    .grow.on {
-      border-color: var(--primary);
-      background: var(--primary-tint)
-    }
-
-    .grow.done {
-      opacity: .55
-    }
-
-    .grow .body {
-      flex: 1;
-      min-width: 0
-    }
-
-    .grow .t1 {
-      font-weight: 650;
-      font-size: var(--fs-sm);
-      line-height: 1.25
-    }
-
-    .grow .t2 {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      line-height: 1.35;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis
-    }
-
-    .grow .meter {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      text-align: right;
-      flex: none;
-      line-height: 1.3
-    }
-
-    .grow .meter b {
-      color: var(--plus)
-    }
-
-    .iconsm {
-      flex: none;
-      width: var(--tap);
-      height: var(--tap);
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      display: grid;
-      place-items: center;
-      font-size: var(--fs-sm);
-      color: var(--mute)
-    }
-
-    /* ---------- sheet (settings) ---------- */
-    .scrim {
-      position: fixed;
-      inset: 0;
-      z-index: 60;
-      background: var(--scrim);
-      backdrop-filter: blur(2px)
-    }
-
-    .scrim[hidden] {
-      display: none
-    }
-
-    .sheet {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 61;
-      max-width: 600px;
-      margin: 0 auto;
-      background: var(--bg);
-      border-top: 1px solid var(--line);
-      border-radius: 18px 18px 0 0;
-      max-height: 88vh;
-      /* dvh tracks the mobile browser bars; vh stays as the fallback */
-      max-height: 88dvh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding: 6px var(--pad) calc(24px + env(safe-area-inset-bottom));
-    }
-
-    .sheet[hidden] {
-      display: none
-    }
-
-    .grab {
-      width: 40px;
-      height: 4px;
-      background: var(--line);
-      border-radius: 2px;
-      margin: 8px auto 4px
-    }
-
-    .sheethead {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 4px 0 6px
-    }
-
-    .sheethead h3 {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: var(--fs-xl);
-      margin: 0;
-      font-weight: 400;
-      letter-spacing: .03em
-    }
-
-    .sheethead .spacer {
-      flex: 1
-    }
-
-    .seg {
-      display: flex;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      overflow: hidden
-    }
-
-    .seg button {
-      flex: 1;
-      padding: 9px 4px;
-      min-height: var(--tap);
-      font-weight: 600;
-      background: var(--panel2);
-      color: var(--mute);
-      font-size: var(--fs-sm)
-    }
-
-    .seg button[aria-pressed="true"] {
-      background: var(--primary);
-      color: var(--on-primary)
-    }
-
-    .saved {
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 11px;
-      margin: 8px 0;
-      background: var(--panel)
-    }
-
-    .saved .sh {
-      display: flex;
-      gap: 8px;
-      align-items: baseline
-    }
-
-    .saved .sh b {
-      font-size: var(--fs-sm)
-    }
-
-    .saved .sh .spacer {
-      flex: 1
-    }
-
-    .saved pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: Inter, sans-serif;
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      margin: 8px 0 0
-    }
-
-    /* ---------- many fields ---------- */
-    .fieldstrip {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding: 4px 0 8px;
-      scrollbar-width: none
-    }
-
-    .fieldstrip::-webkit-scrollbar {
-      display: none
-    }
-
-    /* ---------- import wizard ---------- */
-    .stepper {
-      display: flex;
-      list-style: none;
-      margin: 0 0 14px;
-      padding: 0;
-      gap: 6px;
-      counter-reset: none;
-    }
-
-    .stepper li {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-      color: var(--mute);
-      font-size: var(--fs-xs);
-      font-weight: 600;
-      border-top: 3px solid var(--line);
-      padding-top: 7px;
-    }
-
-    .stepper li.on {
-      color: var(--ink);
-      border-top-color: var(--primary)
-    }
-
-    .stepper li.done {
-      border-top-color: var(--primary)
-    }
-
-    .stepper .sn {
-      flex: none;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--panel2);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-    }
-
-    .stepper li.on .sn {
-      background: var(--primary);
-      color: var(--on-primary)
-    }
-
-    .stepper li.done .sn {
-      background: var(--plus);
-      color: var(--on-plus)
-    }
-
-    .stepper .sl {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap
-    }
-
-    /* A <details> is the browser's own show/hide. Used here so the column
-       mapping - ten dropdowns and a spreadsheet dump - stays out of the way
-       unless it is actually needed. */
-    .disclose {
-      margin-top: 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      background: var(--panel);
-      padding: 0 var(--pad)
-    }
-
-    .disclose>summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 0 0 0 4px;
-      min-height: var(--tap);
-      display: flex;
-      align-items: center;
-      font-size: var(--fs-sm);
-      font-weight: 600;
-      color: var(--mute);
-    }
-
-    .disclose>summary::-webkit-details-marker {
-      display: none
-    }
-
-    .disclose>summary::after {
-      content: '\25BE';
-      margin-left: auto;
-      transition: transform .15s
-    }
-
-    .disclose[open]>summary::after {
-      transform: rotate(180deg)
-    }
-
-    .disclose[open] {
-      padding-bottom: var(--pad)
-    }
-
-    /* Destructive actions live behind one of these. Copy, Done and the rest are
-       everyday taps; deleting a game or an evaluation of a named child is not,
-       and it used to sit at equal weight right beside them. */
-    .disclose.danger {
-      border-style: dashed;
-      background: none
-    }
-
-    .disclose.danger>summary {
-      font-size: var(--fs-xs);
-      font-weight: 600
-    }
-
-    .fchip {
-      flex: none;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 10px;
-      padding: 9px 12px;
-      min-height: var(--tap);
-      font-size: var(--fs-md);
-      font-weight: 600;
-      white-space: nowrap;
-      color: var(--mute)
-    }
-
-    .fchip.on {
-      border-color: var(--primary);
-      background: var(--primary-strong);
-      color: var(--ink)
-    }
-
-    .fchip .n {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-xs);
-      font-weight: 700;
-      color: var(--plus)
-    }
-
-    .fchip .n.todo {
-      color: var(--minus)
-    }
-
-    .cov {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      font-size: var(--fs-sm);
-      color: var(--mute)
-    }
-
-    .cov b {
-      color: var(--ink);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-md)
-    }
-
-    /* ---------- import ---------- */
-    .scrollx {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch
-    }
-
-    .tbl {
-      border-collapse: collapse;
-      font-size: var(--fs-xs);
-      font-family: 'JetBrains Mono', monospace
-    }
-
-    .tbl th,
-    .tbl td {
-      border: 1px solid var(--line);
-      padding: 4px 6px;
-      text-align: left;
-      white-space: nowrap;
-      max-width: 120px;
-      overflow: hidden;
-      text-overflow: ellipsis
-    }
-
-    .tbl th {
-      color: var(--primary);
-      background: var(--panel2);
-      font-weight: 700
-    }
-
-    .map2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 4px
-    }
-
-    .map2 label.f {
-      margin: 0
-    }
-
-    .gamerow {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px 10px;
-      margin: 6px 0
-    }
-
-    .gamerow.off {
-      opacity: .45
-    }
-
-    .gamerow input[type=checkbox] {
-      /* The box itself is drawn at 26px, but the whole row is the label, so the
-         real target is the full width of the card - see .gamerow below. */
-      width: 26px;
-      height: 26px;
-      accent-color: var(--primary);
-      flex: none
-    }
-
-    /* Making the row a <label> means a tap anywhere on it toggles the box.
-       That turns a 26px target into a 358px one without changing the look. */
-    label.gamerow {
-      cursor: pointer;
-      min-height: var(--tap)
-    }
-
-    .gamerow .g1 {
-      font-weight: 650;
-      font-size: var(--fs-sm);
-      line-height: 1.2
-    }
-
-    .gamerow .g2 {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      line-height: 1.3
-    }
-
-    .warn {
-      background: var(--minus-tint);
-      border: 1px solid var(--minus-line);
-      border-radius: 10px;
-      padding: 9px 11px;
-      font-size: var(--fs-sm);
-      margin: 8px 0
-    }
-
-    .okbox {
-      background: var(--primary-tint);
-      border: 1px solid var(--primary-line);
-      border-radius: 10px;
-      padding: 9px 11px;
-      font-size: var(--fs-sm);
-      margin: 8px 0
-    }
-
-    /* compact text button for per-pitch actions (Done / Delete) */
-    .minibtn {
-      flex: none;
-      min-height: 34px;
-      padding: 0 11px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      font-size: var(--fs-sm);
-      font-weight: 650;
-      color: var(--ink)
-    }
-
-    .minibtn.danger {
-      color: var(--minus);
-      border-color: var(--minus-line)
-    }
-
-    details.more {
-      margin-top: 12px
-    }
-
-    details.more summary {
-      cursor: pointer;
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      padding: 6px 0
-    }
-
-    .sheet:focus {
-      outline: none
-    }
-
-    /* stop the page behind an open sheet from scrolling under your thumb */
-    body.locked {
-      overflow: hidden
-    }
-
-    /* ---------- accounts ---------- */
-    /* The avatar is the account. Signed out it shows a neutral person glyph;
-       signed in it shows the mentor's initials. The status dot rides on it
-       rather than on the settings cog, because that is where people look. */
-    .avatar {
-      flex: none;
-      width: var(--tap);
-      height: var(--tap);
-      border-radius: 50%;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      color: var(--mute);
-      display: grid;
-      place-items: center;
-      font-size: var(--fs-sm);
-      font-weight: 700;
-      letter-spacing: .02em;
-      position: relative;
-    }
-
-    .avatar .who {
-      width: 22px;
-      height: 22px;
-      display: block;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      stroke-linecap: round
-    }
-
-    .avatar[data-acct] {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: var(--on-primary)
-    }
-
-    .avatar[data-acct]::after {
-      content: '';
-      position: absolute;
-      bottom: 1px;
-      right: 1px;
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: var(--plus);
-      box-shadow: 0 0 0 2px var(--glass)
-    }
-
-    .avatar[data-acct="pending"] {
-      background: var(--panel2);
-      border-color: var(--minus-line);
-      color: var(--minus)
-    }
-
-    .avatar[data-acct="pending"]::after {
-      background: var(--minus)
-    }
-
-    .acctline {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      overflow-wrap: anywhere;
-      margin-bottom: 6px
-    }
-
-    /* ---------- referee profiles ---------- */
-    .histline {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 2px 10px;
-      align-items: center;
-      font-size: var(--fs-sm);
-      line-height: 1.35;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-left: 3px solid var(--primary);
-      border-radius: 10px;
-      padding: 8px 10px;
-      margin: 8px 0
-    }
-
-    .histline>div {
-      grid-column: 1;
-      min-width: 0
-    }
-
-    .histline .minibtn {
-      grid-column: 2;
-      grid-row: 1 / span 2
-    }
-
-    .watching .minibtn {
-      margin-left: auto
-    }
-
-    .refrow {
-      display: block;
-      width: 100%;
-      text-align: left;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 10px 12px;
-      margin: 6px 0
-    }
-
-    .refrow .rr1 {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: var(--fs-md)
-    }
-
-    .refrow .rr2,
-    .refrow .rr3 {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      margin-top: 2px
-    }
-
-    .refrow .rr3 {
-      color: var(--minus)
-    }
-
-    .pill.low {
-      background: var(--minus-tint);
-      color: var(--minus)
-    }
-
-    .catrow {
-      display: grid;
-      grid-template-columns: 84px 1fr 86px;
-      align-items: center;
-      gap: 8px;
-      margin: 7px 0;
-      font-size: var(--fs-sm)
-    }
-
-    .catrow .bar {
-      height: 8px;
-      border-radius: 4px;
-      background: var(--panel2);
-      overflow: hidden
-    }
-
-    .catrow .bar i {
-      display: block;
-      height: 100%;
-      background: var(--primary)
-    }
-
-    .catrow .bar i.low {
-      background: var(--minus)
-    }
-
-    .catrow .cv {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-sm);
-      text-align: right;
-      white-space: nowrap
-    }
-
-    .catrow .cv small {
-      color: var(--mute)
-    }
-
-    .profhead {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px
-    }
-
-    .bigavg {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: var(--fs-3xl);
-      font-weight: 700;
-      line-height: 1
-    }
-
-    .plist {
-      margin: 6px 0 0;
-      padding-left: 18px;
-      font-size: var(--fs-sm)
-    }
-
-    .plist li {
-      margin: 4px 0
-    }
-
-    .muted {
-      color: var(--mute)
-    }
-
-    details.evald {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 9px 11px;
-      margin: 6px 0
-    }
-
-    details.evald summary {
-      cursor: pointer;
-      font-size: var(--fs-sm);
-      line-height: 1.45
-    }
-
-    details.evald pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: Inter, sans-serif;
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      margin: 8px 0 0
-    }
-  </style>
 </head>
 
-<body>
+<body class="mentor-app">
+  <a class="skip-link" href="#main">Skip to content</a>
 
   <header>
     <div class="brandrow">
-      <!-- Account lives here, as an avatar, the way every mainstream app does
-           it. It is the first thing in the header on every screen, signed in
-           or out, instead of being the third card inside Settings. -->
-      <button class="avatar" id="openAccount" aria-label="Account"><span id="avatarInitials">?</span></button>
-      <div class="brand">SIDE<span>LINE</span></div>
+      <div class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4v16M19 4v16M5 12h14"/><circle cx="12" cy="12" r="4"/></svg></div>
+      <div class="brand">Sideline</div><span class="beta-badge">Beta</span>
       <div class="spacer"></div>
       <button class="iconbtn" id="themeToggle" title="Switch to sunlight theme"
         aria-label="Switch to sunlight theme">&#9728;&#xFE0E;</button>
-      <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">&#9881;</button>
+      <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
+      <button class="avatar" id="openAccount" aria-label="Account"><span id="avatarInitials">?</span></button>
     </div>
+    <div class="session-status"><span id="draftStatus">Drafts save on this device</span><button id="connectionStatus" data-tab="saved">On this device</button></div>
     <div class="watching idle" id="watching" aria-live="polite">
       <div style="min-width:0">
         <div class="who">No referee selected</div>
@@ -2022,7 +70,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="main" tabindex="-1">
     <!-- ============ FIELDS TAB: the pitch map ============ -->
     <section class="tab" id="tab-fields">
       <div id="fieldsWrap"></div>
@@ -2046,7 +94,7 @@
     </section>
 
     <section class="tab" id="tab-saved" hidden>
-      <h2 class="sec">Saved evaluations</h2>
+      <div class="page-heading"><p class="eyebrow">Your work</p><h1>Saved evaluations</h1><p>Review your feedback and check what has been shared.</p></div>
       <div id="savedBody"></div>
     </section>
   </main>
@@ -2056,10 +104,10 @@
        selected - and blue is the selected colour, so two tabs looked active at
        once. These use stroke:currentColor, so the tab decides the colour. -->
   <nav aria-label="Sections">
-    <button data-tab="fields" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M12 4.5v15"/><circle cx="12" cy="12" r="3"/><path d="M2.5 8.5h3v7h-3M21.5 8.5h-3v7h3"/></svg>Fields</button>
+    <button data-tab="fields" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M12 4.5v15"/><circle cx="12" cy="12" r="3"/><path d="M2.5 8.5h3v7h-3M21.5 8.5h-3v7h3"/></svg>Games</button>
     <button data-tab="observe"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 3.5l4 4L8 20H4v-4z"/><path d="M14 6l4 4"/></svg>Observe</button>
-    <button data-tab="score"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 8h12"/><path d="M6 8l-3 6h6zM18 8l-3 6h6z"/><path d="M8 20h8"/></svg>Score</button>
-    <button data-tab="refs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.400 3.5 5.1"/></svg>Refs</button>
+    <button data-tab="score"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 8h12"/><path d="M6 8l-3 6h6zM18 8l-3 6h6z"/><path d="M8 20h8"/></svg>Review</button>
+    <button data-tab="refs"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.400 3.5 5.1"/></svg>Referees</button>
     <button data-tab="saved"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5a2 2 0 012-2h3.2l2 2.5h7.8a2 2 0 012 2v9a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/></svg>Saved</button>
   </nav>
 
@@ -2074,7 +122,7 @@
     <div id="sheetBody"></div>
   </div>
 
-  <div class="dlg" id="dlg" role="alertdialog" aria-modal="true" aria-describedby="dlgMsg" hidden>
+  <div class="dlg" id="dlg" role="alertdialog" aria-label="Confirm action" aria-modal="true" aria-describedby="dlgMsg" hidden>
     <div class="dlgbox">
       <p id="dlgMsg"></p>
       <div class="row">
@@ -2092,14 +140,11 @@
     /* ============================================================
        SIDELINE — field-side notes for LSSA referee evaluations
        ------------------------------------------------------------
-       Mirrors the "Referee Evaluation" Google Form, but built around
-       the actual job: one mentor watching several referees across two
-       fields at the same time. Each referee is a separate form
-       submission, so each referee owns their own notes, ratings,
-       move-up answer and comments.
+       One mentor can watch several referees across multiple fields.
+       Each referee owns their notes, ratings, recommendation and
+       feedback, combined into one daily evaluation saved in Sideline.
        ============================================================ */
 
-    const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSd-Hc5iO0ygjxnme1FirULuMauqI1JFCG_vYob_pYAfAZZPOg/viewform';
 
     /* ---------- mentor accounts (optional) ----------
        Fill in both values to switch on sign-in, shared evaluations and
@@ -2153,9 +198,8 @@
     /* `offside` says whether the division plays offside at all. It tracks the
        crew size for a reason: offside arrives with the assistant referees who
        judge it, so the divisions refereed without ARs are the ones that do not
-       play it. The form still wants a 1 in the offside box for those games -
-       but a 1 there is a note about the division, not about the referee, and
-       everything that averages or ranks referees has to know the difference.
+       play it. These divisions leave offside unrated, and reporting
+       excludes that skill from their averages.
        If the league enforces offside lower down than this, change it here: it
        is the only place the answer is written. */
     const DIVISION_RULES = [
@@ -2258,8 +302,8 @@
     /* The field the way the Google Form spells it, plus the internal A/B pitch
        letter when there is one. Rows with room use this; shortField's "2A" is
        for chips and the minimap, where there genuinely is not room. Before,
-       one game could read "Tigers A" on the Fields tab, "2A" in the picker and
-       "Field 2A" on the Score tab - three names for one pitch. */
+       one game could read "Tigers A" on the Games tab, "2A" in the picker and
+       "Field 2A" on the Review tab - three names for one pitch. */
     function fullPitchLabel(f) {
       if (!f.name) return 'Field not set';
       return f.sub ? `${f.name} ${f.sub}` : f.name;
@@ -2463,7 +507,7 @@
        paint; this keeps it, the status-bar color and the header toggle in step. */
     const THEMES = [['dark', 'Dark'], ['light', 'Sunlight'], ['auto', 'Match phone']];
     const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
-    let themeMode = store.get('sideline:theme') || 'dark';
+    let themeMode = store.get('sideline-beta:theme') || 'light';
     function isLight() {
       return themeMode === 'light' || (themeMode === 'auto' && !(darkQuery && darkQuery.matches));
     }
@@ -2471,7 +515,7 @@
       const light = isLight();
       document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
       const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', light ? '#eef2f5' : '#0b0d10');
+      if (meta) meta.setAttribute('content', light ? '#f4f6f8' : '#101820');
       const btn = document.getElementById('themeToggle');
       if (btn) {
         const label = light ? 'Switch to dark theme' : 'Switch to sunlight theme';
@@ -2480,8 +524,8 @@
       }
     }
     function setTheme(mode) {
-      themeMode = THEMES.some(([k]) => k === mode) ? mode : 'dark';
-      store.set('sideline:theme', themeMode);
+      themeMode = THEMES.some(([k]) => k === mode) ? mode : 'light';
+      store.set('sideline-beta:theme', themeMode);
       applyTheme();
     }
     if (darkQuery && darkQuery.addEventListener) {
@@ -2498,7 +542,7 @@
     function newRef(slot, role) {
       return {
         id: uid(), slot, role,            // slot = CR/AR1/AR2 label, role = CR or AR for the form
-        name: '', notes: [],
+        name: '', notes: [], draftText: '',
         ratings: Object.fromEntries(RATED.map(c => [c.id, null])),
         noOffsides: false, moveUp: null,
         comments: '', commentsEdited: false, submitted: false
@@ -2519,7 +563,7 @@
     }
     function blankSession() {
       return {
-        mentor: store.get('sideline:mentor') || '',
+        mentor: store.get('sideline-beta:mentor') || '',
         date: todayISO(),
         // No placeholder game. A blank one made Settings read "Games (1)" and
         // put a ghost "Field - no division" row on Observe, while the Fields
@@ -2531,7 +575,7 @@
       };
     }
 
-    let S = store.get('sideline:session') || blankSession();
+    let S = store.get('sideline-beta:session') || blankSession();
     /* A saved evaluation as the rest of the app expects it. Records from a
        backup file are only checked for a ratings object, and a number where a
        date or name belongs threw in the Saved list and the CSV, while a bad
@@ -2554,7 +598,7 @@
       r.savedAt = Number.isFinite(t) && t > 0 && t < 8.64e15 ? t : Date.now();
       return r;
     }
-    let HIST = store.get('sideline:history') || [];
+    let HIST = store.get('sideline-beta:history') || [];
     if (!Array.isArray(HIST)) HIST = [];
     HIST = HIST.filter(h => h && typeof h === 'object').map(tidyRecord);
 
@@ -2573,7 +617,7 @@
       if (!CATS.some(c => c.id === S.ui.cat)) S.ui.cat = ui0.cat;
       if (![1, -1, 2].includes(S.ui.pol)) S.ui.pol = ui0.pol;
       if (typeof S.ui.draftText !== 'string') S.ui.draftText = '';
-      if (typeof S.mentor !== 'string') S.mentor = store.get('sideline:mentor') || '';
+      if (typeof S.mentor !== 'string') S.mentor = store.get('sideline-beta:mentor') || '';
       if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date || '')) S.date = todayISO();
       if (!Array.isArray(S.fields)) S.fields = [];
       S.fields = S.fields.filter(f => f && typeof f === 'object');
@@ -2590,16 +634,22 @@
           r.notes.forEach(n => {n.id = safeId(n.id);});
           if (typeof r.name !== 'string') r.name = '';
           if (typeof r.comments !== 'string') r.comments = '';
+          if (typeof r.draftText !== 'string') r.draftText = '';
         });
         relabelSlots(f);
       });
+      // Older backups carried one global note draft. Attribute it to the
+      // selected referee once; new drafts always stay with their referee.
+      const active = S.fields.flatMap(f => f.refs).find(r => r.id === S.activeRefId);
+      if (active && !active.draftText && S.ui.draftText) active.draftText = S.ui.draftText;
+      S.ui.draftText = '';
     }
     normalize();
 
     /* A session restored from storage keeps the date it was created on, so the
        next Saturday the import's "today only" filter matched nothing and new
        saves carried last week's date. An empty session just rolls forward; one
-       holding games gets a banner on the Fields tab asking what to do. */
+       holding games gets a banner on the Games tab asking what to do. */
     function sessionHasData() {
       return S.fields.some(f => f.name || f.refs.some(r => r.name.trim() || refHasAssessment(r)));
     }
@@ -2608,9 +658,10 @@
     let saveTimer = null;
     function writeState() {
       clearTimeout(saveTimer); saveTimer = null;
-      store.set('sideline:session', S);
-      store.set('sideline:history', HIST);
-      if (S.mentor) store.set('sideline:mentor', S.mentor);
+      store.set('sideline-beta:session', S);
+      store.set('sideline-beta:history', HIST);
+      if (S.mentor) store.set('sideline-beta:mentor', S.mentor);
+      paintStatus();
     }
     function save() {
       // Debounce: typing a name fires an input event per keystroke, and
@@ -2670,7 +721,7 @@
     function gameSummary(f) {
       const refs = f.refs;
       const notes = refs.reduce((a, r) => a + r.notes.length, 0);
-      const rated = refs.filter(r => RATED.every(c => r.ratings[c.id] != null)).length;
+      const rated = refs.filter(r => ratedFor(f.division).every(c => (c.id === 'offsides' && r.noOffsides) || r.ratings[c.id] != null)).length;
       const names = refs.map(r => r.name.trim()).filter(Boolean);
       return {
         notes, rated, names, total: refs.length,
@@ -2899,11 +950,6 @@
   </svg>`;
     }
 
-    function refProgress(r) {
-      const done = RATED.filter(c => r.ratings[c.id] != null).length;
-      return {notes: r.notes.length, done, total: RATED.length, ready: done === RATED.length && r.moveUp && r.comments.trim()};
-    }
-
     /* A group is every pitch that shares a field name and kickoff - i.e. the two
        Tigers games at 8:00. The strip shows one chip per group and the view shows
        all of its pitches, instead of eight near-identical chips for one morning. */
@@ -3008,89 +1054,73 @@
   </button>`;
     }
 
+    function sessionHeading() {
+      const date = new Date(S.date + 'T12:00:00');
+      const label = Number.isNaN(date.getTime()) ? S.date : date.toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
+      return `<div class="page-heading"><p class="eyebrow">Your matchday workspace</p><h1>${S.date === todayISO() ? "Today’s games" : 'Your games'}</h1><p>${esc(label)}</p></div>`;
+    }
+
+    function dailyGroups() {
+      const seen = new Set();
+      return allRefs().filter(({ref}) => {
+        const key = nameKey(ref.name) || ref.id;
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      }).map(({ref}) => dayGroupFor(ref));
+    }
+
     function renderFields() {
-      const f = selectedField();
-      /* First run (or a cleared session) used to draw a blank "Field not set"
-         pitch and pop Settings open on every launch. A setup card asks for the
-         two things that matter instead: your name and the schedule. */
-      if (!f || !sessionHasData()) {
-        $('#fieldsWrap').innerHTML = `${staleDateBanner()}
-    <div class="card" style="margin-top:14px">
-      <h2 class="sec" style="margin-top:0">Set up today</h2>
-      <p class="hint">Import the schedule and every field, kickoff and referee name comes in at once.</p>
-      <label class="f"><span>Your name, as it goes on the form</span>
-        <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Mentor/Monitor name" autocomplete="name" /></label>
-      <button class="btn primary" id="openImport" style="margin-top:12px">Import the schedule</button>
-      <div class="row" style="margin-top:8px">
-        <button class="btn sm" id="openSettings2">Add a game by hand</button>
-        <button class="btn sm ghost" data-tab="saved">Restore a backup</button>
-      </div>
-    </div>`;
+      const heading = sessionHeading();
+      if (!S.fields.length) {
+        $('#fieldsWrap').innerHTML = `${heading}${staleDateBanner()}
+          <div class="welcome-card card">
+            <div class="welcome-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><rect x="8" y="9" width="32" height="32" rx="5"/><path d="M16 5v9M32 5v9M8 20h32M17 29l5 5 10-10"/></svg></div>
+            <h2>Good feedback starts here.</h2>
+            <p>Bring in your games, choose a referee, and capture what you see. We’ll help turn your notes into an evaluation.</p>
+            <label class="f"><span>Your mentor name</span><input type="text" data-mentor value="${esc(S.mentor)}" placeholder="First and last name" autocomplete="name" /></label>
+            <button class="btn primary" id="openImport">Import schedule <span aria-hidden="true">&rarr;</span></button>
+            <button class="btn ghost" id="newGame">Add a game manually</button>
+          </div>
+          <div class="workflow-guide" aria-label="How Sideline works">
+            <div><span>1</span><b>Observe</b><p>Quick notes as the game unfolds.</p></div>
+            <div><span>2</span><b>Review</b><p>Rate skills and add your feedback.</p></div>
+            <div><span>3</span><b>Save</b><p>Share with your league from here.</p></div>
+          </div>
+          <div class="local-note"><b>Ready for the sideline.</b> Notes save on this device, even offline. Sign in to share completed evaluations.</div>
+          <button class="btn ghost sm" data-tab="saved">Moving from another device? Restore a backup</button>`;
         return;
       }
-      const group = groupOf(f);
-      const refs = allRefs();
-      const named = refs.filter(x => x.ref.name.trim());
-      const withNotes = refs.filter(x => x.ref.notes.length);
-      const fullyRated = refs.filter(x => RATED.every(c => x.ref.ratings[c.id] != null));
-      // Finished games are off the list, so their referees should not nag here.
-      /* This used to print "Tigers B CR, 2A CR, 2A AR1, 2A AR2, 2B CR, ..." -
-         a wall of abbreviations you had to decode one at a time. Names are what
-         a mentor actually recognises, so lead with those. */
-      const pend = named.filter(x => !x.ref.notes.length && !x.field.done);
-      const dupe = new Map();
-      pend.forEach(x => dupe.set(x.ref.name.trim(), (dupe.get(x.ref.name.trim()) || 0) + 1));
-      const unwatched = pend.map(x => {
-        const n = x.ref.name.trim();
-        return dupe.get(n) > 1 ? `${n} (${pitchLabel(x.field)})` : n;
-      });
-
-      // Every pitch at this field and kickoff, each with its own crew.
-      // Two Tigers pitches means two small pitch maps, one above the other, so
-      // you can see the whole area you are standing in front of.
-      const blocks = group.map(pf => {
-        const crew = pf.refs.map(r => {
-          const done = RATED.filter(c => r.ratings[c.id] != null).length;
-          return `<div class="crewrow${r.id === S.activeRefId ? ' on' : ''}">
-        <span class="slot">${esc(r.slot)}</span>
-        <input type="text" placeholder="Referee name" value="${esc(r.name)}" data-name="${r.id}" />
-        <span class="prog">${r.notes.length} note${r.notes.length === 1 ? '' : 's'}<br>${done}/${RATED.length} rated</span>
-        <button class="go" data-open="${r.id}">Notes</button>
-      </div>`;
-        }).join('');
-        /* Done / Delete live on each pitch. They used to sit once at the bottom
-           and acted only on the selected pitch, even with two pitches shown. */
-        return `<div class="fieldblock">
-      <div class="fieldhead">
-        <div class="fname">${esc(fullPitchLabel(pf))}</div>
-        ${pf.done ? '<span class="pill">done</span>' : ''}
-        <div class="spacer"></div>
-        <button class="minibtn" data-done="${pf.id}">${pf.done ? 'Reopen' : '&check; Done'}</button>
-      </div>
-      ${pitchSVG(pf)}
-      <div class="crew">${crew}</div>
-    </div>`;
+      const groups = dailyGroups().filter(g => g[0].ref.name.trim());
+      const observed = groups.filter(g => dayNotes(g).length).length;
+      const saved = groups.filter(g => {const r = savedRecordFor(g); return r && sameEvaluation(r, recordFor(g));}).length;
+      const doneCount = S.fields.filter(f => f.done).length;
+      const games = S.fields.filter(f => S.ui.showDone || !f.done).slice().sort((a,b) =>
+        (a.time || '99:99').localeCompare(b.time || '99:99') || a.name.localeCompare(b.name));
+      const selected = selectedField();
+      const cards = games.map(f => {
+        const on = selected && selected.id === f.id;
+        const summary = gameSummary(f);
+        return `<article class="game-card${on ? ' selected' : ''}">
+          <button class="game-heading" data-game="${f.id}" aria-expanded="${!!on}">
+            <span class="game-time">${f.time ? esc(pretty12(f.time).split(' ')[0]) : 'Time'}<small>${f.time ? (Number(f.time.slice(0,2)) >= 12 ? 'PM' : 'AM') : 'not set'}</small></span>
+            <span class="game-description"><b>${esc(fullPitchLabel(f) || 'New game')}</b><span>${esc(f.division || 'Set division')}${f.done ? ' · Completed' : ' · ' + plural(f.refs.length, 'referee')}</span></span>
+            <span class="game-chevron" aria-hidden="true">${on ? '−' : '+'}</span>
+          </button>
+          ${on ? `<div class="game-crew">${f.refs.map(r => {
+            const group = dayGroupFor(r), h = savedRecordFor(group);
+            const filed = h && sameEvaluation(h, recordFor(group));
+            const count = dayNotes(group).length;
+            return `<button class="referee-choice" data-open="${r.id}"><span class="referee-role">${esc(r.slot)}</span><span><b>${esc(r.name.trim() || 'Name this referee')}</b><small>${filed ? 'Evaluation saved' : count ? plural(count, 'note') + ' · In progress' : 'Ready to observe'}</small></span><span class="referee-arrow" aria-hidden="true">&rarr;</span></button>`;
+          }).join('')}</div><div class="game-tools"><button class="minibtn" data-editgame="${f.id}">Edit game</button><button class="minibtn" data-done="${f.id}">${f.done ? 'Reopen game' : 'Mark complete'}</button></div>
+          <details class="pitch-disclosure"><summary>View positions on the field</summary>${pitchSVG(f)}</details>`
+          : `<div class="game-preview">${esc(summary.names.join(' · ') || 'Add the referee names to get started')}</div>`}
+        </article>`;
       }).join('');
-
-      const meta = [f.name, f.division, pretty12(f.time)].filter(Boolean).join(', ');
-
-      $('#fieldsWrap').innerHTML = `
-    ${staleDateBanner()}
-    ${nowGameBar()}
-    <div class="card" style="margin-top:2px">
-      <div class="cov">
-        <span><b>${named.length}</b> referees</span>
-        <span><b>${withNotes.length}</b> with notes</span>
-        <span><b>${fullyRated.length}</b> fully rated</span>
-      </div>
-      ${unwatched.length ? `<div class="hint" style="margin:8px 0 0">Not watched yet:
-        ${esc(unwatched.slice(0, 8).join(', '))}${unwatched.length > 8 ? ` and ${unwatched.length - 8} more` : ''}</div>` : ''}
-    </div>
-    <div class="hint" style="margin:10px 0 0">${esc(meta || 'Field not set')}${group.length > 1
-          ? ` &mdash; ${group.length} pitches, one referee each` : ''}</div>
-    ${blocks}
-    <div class="hint" style="margin-top:6px">Tap a position on the pitch to switch who you are watching.
-      Every note goes to whoever is named in the blue bar at the top.</div>`;
+      $('#fieldsWrap').innerHTML = `${heading}${staleDateBanner()}
+        <div class="day-stats" aria-label="Session progress"><div><b>${groups.length}</b><span>Referees</span></div><div><b>${observed}</b><span>Observed</span></div><div><b>${saved}</b><span>Saved</span></div></div>
+        <div class="section-toolbar"><h2>Your schedule</h2><button class="minibtn" id="openImport">Import schedule</button></div>
+        ${cards || `<div class="card empty"><b>All games completed.</b><p>Your saved evaluations are in Saved. Reopen a game to add more feedback.</p><button class="btn" id="showCompleted">Show completed games</button></div>`}
+        <div class="schedule-actions"><button class="btn" id="newGame">+ Add game</button>${doneCount ? `<button class="btn ghost" id="showCompleted" aria-pressed="${!!S.ui.showDone}">${S.ui.showDone ? 'Hide' : 'Show'} completed (${doneCount})</button>` : ''}</div>`;
     }
 
     function staleDateBanner() {
@@ -3114,7 +1144,7 @@
       const box = $('#watching');
       const tab = S.ui.tab;
       // Only where notes can land on the wrong person.
-      box.hidden = (tab === 'refs' || tab === 'saved');
+      box.hidden = !p || (tab !== 'observe' && tab !== 'score');
       if (box.hidden) return;
       if (!p) {
         box.className = 'watching idle';
@@ -3127,7 +1157,7 @@
       const past = pastEvaluations(p.ref);
       box.innerHTML = `<span class="rolechip">${esc(p.ref.role)}</span>
     <div style="min-width:0">
-      <div class="who">${esc(refDisplay(p.ref))}</div>
+      <div class="watching-label">${tab === 'score' ? 'Reviewing' : 'Now observing'}</div><div class="who">${esc(refDisplay(p.ref))}</div>
       <div class="sub">${esc(p.field.name || 'field not set')}${p.field.sub ? ' ' + esc(p.field.sub) : ''} &nbsp;&middot;&nbsp; ${esc(p.ref.slot)}</div>
     </div>
     ${past ? `<button class="minibtn" data-profile="${esc(past.g.key)}"
@@ -3145,8 +1175,8 @@
       const group = f ? groupOf(f) : [];
       const crew = group.flatMap(pf => pf.refs.map(r => {
         const on = r.id === S.activeRefId;
-        return `<button class="mini${on ? ' on' : ''}" data-pick="${r.id}">
-      <span class="m1">${esc(r.slot)}${pf.sub ? '&middot;' + esc(pf.sub) : ''}</span> ${esc(refDisplay(r).split(/\s+/)[0])}
+        return `<button class="mini${on ? ' on' : ''}" data-pick="${r.id}" aria-pressed="${on}">
+      <span class="m1">${esc(r.slot)}${pf.sub ? '&middot;' + esc(pf.sub) : ''}</span> ${esc(refDisplay(r))}
       ${r.notes.length ? `<span style="color:var(--plus);font-weight:700"> ${r.notes.length}</span>` : ''}
     </button>`;
       })).join('');
@@ -3160,7 +1190,7 @@
            above" points at nothing - the next step is the schedule. */
         $('#observeBody').innerHTML = S.fields.length
           ? `<div class="empty">Pick a referee above, or tap a position on the
-      Fields tab. Notes always attach to the referee in the blue bar.</div>`
+      Games tab. Notes always attach to the referee in the watching bar.</div>`
           : `<div class="card" style="margin-top:14px">
       <h2 class="sec" style="margin-top:0">No games yet</h2>
       <p class="hint">Import the day's schedule and every field, kickoff and referee
@@ -3206,11 +1236,13 @@
 
       const placeholder = improving ? 'What improved?' : S.ui.pol === -1 ? 'Something to work on' : 'A strength';
       $('#observeBody').innerHTML = `
-    ${historyLine(ref)}
-    <div class="cats">${catRow}</div>
+    ${historyDisclosure(ref)}
+    <div class="section-toolbar"><h1 class="observe-title">Capture an observation</h1><span class="pill">${plural(ref.notes.length, 'note')}</span></div>
+    <p class="hint">Tap a quick note, or write your own below.</p>
+    ${!ref.name.trim() ? `<label class="f"><span>Referee name</span><input type="text" data-name="${ref.id}" placeholder="First and last name" value="${esc(ref.name)}" /></label>` : ''}
+    <div class="cats" aria-label="Observation categories">${catRow}</div>
     ${improving ? `<div class="hint" style="margin:0 0 8px">&uarr; is on: every note you add now logs as
       <b>improved after halftime</b>.</div>` : ''}
-    <div class="chipgrid">${chips || '<div class="hint">No quick notes for this role. Type one below.</div>'}</div>
     <div class="noteadd">
       <div class="polset" role="group" aria-label="Note type">
         <button data-pol="1"  aria-pressed="${S.ui.pol === 1}" title="Strength" aria-label="Strength">+</button>
@@ -3218,23 +1250,23 @@
         <button data-pol="2"  aria-pressed="${S.ui.pol === 2}" title="Improved after halftime"
           aria-label="Improved after halftime">&uarr;</button>
       </div>
-      <input type="text" id="noteText" placeholder="${placeholder}" aria-label="Note text" value="${esc(S.ui.draftText)}"
+      <input type="text" id="noteText" placeholder="${placeholder}" aria-label="Note text" value="${esc(ref.draftText || '')}"
              enterkeyhint="done" autocapitalize="sentences" />
       <button class="btn primary" style="width:auto;padding:11px 15px" id="addNote">Add</button>
     </div>
-    <div class="timeline">${notes || '<div class="empty">No notes on this referee yet.</div>'}</div>
-    ${ref.notes.length ? `<button class="btn ghost sm" id="toScore" style="margin-top:10px">Rate ${esc(refDisplay(ref))} &rarr;</button>` : ''}
+    <div class="chipgrid">${chips || '<div class="hint">No quick notes for this role. Write one above.</div>'}</div>
+    <h2 class="sec">Your observations</h2>
+    <div class="timeline">${notes || '<div class="empty">Your observations will appear here. Tap a quick note to start.</div>'}</div>
+    <button class="btn" id="toScore" style="margin-top:16px">Review ${esc(refDisplay(ref))} &rarr;</button>
   `;
     }
 
-    function addNote(cat, pol, text) {
+    function addNote(cat, pol, text, fromDraft = false) {
       const p = activePair(); if (!p || !text.trim()) return;
-      // Clear the draft BEFORE rendering. renderObserve rebuilds the input
-      // from S.ui.draftText, so clearing it afterwards would reprint the
-      // text you just submitted.
-      S.ui.draftText = '';
       const note = {id: uid(), cat, pol, text: text.trim(), at: Date.now()};
       const ref = p.ref;
+      // A quick note must not erase custom text the mentor is still composing.
+      if (fromDraft) ref.draftText = '';
       ref.notes.push(note);
       // Blanking an unedited draft marks it stale; the Score tab rebuilds it
       // on arrival. If you have already typed your own comments, they stand.
@@ -3298,11 +1330,8 @@
         });
         return out;
       };
-      /* Only the feedback. This used to open with a list of the games worked
-         and close with a sentence explaining why offside was scored 1. Both
-         were about how the app works rather than about the referee, and the
-         referee is the only one who reads this. The games are on screen on the
-         Score tab, and the offside 1 is the form's own instruction. */
+      /* The summary contains feedback for the referee. Game details and
+         unrated skills are explained separately in Review. */
       const good = group(1), work = group(-1), better = group(2);
       const parts = [];
       if (good.length) parts.push('Strengths: ' + good.join('; ') + '.');
@@ -3315,7 +1344,7 @@
 
     function renderScore() {
       const p = activePair();
-      if (!p) {$('#scoreBody').innerHTML = '<div class="empty">Pick a referee first.</div>'; return;}
+      if (!p) {$('#scoreBody').innerHTML = '<div class="page-heading"><p class="eyebrow">Complete your feedback</p><h1>Review an evaluation</h1><p>Choose a referee from your games to get started.</p></div><button class="btn primary" data-tab="fields">Choose a game</button>'; return;}
 
       /* One evaluation per referee per day, so everything below is the whole
          day: every game they worked, their notes pooled, rated once. */
@@ -3325,14 +1354,11 @@
       const notes = dayNotes(g);
       let dirty = reconcileDay(g);
 
-      /* In divisions that do not play offside, the form still wants a 1 in that
-         box. Fill it in and say why, rather than leaving the mentor to find the
-         checkbox and do it by hand every single game. Nothing here counts
-         towards the referee's average - see ratedForRecord(). Across a day this
-         applies only when NONE of their games played offside. */
+      // Unobserved offside is unrated. Null is supported by the shared database
+      // and is excluded from averages; the old form's required 1 was misleading.
       const noOffsideDivision = !!dayDivisions(g).length && !dayHasOffside(g);
-      if (noOffsideDivision && ref.ratings.offsides !== 1) {
-        applyToDay(g, {ratings: {offsides: 1}});
+      if ((noOffsideDivision || ref.noOffsides) && ref.ratings.offsides !== null) {
+        applyToDay(g, {ratings: {offsides: null}});
         dirty = true;
       }
 
@@ -3350,42 +1376,39 @@
         if (t.minus) bits.push(`${t.minus} to work on`);
         if (t.better) bits.push(`${t.better} improved`);
         const hint = t.n ? `${t.n} note${t.n === 1 ? '' : 's'}: ${bits.join(', ')}` : 'no notes taken';
-        /* In a division with no offside, the form's 1 would otherwise sit there
-           labelled "Needs work" - the exact thing this whole rule exists to
-           stop the app saying about a referee. It reads "Not played" instead. */
-        const wordFor = (v) => (c.id === 'offsides' && noOffsideDivision && v === 1)
-          ? 'Not played' : RATING_WORDS[v];
+        const wordFor = (v) => RATING_WORDS[v];
         const nums = [1, 2, 3, 4].map(v => `<button data-rate="${c.id}|${v}"
       aria-pressed="${ref.ratings[c.id] === v}"
       aria-label="${v} - ${esc(wordFor(v))}" ${locked ? 'disabled style="opacity:.45"' : ''}>
       <span class="rn">${v}</span><span class="rw">${esc(wordFor(v))}</span></button>`).join('');
-        return `<div class="ratewrap">
+        return `<div class="ratewrap" role="group" aria-label="${esc(c.label)}">
       <div class="rlabel">${esc(c.label)}</div>
       <div class="rhint">${esc(hint)}${c.id === 'offsides' && !noOffsideDivision
-          ? ' &middot; form says put 1 if there were no offsides' : ''}</div>
-      <div class="scale"><div class="nums">${nums}</div></div>
+          ? ' &middot; select below if no offside situations occurred' : ''}</div>
+      ${locked ? '' : `<div class="scale"><div class="nums">${nums}</div></div>`}
       ${c.id !== 'offsides' ? '' : noOffsideDivision
-          ? `<div class="okbox" style="margin-top:8px">${esc(field.division)} does not play offside, so the
-        form's 1 is filled in for you. It is not counted against ${esc(refDisplay(ref))}.</div>`
+          ? `<div class="okbox" style="margin-top:8px">Offside is not played in these games. This skill is excluded from the average.</div>`
           : `<label class="switchrow"><input type="checkbox" id="noOff" ${ref.noOffsides ? 'checked' : ''} />
-        No offside situations this game</label>`}
+        No offside situations observed today</label>${ref.noOffsides ? '<p class="hint">Not rated · excluded from the average.</p>' : ''}`}
     </div>`;
       }).join('');
 
       $('#scoreBody').innerHTML = `
-    <h2 class="sec">${esc(refDisplay(ref))} &mdash; ${esc(dayRoles(g))}</h2>
+    <div class="page-heading"><p class="eyebrow">Complete your feedback</p><h1>Review evaluation</h1><p>${esc(refDisplay(ref))} · ${esc(dayRoles(g))}</p></div>
+    <div class="card review-details"><label class="f"><span>Your mentor name</span><input type="text" data-mentor value="${esc(S.mentor)}" autocomplete="name" placeholder="First and last name" /></label>
+    ${!ref.name.trim() ? `<label class="f"><span>Referee name</span><input type="text" data-name="${ref.id}" value="${esc(ref.name)}" placeholder="First and last name" /></label>` : ''}
+    <button class="minibtn" data-editgame="${field.id}">Edit game details</button></div>
     ${g.length > 1 ? `<div class="okbox" style="margin:6px 0 10px">
       <b>${esc(refDisplay(ref))} worked ${plural(g.length, 'game')} today.</b>
       This is one evaluation covering all of them - the league takes one per referee per day.
       <ul class="daygames">${g.map(x => `<li${x.ref.id === lead.ref.id ? ' class="on"' : ''}>${esc(dayGameLabel(x))}
         ${x.ref.notes.length ? `<span class="muted">${plural(x.ref.notes.length, 'note')}</span>` : '<span class="muted">no notes</span>'}</li>`).join('')}</ul>
-      <div class="hint" style="margin:6px 0 0">The form only has room for one game, so it gets the one in
-        bold. Every game is listed in the comments.</div></div>`
+      <div class="hint" style="margin:6px 0 0">Your notes from all these games are included in this daily evaluation.</div></div>`
           : `<p class="hint">${esc(field.name || 'field not set')}${field.division ? ', ' + esc(field.division) : ''}${field.time ? ', ' + esc(pretty12(field.time)) : ''}</p>`}
-    ${historyLine(ref)}
+    ${historyDisclosure(ref)}
     <div class="card">${scales}</div>
     <div class="card">
-      <div class="rlabel" style="font-size:14px;font-weight:600;margin-bottom:8px">Should they move up</div>
+      <div class="rlabel" style="font-size:14px;font-weight:600;margin-bottom:8px">Ready for a higher division?</div>
       <div class="yesno">
         <button data-move="Yes" aria-pressed="${ref.moveUp === 'Yes'}">Yes</button>
         <button data-move="No"  aria-pressed="${ref.moveUp === 'No'}">No</button>
@@ -3393,61 +1416,54 @@
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div class="rlabel" style="font-size:14px;font-weight:600">Comments</div>
+        <div class="rlabel" style="font-size:14px;font-weight:600">Feedback</div>
         <div class="spacer" style="flex:1"></div>
-        <button class="btn sm ghost" style="width:auto" id="rebuild">Rewrite from notes</button>
+        <button class="btn sm ghost" style="width:auto" id="rebuild">Rebuild from notes</button>
       </div>
-      <textarea id="comments" rows="7" aria-label="Comments" placeholder="Built from your notes; edit freely.">${esc(ref.comments)}</textarea>
+      <textarea id="comments" rows="5" aria-label="Feedback" placeholder="Describe what went well and what to work on next.">${esc(ref.comments)}</textarea>
       <div class="charcount" id="charCount">${charCountText(ref.comments)}</div>
-      <button class="btn sm" id="copyComments" style="margin-top:8px">Copy comments</button>
+      <p class="hint" style="margin-top:8px">Built from your observations. Edit it to make the feedback useful and specific.</p>
     </div>
-    <div id="readyBox">${readyHTML(g)}</div>
+    <div id="readyBox" tabindex="-1">${readyHTML(g)}</div>
 
-    <h2 class="sec">Send it in</h2>
-    <ol class="finish">
-      <li><span class="fn">1</span><div>
-        <button class="btn primary" id="copyAll">Copy everything in form order</button>
-        <div class="hint">Puts the whole block on the clipboard.</div></div></li>
-      <li><span class="fn">2</span><div>
-        <button class="btn" id="openForm2">Open the form</button>
-        <div class="hint">Paste into COMMENTS. Everything above the comments is short
-          enough to tap straight in while the copied block is on screen.</div></div></li>
-      <li><span class="fn">3</span><div>
-        <button class="btn" id="saveEval">Save this referee</button>
-        <div class="hint" id="saveHint" hidden></div>
-        <div class="hint">Keeps a copy here, for the referee's profile and your backup.</div></div></li>
-    </ol>
+    <div class="save-panel">
+      <button class="btn primary" id="saveEval">Save evaluation</button>
+      <div class="hint" id="saveHint"></div>
+      <button class="btn ghost" id="nextReferee" hidden>Next referee &rarr;</button>
+    </div>
+    <details class="more export-options"><summary>Copy evaluation text</summary><p class="hint">For sharing your feedback outside Sideline.</p><button class="btn sm" id="copyAll">Copy evaluation</button><button class="btn sm ghost" id="copyComments">Copy feedback only</button></details>
   `;
       paintSaveState(g);
     }
 
-    /* What the form still needs, shown beside the copy button so a half-rated
-       referee gets noticed before you are standing in the parking lot. */
-    /* Checked against the game that answers the form's questions - the day's
-       lead - because that is the one whose field, time and division get typed
-       in. The ratings and comments are the day's and shared by every entry. */
+    /* A complete daily evaluation needs the lead game's details and the day's
+       shared ratings and feedback. Unfinished note drafts must be resolved
+       before saving so they cannot be accidentally left out of the feedback. */
     function missingFor(g) {
       const lead = dayLead(g); if (!lead) return ['a referee'];
       const {field, ref} = lead;
       const out = [];
-      if (!S.mentor.trim()) out.push('your name (account button, top left)');
-      // A name the import could not match is kept as the sheet wrote it, but
-      // the form's Field question only takes one of its own choices.
+      if (!S.mentor.trim()) out.push('your mentor name');
+      const date = new Date(S.date + 'T00:00:00Z');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(S.date) || Number.isNaN(date.getTime()) || date.toISOString().slice(0,10) !== S.date) out.push('a valid session date');
       if (!field.name) out.push('field');
-      else if (!FIELDS.includes(field.name)) out.push('a field from the form\'s list (Settings)');
-      if (!field.time) out.push('kickoff');
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(field.time)) out.push('kickoff');
       if (!field.division) out.push('division');
-      if (!ref.name.trim()) out.push('referee name');
-      RATED.forEach(c => {if (ref.ratings[c.id] == null) out.push(c.short);});
-      if (!ref.moveUp) out.push('move up');
-      if (!ref.comments.trim()) out.push('comments');
+      if (!nameKey(ref.name)) out.push('referee name');
+      if (g.some(x => (x.ref.draftText || '').trim())) out.push('an unfinished note (Observe)');
+      RATED.forEach(c => {
+        if (c.id === 'offsides' && (ref.noOffsides || !dayHasOffside(g))) return;
+        if (![1, 2, 3, 4].includes(ref.ratings[c.id])) out.push(c.short);
+      });
+      if (!ref.moveUp) out.push('higher-division recommendation');
+      if (!ref.comments.trim()) out.push('feedback');
       return out;
     }
     function readyHTML(g) {
       const miss = missingFor(g);
       return miss.length
         ? `<div class="warn"><b>Still missing:</b> ${esc(miss.join(', '))}</div>`
-        : `<div class="okbox">&check; Everything the form asks for is filled in.</div>`;
+        : `<div class="okbox">&check; Ready to save. Your feedback stays in Sideline.</div>`;
     }
     function charCountText(s) {return `${s.length} character${s.length === 1 ? '' : 's'}`;}
 
@@ -3476,7 +1492,7 @@
     function formText(r) {
       // The block is what gets typed and pasted into the form, so it holds what
       // the form asks for and nothing else. Which games an evaluation covers is
-      // on the Score tab and on the saved card; it is not a form question.
+      // on the Review tab and on the saved card; it is not a form question.
       return [
         `Mentor/Monitor name: ${r.mentor}`, `Date: ${prettyDate(r.date)}`, `Field: ${r.field}`,
         `Time: ${pretty12(r.time)}`, `Division: ${r.division}`, `Referee being mentored: ${r.referee}`,
@@ -3511,14 +1527,42 @@
     function savedRecordFor(g) {return savedRecordsFor(g)[0] || null;}
     /* The save button says whether this referee is saved, and whether they
        have changed since - so a late edit is not silently left out of the record. */
+    // Include notes and every covered game: clipboard text alone misses these edits.
+    function sameEvaluation(a, b) {
+      if (!a || !b) return false;
+      const shape = r => [r.mentor, r.date, r.field, r.sub || '', r.time, r.division, r.referee, r.position,
+        RATED.map(c => r.ratings?.[c.id] ?? null), r.moveUp, r.comments,
+        (r.notes || []).map(n => [n.cat, n.pol, n.text, n.at]),
+        (r.games || []).map(x => [x.field, x.sub || '', x.time, x.division, x.position, x.slot])];
+      return JSON.stringify(shape(a)) === JSON.stringify(shape(b));
+    }
+    function nextReferee() {
+      const p = activePair(), current = p ? new Set(dayIds(dayGroupFor(p.ref))) : new Set();
+      return allRefs().find(({ref}) => ref.name.trim() && !current.has(ref.id) && !ref.submitted);
+    }
     function paintSaveState(g) {
       const b = $('#saveEval'), h = $('#saveHint'); if (!b || !h) return;
-      const saved = savedRecordFor(g);
-      const current = !!saved && formText(saved) === formText(recordFor(g));
-      b.innerHTML = saved ? (current ? 'Saved &check;' : 'Update saved copy') : 'Save this referee';
-      b.classList.toggle('primary', !!saved && !current);
-      h.hidden = !saved;
-      h.textContent = saved ? `${current ? 'Saved at' : 'Changed since the save at'} ${clockOf(saved.savedAt)}` : '';
+      const saved = savedRecordFor(g), current = sameEvaluation(saved, recordFor(g));
+      b.textContent = current ? 'Evaluation saved ✓' : saved ? 'Save changes' : 'Save evaluation';
+      b.disabled = current;
+      h.hidden = false;
+      const sharing = isApproved() && uploadConsent() === true;
+      const problem = saved && sharing ? uploadProblem(saved) : '';
+      h.textContent = current ? (problem ? 'Saved on this device. Upload needs attention — open Saved.'
+        : sharing ? needsUpload(saved) ? 'Saved on this device. Waiting to upload.' : 'Shared with your league.'
+        : 'Saved on this device. ' + (isApproved() ? 'Turn on uploads in Account to share.' : 'Sign in to share with your league.'))
+        : 'Draft saved on this device. ' + (sharing ? 'Saving shares this evaluation with your league.' : 'You can save now and share after signing in.');
+      const next = $('#nextReferee'); if (next) next.hidden = !current || !nextReferee();
+    }
+
+    function paintStatus() {
+      const el = $('#connectionStatus'); if (!el) return;
+      const sharing = isApproved() && uploadConsent() === true;
+      el.textContent = !navigator.onLine ? 'Offline · saved here' : !sharing ? 'On this device'
+        : SYNC.running ? 'Uploading…' : refusedCount() || SYNC.error ? 'Upload needs attention'
+        : HIST.some(needsUpload) ? 'Waiting to upload' : 'League connected';
+      el.classList.toggle('attention', !!(sharing && (refusedCount() || SYNC.error)));
+      $('#draftStatus').textContent = persistent ? 'Drafts save on this device' : 'Storage unavailable · back up your work';
     }
 
     async function copyText(t, label) {
@@ -3550,7 +1594,12 @@
       const p = activePair(); if (!p) return;
       const g = dayGroupFor(p.ref);
       const lead = dayLead(g); if (!lead) return;
-      if (!lead.ref.name.trim()) {flash('Add the referee name first'); return;}
+      const missing = missingFor(g);
+      if (missing.length) {
+        flash('Complete the missing details before saving. Your draft is kept here.');
+        const box = $('#readyBox'); if (box) {box.innerHTML = readyHTML(g); box.focus(); box.scrollIntoView({block: 'center'});}
+        return;
+      }
 
       /* One record for the referee's whole day. refIds lists every entry it
          covers so selecting them from any of their games finds it again; refId
@@ -3672,16 +1721,16 @@
        read back in. This JSON file can, on any device, which covers
        carrying data between phone and laptop without needing accounts.
        ============================================================ */
-    const BACKUP_KEYS = ['sideline:mentor', 'sideline:sheet', 'sideline:map', 'sideline:myfields', 'sideline:theme'];
+    const BACKUP_KEYS = ['sideline-beta:mentor', 'sideline-beta:sheet', 'sideline-beta:map', 'sideline-beta:myfields', 'sideline-beta:theme'];
 
     function backupText() {
       const prefs = {};
-      BACKUP_KEYS.forEach(k => {const v = store.get(k); if (v !== undefined) prefs[k] = v;});
+      BACKUP_KEYS.forEach(k => {const v = store.get(k); if (v !== undefined) prefs[k.replace('sideline-beta:', 'sideline:')] = v;});
       return JSON.stringify({app: 'sideline', version: 1, exportedAt: new Date().toISOString(),
         session: S, history: HIST, prefs});
     }
     function markBackedUp() {
-      store.set('sideline:lastBackup', Date.now());
+      store.set('sideline-beta:lastBackup', Date.now());
       if (S.ui.tab === 'saved') renderSaved();
     }
 
@@ -3706,8 +1755,12 @@
           const localMentor = S.mentor;
           S = data.session; normalize();
           if (!S.mentor) S.mentor = localMentor;
-          Object.entries(data.prefs || {}).forEach(([k, v]) => {if (BACKUP_KEYS.includes(k)) store.set(k, v);});
-          if (data.prefs && data.prefs['sideline:theme']) setTheme(data.prefs['sideline:theme']);
+          Object.entries(data.prefs || {}).forEach(([k, v]) => {
+            const key = k.replace(/^sideline:/, 'sideline-beta:');
+            if (BACKUP_KEYS.includes(key)) store.set(key, v);
+          });
+          const restoredTheme = data.prefs && (data.prefs['sideline:theme'] || data.prefs['sideline-beta:theme']);
+          if (restoredTheme) setTheme(restoredTheme);
           save(); setTab('fields'); flash('Backup restored');
         });
     }
@@ -3742,7 +1795,7 @@
        rule regardless of what this cache claims.
        ============================================================ */
     const ACCT_BLANK = {status: 'signedOut', id: '', email: '', name: ''};
-    let ACCT = ACCOUNTS_ON ? {...ACCT_BLANK, ...(store.get('sideline:acct') || {})}
+    let ACCT = ACCOUNTS_ON ? {...ACCT_BLANK, ...(store.get('sideline-beta:acct') || {})}
       : {...ACCT_BLANK, status: 'off'};
     const acctUI = {step: 'email', email: '', code: '', busy: false, error: '', notice: '', offline: false, sentAt: 0};
     let sb = null, sbLoading = null, acctStarted = false, mentorLoading = null;
@@ -3775,9 +1828,9 @@
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
         auth: {
           persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
-          // The "sideline:" prefix matters: the schedule import's browser-cache
+          // The "sideline-beta:" prefix matters: the schedule import's browser-cache
           // scan skips those keys, so a login token is never offered as a schedule.
-          storageKey: 'sideline:auth'
+          storageKey: 'sideline-beta:auth'
         }
       });
       return sb;
@@ -3824,7 +1877,7 @@
 
     /* Whether supabase-js still holds a login on this device. */
     function storedLogin() {
-      try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
+      try {return !!localStorage.getItem('sideline-beta:auth');} catch (e) {return false;}
     }
 
     async function handleSession(event, session) {
@@ -3918,7 +1971,7 @@
       if (error) throw error;
       if (epoch !== accountEpoch || me !== ACCT.id) return false;
       ACCT = {...ACCT, name: want};
-      store.set('sideline:acct', ACCT);
+      store.set('sideline-beta:acct', ACCT);
       acctUI.error = ''; paintAcctCard(true);
       return true;
     }
@@ -3939,7 +1992,7 @@
         accountEpoch++; mentorLoading = null;
         clearTimeout(nameTimer); clearTimeout(SYNC.retryTimer);
       }
-      store.set('sideline:acct', ACCT);
+      store.set('sideline-beta:acct', ACCT);
       if (previousId !== ACCT.id || (wasApproved && !isApproved())) clearLeague();
       if ((!wasApproved || previousId !== ACCT.id) && isApproved()) loadLeagueCache().then(renderQuietly);
       invalidateProfiles();
@@ -3991,14 +2044,14 @@
       const body = $('#sheetBody'); if (!body) return;
       if (!ACCOUNTS_ON) {
         body.innerHTML = `<div class="card">
-        <label class="f"><span>Your name, as it goes on the form</span>
+        <label class="f"><span>Your mentor name</span>
           <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
         <p class="hint" style="margin:10px 0 0">Sharing between mentors is switched off in this build,
           so everything stays on this device.</p></div>`;
         return;
       }
       body.innerHTML = `<div class="card">
-      <label class="f"><span>Your name, as it goes on the form</span>
+      <label class="f"><span>Your mentor name</span>
         <input type="text" data-mentor value="${esc(S.mentor)}" placeholder="Your name" autocomplete="name" /></label>
     </div>
     <div class="card" id="acctCard">${accountCardInner()}</div>`;
@@ -4157,16 +2210,16 @@
        The server matches on the record's own id, so repeats and restored
        backups update in place instead of duplicating.
        ============================================================ */
-    const SYNC = {running: null, again: false, error: '', retryTimer: null, backoff: 0, lastOk: store.get('sideline:lastSync') || 0};
+    const SYNC = {running: null, again: false, error: '', retryTimer: null, backoff: 0, lastOk: store.get('sideline-beta:lastSync') || 0};
 
     function uploadConsent() {
-      const m = store.get('sideline:uploadConsent') || {};
+      const m = store.get('sideline-beta:uploadConsent') || {};
       return m[ACCT.id];
     }
     function setUploadConsent(v) {
-      const m = store.get('sideline:uploadConsent') || {};
+      const m = store.get('sideline-beta:uploadConsent') || {};
       m[ACCT.id] = v;
-      store.set('sideline:uploadConsent', m);
+      store.set('sideline-beta:uploadConsent', m);
     }
     const unsynced = (r) => !!(r.referee && r.referee.trim()) && (!r.syncedAt || r.syncedBy !== ACCT.id);
     /* Why a record cannot go up as saved, or '' if it can. The server's reason
@@ -4179,7 +2232,7 @@
       return e && e.by === ACCT.id && e.savedAt === r.savedAt ? String(e.msg || 'Refused by the server.') : '';
     }
     const needsUpload = (r) => unsynced(r) && !uploadProblem(r);
-    const pendingDeletes = () => (store.get('sideline:pendingDeletes') || []).filter(d => d && d.id && d.by);
+    const pendingDeletes = () => (store.get('sideline-beta:pendingDeletes') || []).filter(d => d && d.id && d.by);
 
     /* slice() counts UTF-16 units. Cutting between the two halves of an emoji
        leaves half a character, and the database refuses the whole upload. */
@@ -4220,7 +2273,7 @@
     function queueRemoteDelete(rec) {
       const by = rec.syncedBy || (isApproved() && uploadConsent() === true ? ACCT.id : '');
       if (!by) return;
-      store.set('sideline:pendingDeletes', pendingDeletes().concat([{id: rec.id, by}]));
+      store.set('sideline-beta:pendingDeletes', pendingDeletes().concat([{id: rec.id, by}]));
     }
 
     let offeredUpload = false;
@@ -4264,7 +2317,7 @@
             const {error} = await c.from('evaluations').delete().eq('mentor_id', me).in('client_id', ids);
             if (error) throw error;
             if (!current()) return;
-            store.set('sideline:pendingDeletes', pendingDeletes().filter(d => !(d.by === me && ids.includes(d.id))));
+            store.set('sideline-beta:pendingDeletes', pendingDeletes().filter(d => !(d.by === me && ids.includes(d.id))));
           }
           if (!current()) return;
           const todo = uploadConsent() === true ? HIST.filter(needsUpload) : [];
@@ -4297,7 +2350,7 @@
             histChanged(); save();
           }
           SYNC.error = ''; SYNC.backoff = 0;
-          SYNC.lastOk = Date.now(); store.set('sideline:lastSync', SYNC.lastOk);
+          SYNC.lastOk = Date.now(); store.set('sideline-beta:lastSync', SYNC.lastOk);
           if (todo.length || mine.length) pullLeague('force');
         } catch (e) {
           if (!current()) return;
@@ -4316,6 +2369,8 @@
 
     function paintSync() {
       paintAcctCard(false);
+      paintStatus();
+      if (S.ui.tab === 'score') {const p = activePair(); if (p) paintSaveState(dayGroupFor(p.ref));}
       if (S.ui.tab === 'saved') renderQuietly();
     }
     const refusedCount = () => HIST.filter(uploadProblem).length;
@@ -4333,7 +2388,7 @@
       const s = ACCT.status;
       if (s === 'signedOut') {
         return `<p class="hint">Not signed in, so these stay on this device. Sharing them with other
-      mentors is under the account button, top left.</p>`;
+      mentors is under the Account.</p>`;
       }
       if (s === 'pending') return '<div class="warn">Your account is waiting for approval. Saved evaluations upload once an admin approves it.</div>';
       if (uploadConsent() !== true) {
@@ -4391,7 +2446,7 @@
             // Give up after a few seconds and try again on the next operation.
             const timer = setTimeout(() => {dbp = null; finish(null);}, 4000);
             try {
-              const req = indexedDB.open('sideline', 1);
+              const req = indexedDB.open('sideline-beta', 1);
               req.onupgradeneeded = () => req.result.createObjectStore('kv');
               req.onsuccess = () => {
                 const db = req.result;
@@ -4820,6 +2875,11 @@
         && !(r.local && ids.includes(r.refId)));
       return past.length ? {g, past} : null;
     }
+    function historyDisclosure(ref) {
+      const past = pastEvaluations(ref);
+      return past ? `<details class="history-disclosure"><summary>Earlier feedback · ${plural(past.past.length, 'evaluation')}</summary>${historyLine(ref)}</details>` : '';
+    }
+
     function historyLine(ref) {
       const h = pastEvaluations(ref);
       if (!h) return '';
@@ -4848,11 +2908,10 @@
     function renderRefs() {
       const sorts = [['support', 'Support first'], ['recent', 'Recent'], ['name', 'A–Z']];
       $('#refsBody').innerHTML = `
-    <h2 class="sec">Referees</h2>
-    <p class="hint">${esc(scopeText())}</p>
+    <div class="page-heading"><p class="eyebrow">Development over time</p><h1>Referees</h1><p>${esc(scopeText())}</p></div>
     ${pullError && isApproved() ? `<div class="warn">Could not refresh: ${esc(pullError)}</div>` : ''}
     <div class="row" style="margin-bottom:8px">
-      ${ACCOUNTS_ON && ACCT.status === 'signedOut' ? '<button class="btn sm" id="openAccount">Sign in</button>' : ''}
+      ${ACCOUNTS_ON && ACCT.status === 'signedOut' ? '<button class="btn sm" data-account="1">Sign in</button>' : ''}
       ${isApproved() ? `<button class="btn sm" id="refsRefresh" ${pulling ? 'disabled' : ''}>${pulling ? 'Refreshing&hellip;' : 'Refresh'}</button>` : ''}
     </div>
     <input type="search" id="refSearch" placeholder="Search by name" aria-label="Search referees"
@@ -4880,7 +2939,7 @@
       }
       if (!list.length) {
         return `<div class="empty">${q ? 'No referee matches that name.'
-          : 'No saved evaluations yet. Profiles build from evaluations saved on the Score tab.'}</div>`;
+          : 'No saved evaluations yet. Profiles build from evaluations saved on the Review tab.'}</div>`;
       }
       return list.map(g => {
         const p = g.profile, concern = topConcern(p);
@@ -4970,17 +3029,21 @@
     ${evals}`;
     }
 
+    const SAVED_UI = {q: ''};
     function renderSaved() {
-      const last = store.get('sideline:lastBackup') || 0;
+      const last = store.get('sideline-beta:lastBackup') || 0;
       const unbacked = HIST.filter(r => (r.savedAt || 0) > last).length;
       const sharing = isApproved() && uploadConsent() === true;
-      const items = HIST.map(r => {
+      const q = nameKey(SAVED_UI.q);
+      const visible = HIST.filter(r => !q || nameKey([r.referee, r.field, r.date].join(' ')).includes(q));
+      const items = visible.map(r => {
         // Labelled scores. The old "3 2 4 - 1 2" string needed the form open
         // beside it to know which number was which.
         const scores = RATED.map(c => `<span class="pill">${esc(c.short)} ${esc(r.ratings[c.id] ?? '-')}</span>`).join('');
         const problem = sharing ? uploadProblem(r) : '';
-        const cloud = !sharing ? '' : (problem || needsUpload(r)) ? '<span class="pill low">not uploaded</span>'
-          : '<span class="pill">&#9729;&#xFE0E; uploaded</span>';
+        const cloud = !sharing ? '<span class="pill">On this device</span>' : (problem || needsUpload(r)) ? '<span class="pill low">' + (problem ? 'Needs attention' : 'Waiting to upload') + '</span>'
+          : '<span class="pill success">Shared with league</span>';
+        const draft = S.date === r.date && allRefs().find(x => nameKey(x.ref.name) === nameKey(r.referee));
         return `<div class="saved">
       <div class="sh">
         <b>${esc(r.referee)}</b><span class="pill">${esc(r.position)}</span>
@@ -4995,8 +3058,9 @@
         <span class="muted">${esc([x.division, x.slot].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>` : ''}
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${scores}</div>
       ${problem ? `<div class="warn" style="margin-top:8px">Not uploaded: ${esc(problem)}</div>` : ''}
-      <pre>${esc(r.comments)}</pre>
-      <button class="btn sm" data-copysaved="${r.id}" style="margin-top:8px">Copy</button>
+      <details class="saved-feedback"><summary>Read feedback</summary><pre>${esc(r.comments)}</pre></details>
+      ${draft ? `<button class="btn sm" data-review="${draft.ref.id}">Open current draft</button>` : ''}
+      <button class="btn sm ghost" data-copysaved="${r.id}" style="margin-top:8px">Copy</button>
       <details class="disclose danger" style="margin-top:8px">
         <summary>More</summary>
         <button class="btn sm danger" data-dropsaved="${r.id}" style="margin-bottom:12px">Delete this evaluation</button>
@@ -5010,8 +3074,9 @@
     ${syncStatusHTML()}
     ${unbacked ? `<div class="warn">${unbacked} saved evaluation${unbacked === 1 ? ' is' : 's are'} not in a backup yet.
       <button class="btn sm primary" id="backupFile" style="margin-top:8px">Save a backup now</button></div>` : ''}
-    ${HIST.length ? items + `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`
-          : '<div class="empty">No evaluations saved yet. Use <b>Save this referee</b> on the Score tab.</div>'}
+    ${HIST.length ? `<label class="f"><span>Find an evaluation</span><input type="search" id="savedSearch" placeholder="Name, field or date" value="${esc(SAVED_UI.q)}" /></label>` : ''}
+    <div id="savedResults">${HIST.length ? (items || '<div class="empty">No evaluations match your search.</div>') + `<button class="btn" id="exportCsv" style="margin-top:12px">Export all as CSV</button>`
+          : '<div class="empty">No saved evaluations yet. Complete your feedback on the <b>Review</b> tab, then save it here.</div>'}</div>
     <h2 class="sec" style="margin-top:26px">Backup &amp; restore</h2>
     <div class="card" style="margin-top:4px">
       <p class="hint" style="margin-top:0">A backup file carries your games, notes, saved evaluations and
@@ -5041,6 +3106,7 @@
       $('#sheetTitle').textContent = sheetMode === 'import' ? 'Import schedule'
         : sheetMode === 'games' ? 'Choose a game'
           : sheetMode === 'account' ? 'Account'
+            : sheetMode === 'game' ? 'Game details'
             : sheetMode === 'profile' ? ((currentProfile() || {}).name || 'Referee') : 'Settings';
       if (sheetMode === 'import') return renderImport();
       if (sheetMode === 'games') return renderPicker();
@@ -5056,7 +3122,7 @@
         (a.time || '99:99').localeCompare(b.time || '99:99') ||
         fieldIdx(a.name) - fieldIdx(b.name) || (a.sub || '').localeCompare(b.sub || ''));
 
-      const gameCards = ordered.map(f => {
+      const gameCards = ordered.filter(f => sheetMode !== 'game' || f.id === editing).map(f => {
         const head = `<div class="grow${f.done ? ' done' : ''}" style="margin:6px 0 0">
       <button style="flex:1;min-width:0;text-align:left;background:none" data-edit="${f.id}"
         data-gamehead="${f.id}" data-withtime aria-expanded="${editing === f.id}">
@@ -5072,14 +3138,14 @@
           .concat(DIVISIONS.map(n => `<option${n === f.division ? ' selected' : ''}>${esc(n)}</option>`)).join('');
         const roles = f.refs.map(r => `<div class="crewrow">
         <span class="slot">${esc(r.slot)}</span>
-        <input type="text" placeholder="Referee name" value="${esc(r.name)}" data-name="${r.id}" />
+        <input type="text" placeholder="Referee name" aria-label="${esc(r.slot)} referee name" value="${esc(r.name)}" data-name="${r.id}" />
         <div class="seg" style="max-width:118px;flex:none">
           <button data-role="${r.id}|CR" aria-pressed="${r.role === 'CR'}">CR</button>
           <button data-role="${r.id}|AR" aria-pressed="${r.role === 'AR'}">AR</button>
         </div>
       </div>`).join('');
 
-        return head + `<div class="card" style="margin:0 0 10px;border-top-left-radius:0;border-top-right-radius:0">
+        return (sheetMode === 'game' ? `<div class="game-editor-title">${gameHeadHTML(f, true)}</div>` : head) + `<div class="card" style="margin:0 0 10px;border-top-left-radius:0;border-top-right-radius:0">
       <label class="f"><span>Field</span><select data-fname="${f.id}">${opts}</select></label>
       <div class="row">
         <label class="f"><span>Division</span><select data-fdiv="${f.id}">${divs}</select></label>
@@ -5099,6 +3165,10 @@
     </div>`;
       }).join('');
 
+      if (sheetMode === 'game') {
+        $('#sheetBody').innerHTML = `<p class="hint" style="margin-top:16px">Set up the game and its crew. Changes save as you go.</p>${gameCards || '<div class="empty">This game has been removed.</div>'}`;
+        return;
+      }
       const groupBtns = FIELD_GROUPS.map(g => {
         const have = g.members.filter(m => S.fields.some(f => f.name === m)).length;
         return `<button class="btn sm${have === g.members.length ? ' ghost' : ''}" style="width:auto;flex:none"
@@ -5138,7 +3208,7 @@
     <div class="hint" style="margin-top:8px">
       Clears every game and all in-progress notes. Saved evaluations stay.${persistent ? '' :
           ' <b>This browser is blocking storage, so notes will not survive a reload.</b>'}</div>
-    <p class="app-version" aria-label="App version 1.0.0">Sideline v1.0.0</p>`;
+    <p class="app-version" aria-label="App version 2.0 beta">Sideline 2.0 · Beta</p>`;
     }
 
     /* ---------- the import wizard ----------
@@ -5196,7 +3266,7 @@
 
         let sourceUI = '';
         if (src === 'sheet') {
-          const last = store.get('sideline:sheet') || {id: '', gid: ''};
+          const last = store.get('sideline-beta:sheet') || {id: '', gid: ''};
           sourceUI = `
         <label class="f"><span>Spreadsheet link or ID</span>
           <input type="text" id="shId" value="${esc(last.id)}" placeholder="docs.google.com/spreadsheets/d/..." /></label>
@@ -5255,7 +3325,7 @@
         const sug = suggestedFields();
 
         const chips = present.map(f => `<button class="fchip${isOn(f.name) ? ' on' : ''}"
-      data-impfield="${esc(f.name)}" aria-pressed="${isOn(f.name)}">
+      data-impfield="${esc(f.name)}" aria-label="${esc(f.name)}, ${plural(f.n, 'game')}" aria-pressed="${isOn(f.name)}">
       ${esc(shortField(f.name))} <span class="n">${f.n}</span></button>`).join('');
 
         body = `<div class="card">
@@ -5360,6 +3430,14 @@
     }
 
     let sheetReturnFocus = null;
+    function syncModalState() {
+      const sheetOpen = !$('#sheet').hidden, dialogOpen = !$('#dlg').hidden;
+      for (const selector of ['header', 'main', 'nav', '.skip-link', '#toast']) {
+        const el = $(selector); if (el) el.inert = sheetOpen || dialogOpen;
+      }
+      $('#sheet').inert = dialogOpen;
+      document.body.classList.toggle('locked', sheetOpen || dialogOpen);
+    }
     function openSheet(mode) {
       const sheet = $('#sheet');
       // Remember what opened the sheet so focus returns there on close, instead
@@ -5369,6 +3447,7 @@
       $('#scrim').hidden = false; sheet.hidden = false;
       document.body.classList.add('locked');
       renderSheet();
+      syncModalState();
       sheet.scrollTop = 0;
       sheet.focus({preventScroll: true});
     }
@@ -5381,15 +3460,18 @@
       // DOM competing with the live UI. Cleared on close, rebuilt on open.
       // IMP itself is kept in memory, so reopening restores the parsed rows.
       $('#sheetBody').innerHTML = '';
+      syncModalState();
       renderAll();
       const back = sheetReturnFocus; sheetReturnFocus = null;
       if (back && back.isConnected && back.focus) back.focus({preventScroll: true});
+      else document.querySelector('nav button[aria-current="page"]')?.focus({preventScroll: true});
     }
 
     /* ============================================================
        RENDER + TABS
        ============================================================ */
     function setTab(t) {
+      if (!['fields', 'observe', 'score', 'refs', 'saved'].includes(t)) t = 'fields';
       S.ui.tab = t; save();
       ['fields', 'observe', 'score', 'refs', 'saved'].forEach(name => {
         $('#tab-' + name).hidden = name !== t;
@@ -5399,51 +3481,11 @@
       });
       renderAll();
       window.scrollTo({top: 0});
-      untuck();
+      document.title = ({fields: 'Games', observe: 'Observe', score: 'Review', refs: 'Referees', saved: 'Saved'}[t]) + ' · Sideline Beta';
     }
 
-    /* ---------- collapse-on-scroll header ----------
-       Scrolling down past the brand row tucks it away; any scroll up brings it
-       straight back. The 6px dead zone stops the header flickering when a
-       fingertip wobbles, and it never tucks near the top of the page. */
-    let lastY = 0, tucked = false, tuckLock = 0;
-    function untuck() {
-      tucked = false; lastY = 0; tuckLock = 0;
-      const h = document.querySelector('header'); if (h) h.classList.remove('tuck');
-    }
-    function onScroll() {
-      const h = document.querySelector('header'); if (!h) return;
-      const y = Math.max(0, window.scrollY);
-
-      /* Only tuck when there is real scrolling to do. On a short page the
-         reclaimed height is a large share of the total, which makes the
-         feedback below far worse, and there is little to gain anyway. */
-      const room = document.documentElement.scrollHeight - window.innerHeight;
-      if (room < 220) {
-        if (tucked) {tucked = false; h.classList.remove('tuck');}
-        lastY = y; return;
-      }
-
-      /* The lock is the important part. The header sits in the flow, so tucking
-         it makes the document ~54px shorter, and the browser nudges scrollY by
-         a few pixels to compensate. That nudge arrives as a fresh scroll event
-         pointing the opposite way, which untucks, which makes the page taller
-         again - a loop that flaps the header several times a second. Ignoring
-         scroll for longer than the transition lets the layout settle first. */
-      const now = Date.now();
-      if (now < tuckLock) {lastY = y; return;}
-      if (Math.abs(y - lastY) < 12) return;
-
-      const want = y > 72 && y > lastY;
-      lastY = y;
-      if (want !== tucked) {
-        tucked = want;
-        h.classList.toggle('tuck', want);
-        tuckLock = now + 320;
-      }
-    }
-    window.addEventListener('scroll', onScroll, {passive: true});
     function renderAll() {
+      paintStatus();
       renderWatching();
       if (S.ui.tab === 'fields') renderFields();
       if (S.ui.tab === 'observe') {renderMinimap(); renderObserve();}
@@ -5472,11 +3514,13 @@
       dlgNoAction = o.onNo || null;
       dlgReturnFocus = document.activeElement;
       $('#dlg').hidden = false;
+      syncModalState();
       // Focus lands on Cancel, so the choice a stray Enter hits is the safe one.
       $('#dlgNo').focus();
     }
     function closeDlg(run) {
       $('#dlg').hidden = true;
+      syncModalState();
       const fn = run ? dlgAction : dlgNoAction;
       dlgAction = dlgNoAction = null;
       const back = dlgReturnFocus; dlgReturnFocus = null;
@@ -5757,7 +3801,7 @@
        than duplicated (matched on field name plus kickoff), and a referee
        who already has notes is never renamed out from under those notes. */
     function refHasAssessment(r) {
-      return !!((r.notes || []).length || r.comments || r.moveUp || r.submitted
+      return !!((r.notes || []).length || r.draftText || r.comments || r.moveUp || r.submitted
         || Object.values(r.ratings || {}).some(v => v != null));
     }
 
@@ -5907,7 +3951,7 @@
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (!k || k.startsWith('sideline:')) continue;
+          if (!k || k.startsWith('sideline-beta:') || k.startsWith('sideline:')) continue;
           let v;
           try {v = JSON.parse(localStorage.getItem(k));} catch (e) {continue;}
           let arr = null;
@@ -5936,7 +3980,7 @@
     function loadTable(rows) {
       const headerRow = guessHeaderRow(rows);
       const header = rows[headerRow] || [];
-      const savedMap = store.get('sideline:map');
+      const savedMap = store.get('sideline-beta:map');
       const auto = autoMap(header);
       // Reuse last time's mapping only if it still points at columns that exist.
       const map = (savedMap && Object.values(savedMap).every(v => v === '' || Number(v) < header.length))
@@ -5979,7 +4023,7 @@
     function defaultFieldFilter() {
       const present = fieldsInImport().map(f => f.name);
       if (!present.length) return [];
-      const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
+      const remembered = (store.get('sideline-beta:myfields') || []).filter(n => present.includes(n));
       if (remembered.length) return remembered;
       const onBoard = present.filter(n => S.fields.some(f => f.name === n));
       if (onBoard.length) return onBoard;
@@ -5990,7 +4034,7 @@
        time" shortcut on step 2 when nothing is selected yet. */
     function suggestedFields() {
       const present = fieldsInImport().map(f => f.name);
-      const remembered = (store.get('sideline:myfields') || []).filter(n => present.includes(n));
+      const remembered = (store.get('sideline-beta:myfields') || []).filter(n => present.includes(n));
       if (remembered.length) return {names: remembered, why: 'the fields you picked last time'};
       const onBoard = present.filter(n => S.fields.some(f => f.name === n));
       if (onBoard.length) return {names: onBoard, why: 'the fields already on your board'};
@@ -6015,9 +4059,14 @@
       if (e.target.id === 'scrim') {closeSheet(); return;}
       if (e.target.id === 'dlg') {closeDlg(false); return;}
 
+      if (hit('data-account')) {openSheet('account'); return;}
       const tab = hit('data-tab'); if (tab) {setTab(tab); return;}
       if (hit('data-openpicker')) {openSheet('games'); return;}
       const themeSet = hit('data-theme-set'); if (themeSet) {setTheme(themeSet); renderSheet(); return;}
+      const editGame = hit('data-editgame');
+      if (editGame) {S.ui.editField = editGame; openSheet('game'); return;}
+      const review = hit('data-review');
+      if (review) {S.activeRefId = review; setTab('score'); return;}
       const pick = hit('data-pick'); if (pick) {S.activeRefId = pick; save(); renderAll(); return;}
       const open = hit('data-open'); if (open) {S.activeRefId = open; save(); setTab('observe'); return;}
       const cat = hit('data-cat'); if (cat) {S.ui.cat = cat; save(); renderObserve(); return;}
@@ -6032,7 +4081,7 @@
           const next = f.refs.find(r => r.name.trim()) || f.refs[0];
           if (next) S.activeRefId = next.id;
         }
-        save(); closeSheet(); return;
+        save(); closeSheet(); renderAll(); return;
       }
       const editF = hit('data-edit');
       if (editF) {S.ui.editField = S.ui.editField === editF ? null : editF; save(); renderSheet(); return;}
@@ -6219,6 +4268,12 @@
          all text - landed on a child with no id and did nothing. */
       const btn = e.target.closest('button[id]');
       switch (btn ? btn.id : '') {
+        case 'newGame': {
+          const f = newField(''); S.fields.push(f); S.ui.editField = f.id; S.ui.fieldId = f.id; S.activeRefId = f.refs[0].id;
+          save(); openSheet('game'); return;
+        }
+        case 'showCompleted': S.ui.showDone = !S.ui.showDone; save(); renderFields(); return;
+        case 'nextReferee': {const p = nextReferee(); if (p) {S.activeRefId = p.ref.id; S.ui.fieldId = p.field.id; setTab('observe');} return;}
         case 'openSettings': case 'openSettings2': openSheet('settings'); return;
         case 'openPicker': openSheet('games'); return;
         case 'themeToggle':
@@ -6269,7 +4324,7 @@
         case 'doFetch': {
           const id = $('#shId').value, gid = $('#shGid').value;
           if (!id.trim()) {flash('Paste the link or ID first'); return;}
-          store.set('sideline:sheet', {id, gid});
+          store.set('sideline-beta:sheet', {id, gid});
           flash('Fetching...');
           fetchSheet(id, gid).then(text => {
             const rows = parseDelimited(text, detectDelim(text));
@@ -6331,31 +4386,33 @@
           return;
         case 'doApply': {
           if (!IMP || !IMP.picked || !IMP.picked.length) {flash('Nothing selected'); return;}
-          store.set('sideline:map', IMP.map);
+          store.set('sideline-beta:map', IMP.map);
           // Remember which pitches you monitor so next week's import defaults to them.
           const chosen = [...new Set(rowsToGames().filter(g => IMP.picked.includes(g.key))
             .map(g => g.field || g.raw.field).filter(Boolean))];
-          if (chosen.length) store.set('sideline:myfields', chosen);
+          if (chosen.length) store.set('sideline-beta:myfields', chosen);
           if (applyGames(IMP.picked) === false) return;
           closeSheet(); setTab('fields'); return;
         }
         case 'closeSheet': closeSheet(); return;
         case 'addField':
           // No cap: monitoring a full slate means every field with a game on it.
-          S.fields.push(newField('')); save(); renderSheet(); return;
+          {const f = newField(''); S.fields.push(f); S.ui.editField = f.id; save(); renderSheet(); return;}
         case 'newSession':
           askConfirm('Clear every game and all in-progress notes? Saved evaluations are kept.',
             'Clear everything', () => {S = blankSession(); save(); closeSheet(); setTab('fields');});
           return;
         case 'addNote':
-          addNote(S.ui.cat, S.ui.pol, $('#noteText').value);
+          addNote(S.ui.cat, S.ui.pol, $('#noteText').value, true);
           return;
         case 'toScore': setTab('score'); return;
         case 'rebuild': {
           const p = activePair(); if (!p) return;
           const g = dayGroupFor(p.ref);
-          applyToDay(g, {comments: buildComments(g), commentsEdited: false});
-          save(); renderScore(); return;
+          const rebuild = () => {applyToDay(g, {comments: buildComments(g), commentsEdited: false}); save(); renderScore();};
+          if (dayLead(g).ref.commentsEdited) askConfirm('Replace your edited feedback with a fresh summary of the notes?', 'Rebuild feedback', rebuild, {tone: 'primary'});
+          else rebuild();
+          return;
         }
         case 'copyComments': {
           const p = activePair(); if (p) copyText(p.ref.comments, 'Comments'); return;
@@ -6365,7 +4422,6 @@
         }
         case 'saveEval': saveEval(); return;
         case 'exportCsv': exportCSV(); return;
-        case 'openForm': case 'openForm2': window.open(FORM_URL, '_blank', 'noopener'); return;
       }
     });
 
@@ -6378,19 +4434,28 @@
       const nameFor = t.getAttribute && t.getAttribute('data-name');
       if (nameFor) {
         allRefs().forEach(({ref}) => {if (ref.id === nameFor) ref.name = t.value;});
-        save(); renderWatching(); return;
+        save(); renderWatching();
+        if (S.ui.tab === 'score') {const p = activePair(); if (p) {$('#readyBox').innerHTML = readyHTML(dayGroupFor(p.ref)); paintSaveState(dayGroupFor(p.ref));}}
+        return;
       }
-      if (t.id === 'noteText') {S.ui.draftText = t.value; save(); return;}
+      if (t.id === 'noteText') {const p = activePair(); if (p) p.ref.draftText = t.value; save(); return;}
       if (t.id === 'pasteBox' && IMP) {IMP.text = t.value; return;}
       if (t.hasAttribute && t.hasAttribute('data-mentor')) {
         // Repaint the avatar as they type, so the initials appear straight away.
         // Only the avatar: anything more rebuilt the field being typed in.
         S.mentor = t.value; save(); paintAvatar();
+        if (S.ui.tab === 'score') {const p = activePair(); if (p) {$('#readyBox').innerHTML = readyHTML(dayGroupFor(p.ref)); paintSaveState(dayGroupFor(p.ref));}}
         if (ACCOUNTS_ON) pushMentorName(1500);
         return;
       }
       if (t.id === 'acctEmail') {acctUI.email = t.value; return;}
       if (t.id === 'acctCode') {acctUI.code = t.value; return;}
+      if (t.id === 'savedSearch') {
+        SAVED_UI.q = t.value;
+        const selection = t.selectionStart; renderSaved();
+        const input = $('#savedSearch'); if (input) {input.focus(); try {input.setSelectionRange(selection, selection);} catch (e) {}}
+        return;
+      }
       if (t.id === 'refSearch') {REFS_UI.q = t.value; $('#refsList').innerHTML = refsListHTML(); return;}
       if (t.id === 'comments') {
         const p = activePair(); if (!p) return;
@@ -6458,20 +4523,27 @@
       if (t.id === 'noOff') {
         const p = activePair(); if (!p) return;
         const g = dayGroupFor(p.ref);
-        // Checking forces the form's "1 if no offsides"; unchecking has to release
-        // that forced 1, not leave it behind looking like a real rating.
-        applyToDay(g, {noOffsides: t.checked, ratings: {offsides: t.checked ? 1 : null}});
+        // An unobserved skill must never become a low performance rating.
+        applyToDay(g, {noOffsides: t.checked, ratings: {offsides: null}});
         if (!dayLead(g).ref.commentsEdited) applyToDay(g, {comments: buildComments(g)});
         save(); renderScore(); return;
       }
     });
     document.addEventListener('keydown', (e) => {
+      const modal = !$('#dlg').hidden ? $('#dlg') : !$('#sheet').hidden ? $('#sheet') : null;
+      if (modal && e.key === 'Tab') {
+        const controls = [...modal.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex="0"]')]
+          .filter(el => !el.disabled && el.getClientRects().length);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (e.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) {e.preventDefault(); last?.focus();}
+        else if (!e.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) {e.preventDefault(); first?.focus();}
+      }
       if (e.key === 'Escape') {
         if (!$('#dlg').hidden) {closeDlg(false); return;}
         if (!$('#sheet').hidden) {closeSheet(); return;}
       }
       if (e.key === 'Enter' && e.target.id === 'noteText') {
-        e.preventDefault(); addNote(S.ui.cat, S.ui.pol, e.target.value);
+        e.preventDefault(); addNote(S.ui.cat, S.ui.pol, e.target.value, true);
       }
       if (e.key === 'Enter' && e.target.id === 'acctEmail' && !acctUI.busy) {e.preventDefault(); sendCode();}
       if (e.key === 'Enter' && e.target.id === 'acctCode' && !acctUI.busy) {e.preventDefault(); verifyCode();}
@@ -6490,7 +4562,7 @@
     applyTheme();
     setTab(S.ui.tab || 'fields');
     // Settings no longer pops open on every launch that lacks a named game; the
-    // Fields tab has its own first-run card for your name and the import.
+    // Games tab has its own first-run card for your name and the import.
 
     // Accounts start after the first paint and never block it.
     paintAccount();

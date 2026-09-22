@@ -1,0 +1,1997 @@
+/* ============================================================
+DESIGN TOKENS
+A "token" is just a named value you use everywhere instead of
+repeating a literal. Change --primary once and every button,
+ring, and active marker follows. Whistle is amber; Sideline is
+sky blue on purpose so the two home-screen icons and the two
+apps never get confused at a glance.
+============================================================ */
+ 
+
+ /* SUNLIGHT theme. A dark screen washes out in direct sun, which is exactly
+    where this app gets used. Same structure with the ground inverted, and
+    every accent darkened until its text clears WCAG AA on white. */
+ 
+
+ * {
+   box-sizing: border-box;
+   -webkit-tap-highlight-color: transparent
+ }
+
+ html,
+ body {
+   margin: 0;
+   padding: 0
+ }
+
+ body {
+   background: var(--bg);
+   color: var(--ink);
+   font-family: var(--font-sans);
+   font-size: var(--fs-base);
+   line-height: 1.5;
+   max-width: 600px;
+   margin: 0 auto;
+   padding-bottom: calc(84px + env(safe-area-inset-bottom));
+   -webkit-font-smoothing: antialiased;
+ }
+
+ button,
+ input,
+ select,
+ textarea {
+   font-family: inherit;
+   font-size: inherit;
+   color: inherit
+ }
+
+ button {
+   cursor: pointer;
+   border: none;
+   background: none
+ }
+
+ :focus-visible {
+   outline: 2px solid var(--primary);
+   outline-offset: 2px
+ }
+
+ @media (prefers-reduced-motion:reduce) {
+   * {
+     transition: none !important;
+     animation: none !important
+   }
+ }
+
+ /* ---------- app chrome ---------- */
+ header {
+   position: sticky;
+   top: 0;
+   z-index: 40;
+   background: var(--glass);
+   backdrop-filter: blur(8px);
+   border-bottom: 1px solid var(--line);
+   padding: calc(8px + env(safe-area-inset-top)) var(--pad) 0;
+ }
+
+ .brandrow {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   /* Collapses on scroll - see header.tuck below. */
+   max-height: 56px;
+   overflow: hidden;
+   transition: max-height .18s ease, opacity .18s ease, margin .18s ease;
+ }
+
+ /* Scrolling down tucks the brand row away and leaves only the "now
+    watching" bar stuck to the top; scrolling up brings it back. This is the
+    same thing Twitter, Instagram and Reddit do, and it matters more here
+    than on any of them: the header was eating a third of the screen before
+    the first note chip, on the one screen you use while a game is running.
+    The watching bar itself never hides - it is the attribution safeguard. */
+ header.tuck .brandrow {
+   max-height: 0;
+   opacity: 0;
+   margin-top: -4px;
+ }
+
+ header.tuck .watching {
+   margin-top: 4px
+ }
+
+ .brand {
+   font-family: var(--font-sans);
+   font-size: var(--fs-2xl);
+   letter-spacing: .06em;
+   line-height: 1
+ }
+
+ .brand span {
+   color: var(--primary)
+ }
+
+ .brandrow .spacer {
+   flex: 1
+ }
+
+ .iconbtn {
+   width: var(--tap);
+   height: var(--tap);
+   border-radius: 10px;
+   border: 1px solid var(--line);
+   background: var(--panel);
+   display: grid;
+   place-items: center;
+   font-size: var(--fs-base);
+ }
+
+ /* the "now watching" bar: the single most important element in the app.
+Two fields of simultaneous refs is exactly how notes end up on the
+wrong person, so attribution is always on screen. */
+ .watching[hidden] {
+   display: none
+ }
+
+ .watching {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   margin: 10px 0;
+   padding: 9px 11px;
+   border-radius: var(--r);
+   background: linear-gradient(90deg, var(--primary-strong), var(--primary-faint));
+   border: 1px solid var(--primary-line);
+ }
+
+ .watching .who {
+   font-weight: 650;
+   font-size: var(--fs-md);
+   line-height: 1.2;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
+ }
+
+ .watching .sub {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   line-height: 1.2
+ }
+
+ .watching .rolechip {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   font-weight: 700;
+   background: var(--primary);
+   color: var(--on-primary);
+   padding: 3px 7px;
+   border-radius: 6px;
+ }
+
+ .watching .clk {
+   margin-left: auto;
+   font-family: var(--font-mono);
+   font-size: var(--fs-sm);
+   font-weight: 700;
+   color: var(--primary);
+   white-space: nowrap;
+ }
+
+ /* "idle", not "empty": the generic .empty rule further down is for
+    empty-state messages and was centring and re-padding this bar. */
+ .watching.idle {
+   background: var(--panel);
+   border-color: var(--line)
+ }
+
+ .watching.idle .who {
+   color: var(--mute);
+   font-weight: 500
+ }
+
+ /* ---------- tabs / nav ---------- */
+ nav {
+   position: fixed;
+   bottom: 0;
+   left: 0;
+   right: 0;
+   z-index: 50;
+   display: flex;
+   max-width: 600px;
+   margin: 0 auto;
+   background: var(--glass);
+   backdrop-filter: blur(10px);
+   border-top: 1px solid var(--line);
+   padding-bottom: env(safe-area-inset-bottom);
+ }
+
+ nav button {
+   flex: 1;
+   padding: 8px 2px 10px;
+   min-height: var(--tap);
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 3px;
+   color: var(--mute);
+   font-size: var(--fs-xs);
+   font-weight: 600;
+ }
+
+ nav button .ico {
+   width: 24px;
+   height: 24px;
+   display: block;
+   fill: none;
+   stroke: currentColor;
+   stroke-width: 1.7;
+   stroke-linecap: round;
+   stroke-linejoin: round;
+ }
+
+ /* The selected tab gets a heavier stroke as well as the accent colour, so
+    it still reads as selected for anyone who cannot separate the two hues. */
+ nav button[aria-current="page"] .ico {
+   stroke-width: 2.2
+ }
+
+ nav button[aria-current="page"] {
+   color: var(--primary)
+ }
+
+ main {
+   padding: 0 var(--pad)
+ }
+
+ .tab[hidden] {
+   display: none
+ }
+
+ /* ---------- generic bits ---------- */
+ .card {
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   padding: var(--pad);
+   margin: 12px 0
+ }
+
+ h2.sec {
+   font-family: var(--font-sans);
+   font-size: var(--fs-xl);
+   letter-spacing: .04em;
+   margin: 18px 0 4px;
+   font-weight: 400
+ }
+
+ .hint {
+   color: var(--mute);
+   font-size: var(--fs-sm);
+   margin: 2px 0 10px
+ }
+
+ .app-version {
+   color: var(--mute);
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   text-align: center;
+   margin: 18px 0 4px
+ }
+
+ label.f {
+   display: block;
+   margin: 10px 0 0
+ }
+
+ label.f>span {
+   display: block;
+   font-size: var(--fs-sm);
+   color: var(--mute);
+   margin-bottom: 4px
+ }
+
+ input[type=text],
+ input[type=email],
+ input[type=search],
+ input[type=date],
+ input[type=time],
+ select,
+ textarea {
+   width: 100%;
+   background: var(--panel2);
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   padding: 11px;
+   min-height: var(--tap);
+   /* iOS Safari zooms the whole page into any input under 16px and does
+      not zoom back out, which throws the layout off mid-game. --fs-base is
+      1rem, so this stays at or above 16px however the phone is set. */
+   font-size: var(--fs-base);
+ }
+
+ textarea {
+   resize: vertical;
+   line-height: 1.5
+ }
+
+ .row {
+   display: flex;
+   gap: 8px
+ }
+
+ .row>* {
+   flex: 1;
+   min-width: 0
+ }
+
+ .btn {
+   background: var(--panel2);
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   padding: 12px 14px;
+   min-height: var(--tap);
+   font-weight: 600;
+   text-align: center;
+   display: block;
+   width: 100%;
+ }
+
+ .btn.primary {
+   background: var(--primary);
+   color: var(--on-primary);
+   border-color: var(--primary)
+ }
+
+ .btn.ghost {
+   background: transparent
+ }
+
+ .btn.danger {
+   color: var(--minus);
+   border-color: var(--minus-line)
+ }
+
+ .btn:disabled {
+   opacity: .45;
+   cursor: default
+ }
+
+ a.btn {
+   color: inherit;
+   text-decoration: none
+ }
+
+ .btn.sm {
+   /* "sm" is about visual weight, not about being hard to hit: the text and
+      padding are smaller, but min-height keeps the target at --tap. */
+   padding: 8px 12px;
+   min-height: var(--tap);
+   font-size: var(--fs-sm);
+   font-weight: 600
+ }
+
+ .pill {
+   display: inline-block;
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   padding: 2px 6px;
+   border-radius: 5px;
+   background: var(--panel2);
+   color: var(--mute);
+ }
+
+ .divider {
+   height: 1px;
+   background: var(--line);
+   margin: 14px -14px
+ }
+
+ .empty {
+   color: var(--mute);
+   font-size: var(--fs-sm);
+   text-align: center;
+   padding: 22px 10px
+ }
+
+ .toast {
+   position: fixed;
+   left: 50%;
+   bottom: calc(96px + env(safe-area-inset-bottom));
+   transform: translateX(-50%);
+   z-index: 90;
+   background: var(--ink);
+   color: var(--bg);
+   font-weight: 650;
+   font-size: var(--fs-sm);
+   padding: 9px 15px;
+   border-radius: 20px;
+   box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
+   display: flex;
+   align-items: center;
+   gap: 12px;
+   width: max-content;
+   max-width: calc(100vw - 32px);
+   opacity: 0;
+   pointer-events: none;
+   transition: opacity .16s, transform .16s;
+ }
+
+ .toast.show {
+   opacity: 1;
+   transform: translateX(-50%) translateY(-4px)
+ }
+
+ /* With a sheet open, "bottom: 96px" lands in the middle of the sheet and
+    covers whatever button is there - during the import that is the one you
+    are meant to press next. Move it to the top while a sheet is up. */
+ body.locked .toast {
+   bottom: auto;
+   top: calc(12px + env(safe-area-inset-top))
+ }
+
+ body.locked .toast.show {
+   transform: translateX(-50%) translateY(4px)
+ }
+
+ /* Only a toast that carries an action (Undo) takes taps; a plain one must
+    not swallow touches on whatever sits under it. */
+ .toast.act.show {
+   pointer-events: auto
+ }
+
+ .toast button {
+   color: inherit;
+   font-weight: 800;
+   font-size: var(--fs-sm);
+   letter-spacing: .04em;
+   text-transform: uppercase;
+   padding: 6px 2px 6px 12px;
+   margin: -6px 0;
+   border-left: 1px solid currentColor
+ }
+
+ /* ---------- pitch map ---------- */
+ .fieldblock {
+   margin: 12px 0 18px
+ }
+
+ .fieldhead {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   margin-bottom: 6px
+ }
+
+ .fieldhead .fname {
+   font-family: var(--font-sans);
+   font-size: var(--fs-lg);
+   letter-spacing: .03em
+ }
+
+ .fieldhead .fmeta {
+   font-size: var(--fs-xs);
+   color: var(--mute)
+ }
+
+ .fieldhead .spacer {
+   flex: 1
+ }
+
+ svg.pitch {
+   width: 100%;
+   height: auto;
+   display: block;
+   border-radius: var(--r);
+   background: var(--grass);
+   border: 1px solid var(--line);
+   touch-action: manipulation
+ }
+
+ svg.pitch .mk {
+   cursor: pointer
+ }
+
+ svg.pitch .mkbg {
+   fill: var(--panel2);
+   stroke: var(--mute);
+   stroke-width: 1.6
+ }
+
+ svg.pitch .mk.on .mkbg {
+   fill: var(--primary);
+   stroke: var(--marker-ring);
+   stroke-width: 2.4
+ }
+
+ svg.pitch .mk.unnamed .mkbg {
+   stroke-dasharray: 3 3
+ }
+
+ svg.pitch .mklabel {
+   font-family: var(--font-mono);
+   font-size: 11px;
+   font-weight: 700;
+   fill: var(--ink);
+   text-anchor: middle;
+   pointer-events: none
+ }
+
+ svg.pitch .mk.on .mklabel {
+   fill: var(--on-primary)
+ }
+
+ svg.pitch .mkname {
+   font-family: var(--font-sans);
+   font-size: 10.5px;
+   fill: var(--ink);
+   text-anchor: middle;
+   pointer-events: none;
+   font-weight: 600
+ }
+
+ svg.pitch .cnt {
+   font-family: var(--font-mono);
+   font-size: 9.5px;
+   font-weight: 700;
+   fill: var(--on-plus);
+   text-anchor: middle;
+   pointer-events: none
+ }
+
+ svg.pitch .cntbg {
+   fill: var(--plus)
+ }
+
+ /* crew rows under each pitch */
+ .crew {
+   margin-top: 8px;
+   display: flex;
+   flex-direction: column;
+   gap: 6px
+ }
+
+ .crewrow {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   padding: 7px 9px;
+ }
+
+ .crewrow.on {
+   border-color: var(--primary);
+   background: var(--primary-tint)
+ }
+
+ .crewrow .slot {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   font-weight: 700;
+   color: var(--primary);
+   width: 30px;
+   flex: none
+ }
+
+ .crewrow input {
+   background: transparent;
+   border: none;
+   padding: 4px 0;
+   font-weight: 600
+ }
+
+ .crewrow input::placeholder {
+   color: var(--mute);
+   font-weight: 400
+ }
+
+ .crewrow .prog {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   font-family: var(--font-mono);
+   flex: none;
+   text-align: right;
+   line-height: 1.25
+ }
+
+ .crewrow .go {
+   flex: none;
+   border: 1px solid var(--line);
+   border-radius: 8px;
+   min-height: 36px;
+   padding: 0 12px;
+   font-size: var(--fs-sm);
+   font-weight: 700;
+   background: var(--panel2)
+ }
+
+ /* ---------- observe ---------- */
+ .minimap {
+   display: flex;
+   gap: 6px;
+   overflow-x: auto;
+   padding: 2px 0 6px;
+   scrollbar-width: none
+ }
+
+ .minimap::-webkit-scrollbar {
+   display: none
+ }
+
+ .mini {
+   flex: none;
+   border: 1px solid var(--line);
+   background: var(--panel);
+   border-radius: 9px;
+   padding: 6px 9px;
+   font-size: var(--fs-xs);
+   font-weight: 600;
+   white-space: nowrap;
+   color: var(--mute);
+ }
+
+ .mini.on {
+   border-color: var(--primary);
+   background: var(--primary-strong);
+   color: var(--ink)
+ }
+
+ .mini .m1 {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   font-weight: 700;
+   color: var(--primary)
+ }
+
+ /* These wrap rather than scroll sideways. There are seven categories and
+    the strip used to show three, hiding 322px of them off the right edge
+    with no arrow or fade to say so - so Offsides and General were, for most
+    people, simply not there. Two rows of chips costs a little height and
+    makes all seven visible at once. */
+ .cats {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 6px;
+   padding: 4px 0 8px;
+ }
+
+ .cat {
+   flex: none;
+   border: 1px solid var(--line);
+   background: var(--panel);
+   border-radius: 20px;
+   padding: 9px 14px;
+   min-height: var(--tap);
+   font-size: var(--fs-md);
+   font-weight: 600;
+   white-space: nowrap;
+   color: var(--mute);
+ }
+
+ /* Selected is the app's primary blue, like every other selected thing.
+    This was white-on-dark, which made "selected" mean two different
+    colours depending on which screen you were looking at. */
+ .cat.on {
+   background: var(--primary);
+   color: var(--on-primary);
+   border-color: var(--primary)
+ }
+
+ .cat .n {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   opacity: .85;
+   margin-left: 2px
+ }
+
+ /* ---------- rating scale ---------- */
+ .scale .nums button {
+   flex-direction: column;
+   gap: 1px;
+   padding: 7px 2px;
+   line-height: 1.15;
+ }
+
+ .scale .nums .rn {
+   font-family: var(--font-mono);
+   font-size: var(--fs-lg);
+   font-weight: 700;
+   display: block;
+ }
+
+ .scale .nums .rw {
+   font-size: var(--fs-xs);
+   font-weight: 600;
+   opacity: .85;
+   display: block;
+   text-align: center;
+ }
+
+ /* The games one evaluation covers, listed on the Score tab. */
+ ul.daygames {
+   list-style: none;
+   margin: 8px 0 0;
+   padding: 0
+ }
+
+ ul.daygames li {
+   padding: 5px 0 5px 16px;
+   position: relative;
+   font-size: var(--fs-sm);
+   border-top: 1px solid var(--line)
+ }
+
+ ul.daygames li::before {
+   content: '';
+   position: absolute;
+   left: 2px;
+   top: 13px;
+   width: 6px;
+   height: 6px;
+   border-radius: 50%;
+   background: var(--mute)
+ }
+
+ ul.daygames li.on {
+   font-weight: 650
+ }
+
+ ul.daygames li.on::before {
+   background: var(--primary)
+ }
+
+ ul.daygames .muted {
+   color: var(--mute)
+ }
+
+ /* ---------- the finish sequence ----------
+    Copy, open the form, save. It was four buttons of equal weight in a row,
+    so the order you had to do them in was something you had to already know. */
+ ol.finish {
+   list-style: none;
+   margin: 4px 0 0;
+   padding: 0
+ }
+
+ ol.finish li {
+   display: flex;
+   gap: 10px;
+   align-items: flex-start;
+   margin-bottom: 14px
+ }
+
+ ol.finish li>div {
+   flex: 1;
+   min-width: 0
+ }
+
+ ol.finish .fn {
+   flex: none;
+   width: 26px;
+   height: 26px;
+   margin-top: 9px;
+   border-radius: 50%;
+   background: var(--panel2);
+   border: 1px solid var(--line);
+   color: var(--mute);
+   display: grid;
+   place-items: center;
+   font-family: var(--font-mono);
+   font-size: var(--fs-sm);
+   font-weight: 700;
+ }
+
+ ol.finish .hint {
+   margin: 6px 0 0
+ }
+
+ .chipgrid {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 6px
+ }
+
+ .chip {
+   border: 1px solid var(--line);
+   background: var(--panel);
+   border-radius: 10px;
+   padding: 10px 12px;
+   min-height: var(--tap);
+   font-size: var(--fs-md);
+   text-align: left;
+   line-height: 1.25;
+   display: flex;
+   align-items: flex-start;
+   gap: 6px;
+ }
+
+ .chip .m {
+   font-family: var(--font-mono);
+   font-weight: 700;
+   flex: none
+ }
+
+ .chip.p {
+   border-left: 3px solid var(--plus)
+ }
+
+ .chip.p .m {
+   color: var(--plus)
+ }
+
+ .chip.m- {
+   border-left: 3px solid var(--minus)
+ }
+
+ .chip.m- .m {
+   color: var(--minus)
+ }
+
+ /* With the arrow selected every chip logs as "improved", so the chips say
+    so instead of still showing their own + or - */
+ .chip.b {
+   border-left: 3px solid var(--primary)
+ }
+
+ .chip.b .m {
+   color: var(--primary)
+ }
+
+ .chip:active {
+   background: var(--panel2)
+ }
+
+ .noteadd {
+   display: flex;
+   gap: 6px;
+   margin-top: 10px;
+   align-items: stretch
+ }
+
+ .noteadd input {
+   flex: 1
+ }
+
+ .polset {
+   display: flex;
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   overflow: hidden;
+   flex: none
+ }
+
+ .polset button {
+   width: 40px;
+   font-family: var(--font-mono);
+   font-weight: 700;
+   font-size: var(--fs-base);
+   background: var(--panel2);
+   color: var(--mute)
+ }
+
+ .polset button[data-pol="1"][aria-pressed="true"] {
+   background: var(--plus);
+   color: var(--on-plus)
+ }
+
+ .polset button[data-pol="-1"][aria-pressed="true"] {
+   background: var(--minus);
+   color: var(--on-minus)
+ }
+
+ .polset button[data-pol="2"][aria-pressed="true"] {
+   background: var(--primary);
+   color: var(--on-primary)
+ }
+
+ .timeline {
+   margin-top: 12px;
+   border-left: 2px solid var(--line);
+   padding-left: 11px
+ }
+
+ .nrow {
+   display: flex;
+   gap: 8px;
+   align-items: flex-start;
+   padding: 7px 0;
+   border-bottom: 1px solid var(--line)
+ }
+
+ .nrow:last-child {
+   border-bottom: none
+ }
+
+ .nrow .t {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   flex: none;
+   width: 48px;
+   padding-top: 2px
+ }
+
+ .nrow .bd {
+   flex: 1;
+   min-width: 0;
+   font-size: var(--fs-sm);
+   line-height: 1.35
+ }
+
+ .nrow .bd .cn {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   display: block
+ }
+
+ .nrow .mk2 {
+   font-family: var(--font-mono);
+   font-weight: 700;
+   flex: none
+ }
+
+ .nrow.p .mk2 {
+   color: var(--plus)
+ }
+
+ .nrow.n .mk2 {
+   color: var(--minus)
+ }
+
+ .nrow.b .mk2 {
+   color: var(--primary)
+ }
+
+ .nrow.o .mk2 {
+   color: var(--mute)
+ }
+
+ /* Was a ~20px target sitting right beside the "improved" arrow. Deleting
+    is now undoable, but it should still be hard to hit by accident. */
+ .nrow .del {
+   flex: none;
+   color: var(--mute);
+   width: 36px;
+   height: 36px;
+   margin: -6px -4px -6px 0;
+   display: grid;
+   place-items: center;
+   border-radius: 8px;
+   font-size: var(--fs-base)
+ }
+
+ .nrow .del:active {
+   background: var(--panel2)
+ }
+
+ /* ---------- score ---------- */
+ .ratewrap {
+   margin: 14px 0
+ }
+
+ .ratewrap .rlabel {
+   font-size: var(--fs-sm);
+   font-weight: 600
+ }
+
+ .ratewrap .rhint {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   margin: 2px 0 7px
+ }
+
+ .scale {
+   display: flex;
+   gap: 6px;
+   align-items: center
+ }
+
+ .scale .end {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   flex: none;
+   width: 26px
+ }
+
+ .scale .end.r {
+   text-align: right
+ }
+
+ .scale .nums {
+   display: flex;
+   gap: 6px;
+   flex: 1
+ }
+
+ .scale .nums button {
+   flex: 1;
+   padding: 11px 0;
+   border: 1px solid var(--line);
+   background: var(--panel2);
+   border-radius: 10px;
+   font-family: var(--font-mono);
+   font-weight: 700;
+   font-size: var(--fs-md);
+ }
+
+ .scale .nums button[aria-pressed="true"] {
+   background: var(--primary);
+   color: var(--on-primary);
+   border-color: var(--primary)
+ }
+
+ .switchrow {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   margin: 10px 0;
+   font-size: var(--fs-sm)
+ }
+
+ .switchrow input {
+   width: auto;
+   flex: none;
+   width: 20px;
+   height: 20px;
+   accent-color: var(--primary)
+ }
+
+ .yesno {
+   display: flex;
+   gap: 8px
+ }
+
+ .yesno button {
+   flex: 1;
+   padding: 12px;
+   border: 1px solid var(--line);
+   background: var(--panel2);
+   border-radius: 10px;
+   font-weight: 700
+ }
+
+ .yesno button[aria-pressed="true"][data-move="Yes"] {
+   background: var(--plus);
+   color: var(--on-plus);
+   border-color: var(--plus)
+ }
+
+ .yesno button[aria-pressed="true"][data-move="No"] {
+   background: var(--minus);
+   color: var(--on-minus);
+   border-color: var(--minus)
+ }
+
+ .charcount {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   text-align: right;
+   margin-top: 4px
+ }
+
+ /* ---------- confirm dialog ---------- */
+ .dlg {
+   position: fixed;
+   inset: 0;
+   z-index: 80;
+   display: grid;
+   place-items: center;
+   padding: 22px;
+   background: var(--scrim)
+ }
+
+ .dlg[hidden] {
+   display: none
+ }
+
+ .dlgbox {
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: 16px;
+   padding: 18px;
+   max-width: 340px;
+   width: 100%
+ }
+
+ .dlgbox p {
+   margin: 0 0 16px;
+   font-size: var(--fs-md);
+   line-height: 1.45
+ }
+
+ /* ---------- game picker ---------- */
+ .nowgame {
+   display: flex;
+   align-items: center;
+   gap: 9px;
+   width: 100%;
+   text-align: left;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   padding: 9px 11px;
+   margin: 10px 0
+ }
+
+ .nowgame .g1 {
+   font-weight: 650;
+   font-size: var(--fs-sm);
+   line-height: 1.2
+ }
+
+ .nowgame .g2 {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   line-height: 1.3
+ }
+
+ .nowgame .chev {
+   margin-left: auto;
+   color: var(--mute);
+   font-size: var(--fs-lg);
+   flex: none
+ }
+
+ /* Kickoff heading in the game picker. Was named .slot, which collided
+    with the crew-row .slot label and pushed a 14px margin onto it. */
+ .slothead {
+   margin: 14px 0 6px;
+   font-family: var(--font-sans);
+   font-size: var(--fs-lg);
+   letter-spacing: .04em;
+   color: var(--primary)
+ }
+
+ .grow {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   padding: 10px 11px;
+   margin: 6px 0
+ }
+
+ .grow.on {
+   border-color: var(--primary);
+   background: var(--primary-tint)
+ }
+
+ .grow.done {
+   opacity: .55
+ }
+
+ .grow .body {
+   flex: 1;
+   min-width: 0
+ }
+
+ .grow .t1 {
+   font-weight: 650;
+   font-size: var(--fs-sm);
+   line-height: 1.25
+ }
+
+ .grow .t2 {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   line-height: 1.35;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis
+ }
+
+ .grow .meter {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   text-align: right;
+   flex: none;
+   line-height: 1.3
+ }
+
+ .grow .meter b {
+   color: var(--plus)
+ }
+
+ .iconsm {
+   flex: none;
+   width: var(--tap);
+   height: var(--tap);
+   border-radius: 8px;
+   border: 1px solid var(--line);
+   background: var(--panel2);
+   display: grid;
+   place-items: center;
+   font-size: var(--fs-sm);
+   color: var(--mute)
+ }
+
+ /* ---------- sheet (settings) ---------- */
+ .scrim {
+   position: fixed;
+   inset: 0;
+   z-index: 60;
+   background: var(--scrim);
+   backdrop-filter: blur(2px)
+ }
+
+ .scrim[hidden] {
+   display: none
+ }
+
+ .sheet {
+   position: fixed;
+   left: 0;
+   right: 0;
+   bottom: 0;
+   z-index: 61;
+   max-width: 600px;
+   margin: 0 auto;
+   background: var(--bg);
+   border-top: 1px solid var(--line);
+   border-radius: 18px 18px 0 0;
+   max-height: 88vh;
+   /* dvh tracks the mobile browser bars; vh stays as the fallback */
+   max-height: 88dvh;
+   overflow-y: auto;
+   overscroll-behavior: contain;
+   padding: 6px var(--pad) calc(24px + env(safe-area-inset-bottom));
+ }
+
+ .sheet[hidden] {
+   display: none
+ }
+
+ .grab {
+   width: 40px;
+   height: 4px;
+   background: var(--line);
+   border-radius: 2px;
+   margin: 8px auto 4px
+ }
+
+ .sheethead {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   margin: 4px 0 6px
+ }
+
+ .sheethead h3 {
+   font-family: var(--font-sans);
+   font-size: var(--fs-xl);
+   margin: 0;
+   font-weight: 400;
+   letter-spacing: .03em
+ }
+
+ .sheethead .spacer {
+   flex: 1
+ }
+
+ .seg {
+   display: flex;
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   overflow: hidden
+ }
+
+ .seg button {
+   flex: 1;
+   padding: 9px 4px;
+   min-height: var(--tap);
+   font-weight: 600;
+   background: var(--panel2);
+   color: var(--mute);
+   font-size: var(--fs-sm)
+ }
+
+ .seg button[aria-pressed="true"] {
+   background: var(--primary);
+   color: var(--on-primary)
+ }
+
+ .saved {
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   padding: 11px;
+   margin: 8px 0;
+   background: var(--panel)
+ }
+
+ .saved .sh {
+   display: flex;
+   gap: 8px;
+   align-items: baseline
+ }
+
+ .saved .sh b {
+   font-size: var(--fs-sm)
+ }
+
+ .saved .sh .spacer {
+   flex: 1
+ }
+
+ .saved pre {
+   white-space: pre-wrap;
+   word-break: break-word;
+   font-family: var(--font-sans);
+   font-size: var(--fs-sm);
+   color: var(--mute);
+   margin: 8px 0 0
+ }
+
+ /* ---------- many fields ---------- */
+ .fieldstrip {
+   display: flex;
+   gap: 6px;
+   overflow-x: auto;
+   padding: 4px 0 8px;
+   scrollbar-width: none
+ }
+
+ .fieldstrip::-webkit-scrollbar {
+   display: none
+ }
+
+ /* ---------- import wizard ---------- */
+ .stepper {
+   display: flex;
+   list-style: none;
+   margin: 0 0 14px;
+   padding: 0;
+   gap: 6px;
+   counter-reset: none;
+ }
+
+ .stepper li {
+   flex: 1;
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   min-width: 0;
+   color: var(--mute);
+   font-size: var(--fs-xs);
+   font-weight: 600;
+   border-top: 3px solid var(--line);
+   padding-top: 7px;
+ }
+
+ .stepper li.on {
+   color: var(--ink);
+   border-top-color: var(--primary)
+ }
+
+ .stepper li.done {
+   border-top-color: var(--primary)
+ }
+
+ .stepper .sn {
+   flex: none;
+   width: 20px;
+   height: 20px;
+   border-radius: 50%;
+   display: grid;
+   place-items: center;
+   background: var(--panel2);
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+ }
+
+ .stepper li.on .sn {
+   background: var(--primary);
+   color: var(--on-primary)
+ }
+
+ .stepper li.done .sn {
+   background: var(--plus);
+   color: var(--on-plus)
+ }
+
+ .stepper .sl {
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap
+ }
+
+ /* A <details> is the browser's own show/hide. Used here so the column
+    mapping - ten dropdowns and a spreadsheet dump - stays out of the way
+    unless it is actually needed. */
+ .disclose {
+   margin-top: 12px;
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   background: var(--panel);
+   padding: 0 var(--pad)
+ }
+
+ .disclose>summary {
+   cursor: pointer;
+   list-style: none;
+   padding: 0 0 0 4px;
+   min-height: var(--tap);
+   display: flex;
+   align-items: center;
+   font-size: var(--fs-sm);
+   font-weight: 600;
+   color: var(--mute);
+ }
+
+ .disclose>summary::-webkit-details-marker {
+   display: none
+ }
+
+ .disclose>summary::after {
+   content: '\25BE';
+   margin-left: auto;
+   transition: transform .15s
+ }
+
+ .disclose[open]>summary::after {
+   transform: rotate(180deg)
+ }
+
+ .disclose[open] {
+   padding-bottom: var(--pad)
+ }
+
+ /* Destructive actions live behind one of these. Copy, Done and the rest are
+    everyday taps; deleting a game or an evaluation of a named child is not,
+    and it used to sit at equal weight right beside them. */
+ .disclose.danger {
+   border-style: dashed;
+   background: none
+ }
+
+ .disclose.danger>summary {
+   font-size: var(--fs-xs);
+   font-weight: 600
+ }
+
+ .fchip {
+   flex: none;
+   border: 1px solid var(--line);
+   background: var(--panel);
+   border-radius: 10px;
+   padding: 9px 12px;
+   min-height: var(--tap);
+   font-size: var(--fs-md);
+   font-weight: 600;
+   white-space: nowrap;
+   color: var(--mute)
+ }
+
+ .fchip.on {
+   border-color: var(--primary);
+   background: var(--primary-strong);
+   color: var(--ink)
+ }
+
+ .fchip .n {
+   font-family: var(--font-mono);
+   font-size: var(--fs-xs);
+   font-weight: 700;
+   color: var(--plus)
+ }
+
+ .fchip .n.todo {
+   color: var(--minus)
+ }
+
+ .cov {
+   display: flex;
+   gap: 14px;
+   flex-wrap: wrap;
+   font-size: var(--fs-sm);
+   color: var(--mute)
+ }
+
+ .cov b {
+   color: var(--ink);
+   font-family: var(--font-mono);
+   font-size: var(--fs-md)
+ }
+
+ /* ---------- import ---------- */
+ .scrollx {
+   overflow-x: auto;
+   -webkit-overflow-scrolling: touch
+ }
+
+ .tbl {
+   border-collapse: collapse;
+   font-size: var(--fs-xs);
+   font-family: var(--font-mono)
+ }
+
+ .tbl th,
+ .tbl td {
+   border: 1px solid var(--line);
+   padding: 4px 6px;
+   text-align: left;
+   white-space: nowrap;
+   max-width: 120px;
+   overflow: hidden;
+   text-overflow: ellipsis
+ }
+
+ .tbl th {
+   color: var(--primary);
+   background: var(--panel2);
+   font-weight: 700
+ }
+
+ .map2 {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 8px;
+   margin-top: 4px
+ }
+
+ .map2 label.f {
+   margin: 0
+ }
+
+ .gamerow {
+   display: flex;
+   align-items: center;
+   gap: 9px;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   padding: 8px 10px;
+   margin: 6px 0
+ }
+
+ .gamerow.off {
+   opacity: .45
+ }
+
+ .gamerow input[type=checkbox] {
+   /* The box itself is drawn at 26px, but the whole row is the label, so the
+      real target is the full width of the card - see .gamerow below. */
+   width: 26px;
+   height: 26px;
+   accent-color: var(--primary);
+   flex: none
+ }
+
+ /* Making the row a <label> means a tap anywhere on it toggles the box.
+    That turns a 26px target into a 358px one without changing the look. */
+ label.gamerow {
+   cursor: pointer;
+   min-height: var(--tap)
+ }
+
+ .gamerow .g1 {
+   font-weight: 650;
+   font-size: var(--fs-sm);
+   line-height: 1.2
+ }
+
+ .gamerow .g2 {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   line-height: 1.3
+ }
+
+ .warn {
+   background: var(--minus-tint);
+   border: 1px solid var(--minus-line);
+   border-radius: 10px;
+   padding: 9px 11px;
+   font-size: var(--fs-sm);
+   margin: 8px 0
+ }
+
+ .okbox {
+   background: var(--primary-tint);
+   border: 1px solid var(--primary-line);
+   border-radius: 10px;
+   padding: 9px 11px;
+   font-size: var(--fs-sm);
+   margin: 8px 0
+ }
+
+ /* compact text button for per-pitch actions (Done / Delete) */
+ .minibtn {
+   flex: none;
+   min-height: 34px;
+   padding: 0 11px;
+   border-radius: 8px;
+   border: 1px solid var(--line);
+   background: var(--panel2);
+   font-size: var(--fs-sm);
+   font-weight: 650;
+   color: var(--ink)
+ }
+
+ .minibtn.danger {
+   color: var(--minus);
+   border-color: var(--minus-line)
+ }
+
+ details.more {
+   margin-top: 12px
+ }
+
+ details.more summary {
+   cursor: pointer;
+   font-size: var(--fs-sm);
+   color: var(--mute);
+   padding: 6px 0
+ }
+
+ .sheet:focus {
+   outline: none
+ }
+
+ /* stop the page behind an open sheet from scrolling under your thumb */
+ body.locked {
+   overflow: hidden
+ }
+
+ /* ---------- accounts ---------- */
+ /* The avatar is the account. Signed out it shows a neutral person glyph;
+    signed in it shows the mentor's initials. The status dot rides on it
+    rather than on the settings cog, because that is where people look. */
+ .avatar {
+   flex: none;
+   width: var(--tap);
+   height: var(--tap);
+   border-radius: 50%;
+   border: 1px solid var(--line);
+   background: var(--panel2);
+   color: var(--mute);
+   display: grid;
+   place-items: center;
+   font-size: var(--fs-sm);
+   font-weight: 700;
+   letter-spacing: .02em;
+   position: relative;
+ }
+
+ .avatar .who {
+   width: 22px;
+   height: 22px;
+   display: block;
+   fill: none;
+   stroke: currentColor;
+   stroke-width: 1.8;
+   stroke-linecap: round
+ }
+
+ .avatar[data-acct] {
+   background: var(--primary);
+   border-color: var(--primary);
+   color: var(--on-primary)
+ }
+
+ .avatar[data-acct]::after {
+   content: '';
+   position: absolute;
+   bottom: 1px;
+   right: 1px;
+   width: 11px;
+   height: 11px;
+   border-radius: 50%;
+   background: var(--plus);
+   box-shadow: 0 0 0 2px var(--glass)
+ }
+
+ .avatar[data-acct="pending"] {
+   background: var(--panel2);
+   border-color: var(--minus-line);
+   color: var(--minus)
+ }
+
+ .avatar[data-acct="pending"]::after {
+   background: var(--minus)
+ }
+
+ .acctline {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   flex-wrap: wrap;
+   overflow-wrap: anywhere;
+   margin-bottom: 6px
+ }
+
+ /* ---------- referee profiles ---------- */
+ .histline {
+   display: grid;
+   grid-template-columns: 1fr auto;
+   gap: 2px 10px;
+   align-items: center;
+   font-size: var(--fs-sm);
+   line-height: 1.35;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-left: 3px solid var(--primary);
+   border-radius: 10px;
+   padding: 8px 10px;
+   margin: 8px 0
+ }
+
+ .histline>div {
+   grid-column: 1;
+   min-width: 0
+ }
+
+ .histline .minibtn {
+   grid-column: 2;
+   grid-row: 1 / span 2
+ }
+
+ .watching .minibtn {
+   margin-left: auto
+ }
+
+ .refrow {
+   display: block;
+   width: 100%;
+   text-align: left;
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: var(--r);
+   padding: 10px 12px;
+   margin: 6px 0
+ }
+
+ .refrow .rr1 {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 8px;
+   font-size: var(--fs-md)
+ }
+
+ .refrow .rr2,
+ .refrow .rr3 {
+   font-size: var(--fs-xs);
+   color: var(--mute);
+   margin-top: 2px
+ }
+
+ .refrow .rr3 {
+   color: var(--minus)
+ }
+
+ .pill.low {
+   background: var(--minus-tint);
+   color: var(--minus)
+ }
+
+ .catrow {
+   display: grid;
+   grid-template-columns: 84px 1fr 86px;
+   align-items: center;
+   gap: 8px;
+   margin: 7px 0;
+   font-size: var(--fs-sm)
+ }
+
+ .catrow .bar {
+   height: 8px;
+   border-radius: 4px;
+   background: var(--panel2);
+   overflow: hidden
+ }
+
+ .catrow .bar i {
+   display: block;
+   height: 100%;
+   background: var(--primary)
+ }
+
+ .catrow .bar i.low {
+   background: var(--minus)
+ }
+
+ .catrow .cv {
+   font-family: var(--font-mono);
+   font-size: var(--fs-sm);
+   text-align: right;
+   white-space: nowrap
+ }
+
+ .catrow .cv small {
+   color: var(--mute)
+ }
+
+ .profhead {
+   display: flex;
+   align-items: flex-end;
+   justify-content: space-between;
+   gap: 12px;
+   margin-bottom: 8px
+ }
+
+ .bigavg {
+   font-family: var(--font-mono);
+   font-size: var(--fs-3xl);
+   font-weight: 700;
+   line-height: 1
+ }
+
+ .plist {
+   margin: 6px 0 0;
+   padding-left: 18px;
+   font-size: var(--fs-sm)
+ }
+
+ .plist li {
+   margin: 4px 0
+ }
+
+ .muted {
+   color: var(--mute)
+ }
+
+ details.evald {
+   background: var(--panel);
+   border: 1px solid var(--line);
+   border-radius: 10px;
+   padding: 9px 11px;
+   margin: 6px 0
+ }
+
+ details.evald summary {
+   cursor: pointer;
+   font-size: var(--fs-sm);
+   line-height: 1.45
+ }
+
+ details.evald pre {
+   white-space: pre-wrap;
+   word-break: break-word;
+   font-family: var(--font-sans);
+   font-size: var(--fs-sm);
+   color: var(--mute);
+   margin: 8px 0 0
+ }
+
+/* Matchday layout */
+body { max-width: 680px; padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+header { padding-top: calc(10px + env(safe-area-inset-top)); backdrop-filter: none; }
+.brandrow { gap: 6px; max-height: none; overflow: visible; }
+.iconbtn, .avatar { width: 44px; height: 44px; min-width: 44px; flex: none; border-color: transparent; background: var(--panel); }
+.avatar { border-color: var(--line); }
+.iconbtn .ico { width: 23px; height: 23px; fill: var(--panel); stroke: currentColor; stroke-width: 1.6; }
+.session-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0 8px; font-size: .6875rem; color: var(--mute); }
+.session-status > span { min-width: 0; }
+.session-status button { font-size: inherit; color: var(--primary); min-height: 32px; padding: 4px 0 4px 8px; text-align: right; }
+.session-status button::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; background: currentColor; border-radius: 50%; }
+.session-status button.attention { color: var(--minus); }
+.watching { background: var(--primary-tint); padding: 10px 12px; margin: 0 0 12px; gap: 10px; }
+.watching-label { text-transform: uppercase; letter-spacing: .08em; font-size: .625rem; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
+.watching .who { font-size: var(--fs-lg); white-space: normal; overflow-wrap: anywhere; }
+.watching .sub { margin-top: 4px; }
+.watching .rolechip { padding: 8px; }
+nav { max-width: 680px; background: var(--panel); backdrop-filter: none; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); gap: 4px; }
+nav button { border-radius: 10px; min-height: 58px; padding: 6px 1px; font-size: .6875rem; gap: 4px; }
+nav button[aria-current=page] { background: var(--primary-tint); }
+main { min-height: 65vh; }
+.card { margin: 16px 0; }
+.welcome-card { padding: 24px; }
+.welcome-icon { width: 56px; height: 56px; border-radius: 16px; padding: 8px; background: var(--primary-tint); color: var(--primary); margin-bottom: 18px; }
+.welcome-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.welcome-card h2 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 12px; }
+.welcome-card p { color: var(--mute); font-size: var(--fs-md); margin: 0 0 20px; }
+.welcome-card .btn { margin-top: 12px; }
+.welcome-card .btn.primary { display: flex; align-items: center; justify-content: space-between; }
+.workflow-guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 12px 0; }
+.workflow-guide span { display: block; color: var(--primary); margin-bottom: 8px; font-weight: 750; font-size: var(--fs-xs); }
+.workflow-guide b { font-size: var(--fs-sm); }
+.workflow-guide p { font-size: var(--fs-xs); line-height: 1.5; color: var(--mute); margin: 6px 0 0; }
+.local-note { border-top: 1px solid var(--line); color: var(--mute); padding: 20px 0; margin-top: 12px; font-size: var(--fs-sm); }
+.local-note b { display: block; color: var(--ink); margin-bottom: 4px; }
+.day-stats { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--r); padding: 18px 0; background: var(--panel); }
+.day-stats > div { padding: 0 16px; border-right: 1px solid var(--line); }
+.day-stats > div:last-child { border: 0; }
+.day-stats b { display: block; font-size: 1.75rem; line-height: 1.1; letter-spacing: -.04em; }
+.day-stats span { display: block; color: var(--mute); font-size: var(--fs-xs); margin-top: 6px; }
+.section-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 20px 0 8px; }
+.section-toolbar h2, .observe-title { margin: 0; font-size: var(--fs-lg); line-height: 1.3; }
+.minibtn { font-family: inherit; font-weight: 650; min-height: 44px; padding: 8px 10px; }
+.game-card { margin: 12px 0; border: 1px solid var(--line); background: var(--panel); border-radius: var(--r); overflow: hidden; }
+.game-card.selected { border-color: var(--primary-line); }
+.game-heading { display: flex; width: 100%; align-items: center; gap: 14px; text-align: left; padding: 18px 16px; }
+.game-time { min-width: 52px; font-size: 1.125rem; font-weight: 750; letter-spacing: -.03em; line-height: 1.3; }
+.game-time small { display: block; font-size: .6875rem; font-weight: 600; color: var(--mute); letter-spacing: .02em; }
+.game-description { display: block; min-width: 0; flex: 1; border-left: 1px solid var(--line); padding-left: 14px; }
+.game-description b { display: block; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.game-description > span { display: block; color: var(--mute); font-size: var(--fs-xs); margin-top: 3px; }
+.game-chevron { color: var(--primary); font-size: 1.25rem; }
+.game-crew { padding: 0 16px; }
+.referee-choice { display: flex; width: 100%; text-align: left; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); min-height: 70px; }
+.referee-role { width: 38px; height: 38px; background: var(--panel2); color: var(--primary); border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 750; font-size: .6875rem; }
+.referee-choice > span:nth-child(2) { min-width: 0; }
+.referee-choice b { display: block; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.referee-choice small { display: block; color: var(--mute); font-size: var(--fs-xs); margin-top: 3px; }
+.referee-arrow { margin-left: auto; color: var(--primary); }
+.game-tools { display: flex; justify-content: space-between; padding: 0 10px 6px; }
+.game-preview { padding: 0 16px 16px; font-size: var(--fs-xs); color: var(--mute); overflow-wrap: anywhere; }
+.pitch-disclosure { border-top: 1px solid var(--line); }
+.pitch-disclosure summary { padding: 14px 16px; font-size: var(--fs-xs); color: var(--mute); cursor: pointer; }
+.pitch-disclosure svg.pitch { max-height: 250px; }
+.schedule-actions { display: flex; gap: 8px; margin: 20px 0; }
+.schedule-actions > * { flex: 1; font-size: var(--fs-sm); }
+.nowgame { margin: 16px 0 10px; background: var(--panel); }
+.minimap { flex-wrap: wrap; overflow: visible; }
+.mini { min-height: 44px; white-space: normal; text-align: left; font-size: var(--fs-sm); }
+.cats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 10px 0 12px; }
+.cat { border-radius: 8px; font-size: var(--fs-xs); padding: 8px 3px; white-space: normal; overflow-wrap: anywhere; }
+.chip { min-height: 54px; border-radius: 10px; padding: 12px; font-size: var(--fs-sm); line-height: 1.4; }
+.chip .m { font-family: inherit; font-size: 1.125rem; }
+.noteadd { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 20px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.noteadd .polset { grid-column: 1 / -1; display: flex; gap: 6px; border: 0; }
+.polset button { flex: 1; min-height: 44px; border-radius: 8px; font-size: 1rem; }
+.polset button::after { font-size: var(--fs-xs); font-weight: 600; margin-left: 6px; }
+.polset button[data-pol="1"]::after { content: 'Strength'; }
+.polset button[data-pol="-1"]::after { content: 'Work on'; }
+.polset button[data-pol="2"]::after { content: 'Improved'; }
+.noteadd input { min-width: 0; }
+.nrow { padding: 12px; background: var(--panel); margin-top: 8px; border-radius: 10px; }
+.nrow .del { min-width: 40px; min-height: 44px; }
+.review-details { display: flex; align-items: end; gap: 12px; }
+.review-details label { margin: 0; flex: 1; min-width: 0; }
+.review-details .minibtn { font-size: var(--fs-xs); max-width: 92px; flex: none; }
+.ratewrap { padding: 18px 0; }
+.rlabel { font-size: var(--fs-base); font-weight: 650; }
+.rhint { margin: 5px 0 12px; }
+.scale .nums button { min-height: 64px; border-radius: 9px; gap: 6px; }
+.scale .nums .rw { font-size: .6875rem; opacity: 1; }
+.save-panel { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin: 20px 0 10px; z-index: 15; box-shadow: var(--shadow); }
+.save-panel .hint { font-size: var(--fs-xs); margin: 8px 0 0; text-align: center; }
+.save-panel .btn:disabled { opacity: 1; background: var(--panel2); border-color: var(--line); color: var(--plus); }
+.export-options { padding: 16px 0; }
+.export-options summary, .saved-feedback summary { cursor: pointer; font-size: var(--fs-sm); min-height: 44px; padding: 12px 0; color: var(--primary); }
+.saved { margin-top: 16px; padding: 18px; border-radius: var(--r); }
+.saved .sh { flex-wrap: wrap; gap: 8px; }
+.saved .sh > b { flex: 1 1 100%; font-size: var(--fs-lg); }
+.saved .sh .spacer { display: none; }
+.saved-feedback { margin: 10px 0; }
+.sheet { max-width: 680px; border-radius: 22px 22px 0 0; padding: 0 20px calc(24px + env(safe-area-inset-bottom)); }
+.sheethead { position: sticky; top: 0; background: var(--panel); z-index: 3; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.sheethead h3 { font-size: var(--fs-xl); }
+.sheet .crewrow input { background: var(--panel2); border: 1px solid var(--line); padding: 10px; }
+.sheet .crewrow { gap: 8px; flex-wrap: wrap; }
+.sheet .crewrow input { min-width: 130px; flex: 1; }
+.sheet .crewrow .seg { margin-left: auto; }
+.grow { min-height: 72px; }
+.grow > button:first-child { min-height: 48px; padding: 8px; }
+.seg button, .iconsm { min-height: 44px; }
+.refrow { border-radius: var(--r); padding: 16px; }
+.history-disclosure { margin: 12px 0; border-bottom: 1px solid var(--line); }
+.history-disclosure > summary { padding: 12px 0; min-height: 44px; color: var(--primary); font-size: var(--fs-xs); cursor: pointer; }
+.game-editor-title { font-weight: 650; padding: 8px 0 16px; }
+.game-editor-title .t2 { font-size: var(--fs-xs); color: var(--mute); font-weight: 400; margin-top: 4px; }
+.ratewrap { margin: 0; }
+.ratewrap + .ratewrap { border-top: 1px solid var(--line); }
+.ratewrap .rlabel { font-size: var(--fs-md); }
+.app-version { font-family: inherit; }
+@media (min-width: 720px) {
+  body { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .welcome-card { padding: 32px; }
+  .workflow-guide { padding: 16px; }
+}
+@media (max-width: 360px) {
+  body { --pad: 14px; }
+  .brandrow .brandmark { display: none; }
+  .brandrow { gap: 4px; }
+  .brand { font-size: 1.375rem; }
+  .welcome-card { padding: 20px; }
+  .chipgrid { grid-template-columns: 1fr; }
+  .polset button::after { font-size: .6875rem; margin-left: 3px; }
+  .noteadd { padding: 12px; }
+  .review-details { flex-wrap: wrap; }
+  .scale .nums .rw { font-size: .625rem; }
+}

@@ -1,14 +1,25 @@
 {
-  "name": "Sideline — Referee Evaluation Notes",
-  "short_name": "Sideline",
-  "description": "Field-side note taking for LSSA referee mentor evaluations",
+  "name": "Sideline Beta — Referee Mentoring",
+  "short_name": "Sideline Beta",
+  "description": "Observe, review and save referee evaluations from the sideline, even offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b0d10",
-  "theme_color": "#0b0d10",
-  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#f4f6f8",
   "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "icon.svg",
       "sizes": "any",

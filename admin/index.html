@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex" />
-  <title>Sideline Admin</title>
+  <title>Sideline Beta · League workspace</title>
   <link rel="icon" href="../icon.svg" type="image/svg+xml" />
 
   <script>
@@ -27,1350 +27,22 @@
 
     /* Theme before first paint. The console follows the computer's setting
        unless someone picks one; the mentor app's own choice is left alone
-       (its 'sideline:theme' is about reading a phone in the sun). */
+       (its 'sideline-beta:theme' is about reading a phone in the sun). */
     (function () {
       var mode = 'auto';
-      try { mode = JSON.parse(localStorage.getItem('sideline:adminTheme')) || 'auto'; } catch (e) { }
+      try { mode = JSON.parse(localStorage.getItem('sideline-beta:adminTheme')) || 'auto'; } catch (e) { }
       var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     })();
   </script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
+  <link rel="stylesheet" href="../assets/admin.css?v=beta2" />
+  <link rel="stylesheet" href="../assets/design-system.css?v=beta2" />
 
-  <style>
-    /* ============================================================
-       SIDELINE ADMIN CONSOLE
-       The mentor app is built for a phone at a field with no signal. This
-       page is for the assignor and league leadership at a desk: tables,
-       filters and summaries. It is laid out for a computer first and still
-       works on a phone. Colors are the mentor app's own tokens, so the two
-       read as one product.
-       ============================================================ */
-    :root {
-      color-scheme: dark;
-      --bg: #0b0d10;
-      --panel: #14181d;
-      --panel2: #1b2127;
-      --line: #242c34;
-      --grid: #20272e;
-      --ink: #e9eef3;
-      --mute: #8b98a5;
-      --primary: #38bdf8;
-      --plus: #34d399;
-      --minus: #fb923c;
-      --on-primary: #06212e;
-      --primary-faint: rgba(56, 189, 248, .05);
-      --primary-tint: rgba(56, 189, 248, .1);
-      --primary-line: rgba(56, 189, 248, .38);
-      --minus-tint: rgba(251, 146, 60, .1);
-      --minus-line: rgba(251, 146, 60, .38);
-      /* de-emphasis for bars that are context, not the point */
-      --bar-muted: #5f6c78;
-      --scrim: rgba(0, 0, 0, .55);
-      --shadow: 0 10px 40px rgba(0, 0, 0, .45);
-      --r: 12px;
-      --side: 232px;
-
-      --fs-xs: 0.8125rem;
-      --fs-sm: 0.875rem;
-      --fs-md: 0.9375rem;
-      --fs-base: 1rem;
-      --fs-lg: 1.125rem;
-      --fs-xl: 1.25rem;
-      --fs-2xl: 1.625rem;
-    }
-
-    :root[data-theme="light"] {
-      color-scheme: light;
-      --bg: #eef2f5;
-      --panel: #ffffff;
-      --panel2: #f4f7f9;
-      --line: #d3dce3;
-      --grid: #e6ebef;
-      --ink: #0b1218;
-      --mute: #4a5764;
-      --primary: #0369a1;
-      --plus: #047857;
-      --minus: #c2410c;
-      --on-primary: #ffffff;
-      --primary-faint: rgba(3, 105, 161, .04);
-      --primary-tint: rgba(3, 105, 161, .08);
-      --primary-line: rgba(3, 105, 161, .45);
-      --minus-tint: rgba(194, 65, 12, .07);
-      --minus-line: rgba(194, 65, 12, .4);
-      --bar-muted: #84919d;
-      --scrim: rgba(11, 18, 24, .4);
-      --shadow: 0 10px 40px rgba(11, 18, 24, .16);
-    }
-
-    * {
-      box-sizing: border-box
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--ink);
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      font-size: var(--fs-base);
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-      color: inherit
-    }
-
-    button {
-      cursor: pointer
-    }
-
-    a {
-      color: var(--primary)
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px
-    }
-
-    [hidden] {
-      display: none !important
-    }
-
-    @media (prefers-reduced-motion:reduce) {
-      * {
-        transition: none !important;
-        animation: none !important
-      }
-    }
-
-    .muted {
-      color: var(--mute)
-    }
-
-    .num {
-      font-variant-numeric: tabular-nums
-    }
-
-    .vh {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip: rect(0 0 0 0);
-      white-space: nowrap
-    }
-
-    /* ---------- controls ---------- */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      min-height: 36px;
-      padding: 6px 14px;
-      border-radius: 9px;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      color: var(--ink);
-      font-weight: 600;
-      font-size: var(--fs-sm);
-      text-decoration: none;
-      white-space: nowrap;
-    }
-
-    .btn:hover {
-      border-color: var(--primary-line)
-    }
-
-    .btn.primary {
-      background: var(--primary);
-      color: var(--on-primary);
-      border-color: var(--primary)
-    }
-
-    .btn.ghost {
-      background: transparent
-    }
-
-    .btn.danger {
-      background: transparent;
-      color: var(--minus);
-      border-color: var(--minus-line)
-    }
-
-    .btn.sm {
-      min-height: 30px;
-      padding: 3px 10px;
-      font-size: var(--fs-xs)
-    }
-
-    .btn:disabled {
-      opacity: .45;
-      cursor: default
-    }
-
-    .linkbtn {
-      background: none;
-      border: 0;
-      padding: 0;
-      font-weight: 600;
-      text-align: left;
-      color: var(--ink);
-    }
-
-    .linkbtn:hover {
-      color: var(--primary);
-      text-decoration: underline
-    }
-
-    .fld {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      font-weight: 600;
-    }
-
-    .inp,
-    .fld select,
-    .fld input {
-      min-height: 36px;
-      padding: 5px 10px;
-      border-radius: 9px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--ink);
-      font-size: var(--fs-sm);
-      font-weight: 500;
-    }
-
-    .chk {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: var(--fs-sm);
-      min-height: 36px
-    }
-
-    .chk input {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--primary)
-    }
-
-    /* Anything tapped by a finger is held to 44px, as in the mentor app. */
-    @media (pointer: coarse) {
-
-      .btn,
-      .inp,
-      .fld select,
-      .fld input,
-      .chk {
-        min-height: 44px
-      }
-
-      .btn.sm {
-        min-height: 40px
-      }
-
-      .inp,
-      .fld select,
-      .fld input {
-        font-size: 16px
-      }
-    }
-
-    .pill {
-      display: inline-block;
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 1.5;
-      padding: 0 8px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      color: var(--mute);
-      white-space: nowrap;
-    }
-
-    .pill.low {
-      color: var(--minus);
-      border-color: var(--minus-line);
-      background: var(--minus-tint)
-    }
-
-    .pill.acc {
-      color: var(--primary);
-      border-color: var(--primary-line);
-      background: var(--primary-tint)
-    }
-
-    /* ---------- layout ---------- */
-    .shell {
-      display: grid;
-      grid-template-columns: var(--side) minmax(0, 1fr);
-      min-height: 100vh;
-    }
-
-    .side {
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding: 20px 14px 16px;
-      background: var(--panel);
-      border-right: 1px solid var(--line);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 8px;
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 1.75rem;
-      letter-spacing: .06em;
-      line-height: 1;
-      text-decoration: none;
-      color: var(--ink);
-    }
-
-    .brand span {
-      color: var(--primary)
-    }
-
-    .brand small {
-      font-family: Inter, sans-serif;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .1em;
-      color: var(--mute);
-      border: 1px solid var(--line);
-      border-radius: 5px;
-      padding: 1px 6px;
-    }
-
-    .nav {
-      display: flex;
-      flex-direction: column;
-      gap: 2px
-    }
-
-    .nav a {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 10px;
-      border-radius: 9px;
-      font-weight: 600;
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      text-decoration: none;
-    }
-
-    .nav a:hover {
-      background: var(--panel2);
-      color: var(--ink)
-    }
-
-    .nav a[aria-current="page"] {
-      background: var(--primary-tint);
-      color: var(--ink)
-    }
-
-    .nav a[aria-current="page"] svg {
-      color: var(--primary)
-    }
-
-    .nav svg {
-      width: 18px;
-      height: 18px;
-      flex: none;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      stroke-linecap: round;
-      stroke-linejoin: round
-    }
-
-    .badge {
-      margin-left: auto;
-      min-width: 20px;
-      text-align: center;
-      background: var(--primary);
-      color: var(--on-primary);
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 0 6px;
-    }
-
-    .acct {
-      margin-top: auto;
-      border-top: 1px solid var(--line);
-      padding-top: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      font-size: var(--fs-xs);
-    }
-
-    .acct .who {
-      overflow-wrap: anywhere;
-      color: var(--mute)
-    }
-
-    .acct .who b {
-      display: block;
-      color: var(--ink);
-      font-size: var(--fs-sm)
-    }
-
-    .acct .row {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap
-    }
-
-    .main {
-      min-width: 0;
-      width: 100%;
-      max-width: 1400px;
-      padding: 22px 32px 64px;
-    }
-
-    .top {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .top h1 {
-      margin: 0;
-      font-size: var(--fs-2xl);
-      font-weight: 700;
-      letter-spacing: -.01em
-    }
-
-    .spacer {
-      flex: 1
-    }
-
-    .fresh {
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    /* One filter row above everything it scopes. It stays put while the
-       page scrolls, so the numbers never lose their context. */
-    .filters {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 10px 14px;
-      padding: 12px 0 14px;
-      margin-bottom: 18px;
-      background: var(--bg);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .filters .scope {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      padding-bottom: 8px;
-    }
-
-    .view {
-      transition: opacity .15s
-    }
-
-    .view.busy {
-      opacity: .55
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px 14px;
-      flex-wrap: wrap;
-      margin-bottom: 12px
-    }
-
-    .toolbar .inp {
-      width: min(320px, 100%)
-    }
-
-    .banner {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-      padding: 10px 14px;
-      border-radius: var(--r);
-      border: 1px solid var(--primary-line);
-      background: var(--primary-tint);
-      font-size: var(--fs-sm);
-    }
-
-    .warn {
-      margin: 0 0 14px;
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 1px solid var(--minus-line);
-      background: var(--minus-tint);
-      font-size: var(--fs-sm);
-    }
-
-    .empty {
-      padding: 12px 0;
-      color: var(--mute);
-      font-size: var(--fs-sm)
-    }
-
-    .hint {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      margin: 8px 0 0
-    }
-
-    /* ---------- cards + stat tiles ---------- */
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .kpi {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 14px 16px;
-      min-width: 0;
-    }
-
-    .kpi .l {
-      font-size: var(--fs-xs);
-      font-weight: 600;
-      color: var(--mute)
-    }
-
-    .kpi .v {
-      font-size: 2rem;
-      font-weight: 650;
-      line-height: 1.15;
-      margin-top: 4px;
-      letter-spacing: -.01em
-    }
-
-    .kpi .s {
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      margin-top: 2px
-    }
-
-    .grid2 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      padding: 16px 18px;
-      min-width: 0;
-    }
-
-    .card h2 {
-      margin: 0;
-      font-size: var(--fs-md);
-      font-weight: 650
-    }
-
-    .card .sub {
-      margin: 2px 0 10px;
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    h2.sec {
-      margin: 26px 0 10px;
-      font-size: var(--fs-lg);
-      font-weight: 650
-    }
-
-    h2.sec:first-child {
-      margin-top: 0
-    }
-
-    /* A short list of referees on the overview; each line opens the profile. */
-    .rlist {
-      list-style: none;
-      margin: 0;
-      padding: 0
-    }
-
-    .rrow {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      padding: 9px 6px;
-      text-align: left;
-      background: none;
-      border: 0;
-      border-top: 1px solid var(--line);
-      border-radius: 0;
-    }
-
-    .rlist li:first-child .rrow {
-      border-top: 0
-    }
-
-    button.rrow:hover {
-      background: var(--primary-faint)
-    }
-
-    .rrow .t {
-      min-width: 0;
-      flex: 1
-    }
-
-    .rrow .nm {
-      font-weight: 600;
-      font-size: var(--fs-sm);
-      overflow-wrap: anywhere
-    }
-
-    .rrow .d {
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    .rrow .r {
-      text-align: right;
-      white-space: nowrap;
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    /* ---------- tables ---------- */
-    .tablewrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: var(--r);
-      background: var(--panel);
-    }
-
-    table.data {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--fs-sm)
-    }
-
-    table.data th {
-      text-align: left;
-      background: var(--panel2);
-      color: var(--mute);
-      font-size: var(--fs-xs);
-      font-weight: 650;
-      white-space: nowrap;
-      border-bottom: 1px solid var(--line);
-      padding: 0;
-    }
-
-    table.data th>span,
-    table.data th>button {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      width: 100%;
-      padding: 9px 8px;
-      background: none;
-      border: 0;
-      font: inherit;
-      color: inherit;
-    }
-
-    table.data th>button:hover {
-      color: var(--ink)
-    }
-
-    table.data th[aria-sort]>button {
-      color: var(--ink)
-    }
-
-    table.data td {
-      padding: 8px 8px;
-      border-bottom: 1px solid var(--line);
-      vertical-align: top
-    }
-
-    table.data tbody tr:last-child td {
-      border-bottom: 0
-    }
-
-    table.data .n {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap
-    }
-
-    table.data th.n>button,
-    table.data th.n>span {
-      justify-content: flex-end
-    }
-
-    table.data tr.click {
-      cursor: pointer
-    }
-
-    table.data tr.click:hover td {
-      background: var(--primary-faint)
-    }
-
-    table.data td.low {
-      color: var(--minus);
-      font-weight: 650
-    }
-
-    /* "Watch for" rides under the referee's name, cut to one line, so every
-       row stays one height and the skill columns fit a laptop screen. */
-    table.data .wf {
-      max-width: 220px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--mute);
-      font-size: var(--fs-xs)
-    }
-
-    @media (max-width: 1400px) {
-      .hide-md {
-        display: none !important
-      }
-    }
-
-    table.data tr.exp>td {
-      background: var(--panel2)
-    }
-
-    .more {
-      margin-top: 12px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      font-size: var(--fs-xs);
-      color: var(--mute)
-    }
-
-    /* ---------- charts ----------
-       Thin marks, hairline solid grid, text in text colors. Every chart has
-       a "Show as a table" twin under it and a tooltip on hover and focus. */
-    .chart {
-      position: relative;
-      width: 100%;
-      min-height: 60px
-    }
-
-    .chart svg {
-      display: block;
-      overflow: visible
-    }
-
-    .chart .ax {
-      fill: var(--mute);
-      font-size: 12px;
-      font-family: Inter, sans-serif
-    }
-
-    .chart .lb {
-      fill: var(--ink);
-      font-size: 13px;
-      font-family: Inter, sans-serif
-    }
-
-    .chart .vl {
-      fill: var(--ink);
-      font-size: 12px;
-      font-weight: 600;
-      font-family: Inter, sans-serif
-    }
-
-    .chart .gl {
-      stroke: var(--grid);
-      stroke-width: 1;
-      shape-rendering: crispEdges
-    }
-
-    .chart .base {
-      stroke: var(--line);
-      stroke-width: 1;
-      shape-rendering: crispEdges
-    }
-
-    .chart .m1 {
-      fill: var(--primary)
-    }
-
-    .chart .m0 {
-      fill: var(--bar-muted)
-    }
-
-    .chart .ln {
-      fill: none;
-      stroke: var(--primary);
-      stroke-width: 2;
-      stroke-linejoin: round;
-      stroke-linecap: round
-    }
-
-    .chart .dot {
-      fill: var(--primary);
-      stroke: var(--panel);
-      stroke-width: 2
-    }
-
-    .chart .cross {
-      stroke: var(--mute);
-      stroke-width: 1;
-      opacity: 0
-    }
-
-    .chart .hit {
-      fill: transparent;
-      outline: none
-    }
-
-    .chart .mk:hover .m1,
-    .chart .mk:hover .m0,
-    .chart .mk:focus-within .m1,
-    .chart .mk:focus-within .m0 {
-      opacity: .72
-    }
-
-    .chart .mk:hover .cross,
-    .chart .mk:focus-within .cross {
-      opacity: .5
-    }
-
-    .chart .mk:focus-within .hit {
-      stroke: var(--primary);
-      stroke-width: 1.5
-    }
-
-    details.tv {
-      margin-top: 6px
-    }
-
-    details.tv summary {
-      cursor: pointer;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      padding: 4px 0
-    }
-
-    details.tv table {
-      margin-top: 6px
-    }
-
-    .tip {
-      position: fixed;
-      z-index: 200;
-      pointer-events: none;
-      max-width: 260px;
-      padding: 7px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      box-shadow: var(--shadow);
-      font-size: var(--fs-xs);
-      color: var(--mute);
-    }
-
-    .tip b {
-      display: block;
-      color: var(--ink);
-      font-size: var(--fs-sm)
-    }
-
-    /* per-skill bars, the same shape as the mentor app's referee profile */
-    .catrow {
-      display: grid;
-      grid-template-columns: 96px 1fr 84px;
-      align-items: center;
-      gap: 10px;
-      margin: 6px 0;
-      font-size: var(--fs-sm);
-    }
-
-    .catrow .bar {
-      height: 8px;
-      border-radius: 4px;
-      background: var(--panel2);
-      overflow: hidden
-    }
-
-    .catrow .bar i {
-      display: block;
-      height: 100%;
-      background: var(--primary);
-      border-radius: 0 4px 4px 0
-    }
-
-    .catrow .bar i.low {
-      background: var(--minus)
-    }
-
-    .catrow .cv {
-      text-align: right;
-      font-variant-numeric: tabular-nums
-    }
-
-    .catrow .cv small {
-      color: var(--mute)
-    }
-
-    .plist {
-      margin: 6px 0 0;
-      padding-left: 18px;
-      font-size: var(--fs-sm)
-    }
-
-    .plist li {
-      margin: 3px 0
-    }
-
-    .evald {
-      border-top: 1px solid var(--line);
-      padding: 9px 0
-    }
-
-    .evald summary {
-      cursor: pointer;
-      font-size: var(--fs-sm)
-    }
-
-    .scores {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin: 8px 0
-    }
-
-    .comments {
-      white-space: pre-wrap;
-      font-family: inherit;
-      font-size: var(--fs-sm);
-      background: var(--panel2);
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin: 8px 0 0;
-      overflow-wrap: anywhere;
-    }
-
-    .evalbody .comments {
-      background: var(--panel)
-    }
-
-    .pol {
-      display: inline-block;
-      width: 1.1em;
-      font-weight: 700
-    }
-
-    .pol.p1 {
-      color: var(--plus)
-    }
-
-    .pol.m1 {
-      color: var(--minus)
-    }
-
-    .pol.up {
-      color: var(--primary)
-    }
-
-    /* ---------- the referee panel ---------- */
-    .scrim {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: var(--scrim)
-    }
-
-    .drawer {
-      position: fixed;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 60;
-      width: min(680px, 100vw);
-      display: flex;
-      flex-direction: column;
-      background: var(--bg);
-      border-left: 1px solid var(--line);
-      box-shadow: var(--shadow);
-    }
-
-    .drhead {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 20px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .drhead h2 {
-      flex: 1;
-      min-width: 0;
-      margin: 0;
-      font-size: var(--fs-xl);
-      overflow-wrap: anywhere
-    }
-
-    .xbtn {
-      width: 40px;
-      height: 40px;
-      flex: none;
-      border-radius: 9px;
-      border: 1px solid var(--line);
-      background: var(--panel2);
-      font-size: 22px;
-      line-height: 1;
-    }
-
-    .drbody {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 20px 48px
-    }
-
-    .drbody .card {
-      margin-bottom: 14px
-    }
-
-    .drstats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 14px
-    }
-
-    .cols2 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-      gap: 14px
-    }
-
-    .dupe {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-      padding: 12px 0;
-      border-top: 1px solid var(--line);
-    }
-
-    .dupe:first-of-type {
-      border-top: 0
-    }
-
-    .dupe .why {
-      grid-column: 1 / -1;
-      font-size: var(--fs-xs);
-      color: var(--mute);
-      margin-top: -6px
-    }
-
-    .dupe .acts {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      justify-content: flex-end
-    }
-
-    .formrow {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: flex-end
-    }
-
-    /* A select sizes itself to its longest option; min-width lets it shrink
-       to the row instead of pushing past the edge of a phone. */
-    .formrow .fld {
-      flex: 1 1 220px;
-      min-width: 0
-    }
-
-    .formrow .fld select {
-      width: 100%;
-      min-width: 0
-    }
-
-    /* ---------- sign-in gate ---------- */
-    .gate {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px 16px
-    }
-
-    .gate .card {
-      width: min(440px, 100%);
-      padding: 24px
-    }
-
-    .gate .brand {
-      padding: 0;
-      margin-bottom: 18px
-    }
-
-    .gate h1 {
-      font-size: var(--fs-xl);
-      margin: 0 0 6px
-    }
-
-    .gate p {
-      font-size: var(--fs-sm);
-      color: var(--mute);
-      margin: 0 0 14px
-    }
-
-    .gate .fld {
-      margin-bottom: 12px
-    }
-
-    .gate .btn {
-      width: 100%
-    }
-
-    .stack {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 10px
-    }
-
-    /* ---------- dialog + toast ---------- */
-    dialog.dlg {
-      width: min(460px, calc(100vw - 32px));
-      padding: 22px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--panel);
-      color: var(--ink);
-      box-shadow: var(--shadow);
-    }
-
-    dialog.dlg::backdrop {
-      background: var(--scrim)
-    }
-
-    dialog.dlg h2 {
-      margin: 0 0 8px;
-      font-size: var(--fs-lg)
-    }
-
-    dialog.dlg p {
-      margin: 0 0 12px;
-      font-size: var(--fs-sm);
-      color: var(--mute)
-    }
-
-    dialog.dlg .acts {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-top: 16px
-    }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 24px;
-      transform: translateX(-50%);
-      z-index: 300;
-      max-width: calc(100vw - 32px);
-      padding: 10px 16px;
-      border-radius: 10px;
-      background: var(--ink);
-      color: var(--bg);
-      font-size: var(--fs-sm);
-      font-weight: 600;
-      box-shadow: var(--shadow);
-    }
-
-    /* ---------- phones and narrow windows ----------
-       The side rail becomes a top bar with the sections in a scrolling
-       row, the filters stop sticking (they would eat half the screen), and
-       tables drop their secondary columns. */
-    @media (max-width: 900px) {
-      .shell {
-        display: block
-      }
-
-      .side {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        height: auto;
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px 10px;
-        padding: 10px 16px 0;
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .brand {
-        padding: 0;
-        font-size: 1.5rem
-      }
-
-      .nav {
-        order: 3;
-        flex-direction: row;
-        width: calc(100% + 32px);
-        margin: 0 -16px;
-        padding: 0 8px;
-        overflow-x: auto;
-        scrollbar-width: none;
-        gap: 0;
-      }
-
-      .nav a {
-        flex: none;
-        border-radius: 0;
-        padding: 10px 12px 11px;
-        min-height: 44px;
-        border-bottom: 2px solid transparent;
-        white-space: nowrap;
-      }
-
-      .nav a[aria-current="page"] {
-        background: none;
-        border-bottom-color: var(--primary)
-      }
-
-      .nav svg {
-        display: none
-      }
-
-      .badge {
-        margin-left: 4px
-      }
-
-      .acct {
-        margin: 0 0 0 auto;
-        padding: 0;
-        border: 0;
-        flex-direction: row;
-        align-items: center
-      }
-
-      .acct .who,
-      .acct .note {
-        display: none
-      }
-
-      .main {
-        padding: 14px 16px 56px
-      }
-
-      .top h1 {
-        font-size: var(--fs-xl)
-      }
-
-      .filters {
-        position: static
-      }
-
-      .filters .fld {
-        flex: 1 1 140px
-      }
-
-      .kpis {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px
-      }
-
-      .kpi {
-        padding: 12px
-      }
-
-      .kpis .kpi:last-child:nth-child(odd) {
-        grid-column: 1 / -1
-      }
-
-      .drstats {
-        gap: 8px
-      }
-
-      .drstats .kpi .v {
-        font-size: 1.375rem
-      }
-
-      .kpi .v {
-        font-size: 1.625rem
-      }
-
-      .card {
-        padding: 14px
-      }
-
-      .hide-sm {
-        display: none !important
-      }
-
-      .drhead {
-        padding: 10px 16px
-      }
-
-      .drbody {
-        padding: 14px 16px 48px
-      }
-
-      .dupe {
-        grid-template-columns: minmax(0, 1fr)
-      }
-
-      .dupe .acts {
-        justify-content: flex-start
-      }
-    }
-  </style>
 </head>
 
-<body>
+<body class="admin-app">
+  <a class="skip-link" href="#main">Skip to content</a>
   <div id="app"></div>
 
   <div class="scrim" id="scrim" hidden></div>
@@ -1578,7 +250,7 @@
        THEME
        ============================================================ */
     const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
-    let themeMode = store.get('sideline:adminTheme') || 'auto';
+    let themeMode = store.get('sideline-beta:adminTheme') || 'auto';
     const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
     function applyTheme() {
       const dark = themeMode === 'dark' || (themeMode !== 'light' && darkQuery && darkQuery.matches);
@@ -1590,7 +262,7 @@
        SIGN-IN
        ------------------------------------------------------------
        Same client settings as the mentor app, including where the login is
-       kept ('sideline:auth'). On the same site the two pages therefore share
+       kept ('sideline-beta:auth'). On the same site the two pages therefore share
        one login: sign in on either and both are signed in in this browser.
        ============================================================ */
     let sb = null, sbLoading = null;
@@ -1614,7 +286,7 @@
     function sbc() {
       if (sb || !ACCOUNTS_ON || !window.supabase || !window.supabase.createClient) return sb;
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-        auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sideline:auth'}
+        auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sideline-beta:auth'}
       });
       return sb;
     }
@@ -1648,7 +320,7 @@
        "no session" both when there is none and when a stored login could not
        be refreshed for want of a connection; only the first is a sign-out. */
     function storedLogin() {
-      try {return !!localStorage.getItem('sideline:auth');} catch (e) {return false;}
+      try {return !!localStorage.getItem('sideline-beta:auth');} catch (e) {return false;}
     }
 
     function clearImportPreview() {
@@ -1839,14 +511,14 @@
       ['all', 'All dates'], ['custom', 'Custom dates']];
     const F = {range: '90', from: '', to: '', division: '', position: ''};
     (() => {
-      const s = store.get('sideline:adminFilters') || {};
+      const s = store.get('sideline-beta:adminFilters') || {};
       if (RANGES.some(r => r[0] === s.range)) F.range = s.range;
       if (ISO_RE.test(s.from || '')) F.from = s.from;
       if (ISO_RE.test(s.to || '')) F.to = s.to;
       if (typeof s.division === 'string') F.division = s.division;
       if (['CR', 'AR'].includes(s.position)) F.position = s.position;
     })();
-    const saveFilters = () => store.set('sideline:adminFilters', F);
+    const saveFilters = () => store.set('sideline-beta:adminFilters', F);
 
     function rangeBounds() {
       const t = todayISO();
@@ -2210,11 +882,15 @@
       ['referees', 'Referees', '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.2a3.2 3.2 0 010 5.9M17.5 14.9c2.1.6 3.5 2.4 3.5 5.1"/>'],
       ['evaluations', 'Evaluations', '<path d="M8 4h8v3H8z"/><path d="M8 5.5H5.5v15h13v-15H16"/><path d="M8.5 12h7M8.5 16h5"/>'],
       ['mentors', 'Mentors', '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'],
-      ['cleanup', 'Clean-up', '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>'],
-      ['import', 'Import', '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/>'],
+      ['cleanup', 'Manage records', '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>'],
+      ['import', 'Legacy form import', '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4"/>'],
     ];
-    const TITLES = {overview: 'Overview', referees: 'Referees', evaluations: 'Evaluations', mentors: 'Mentors and admins', cleanup: 'Clean-up',
-      import: 'Import form responses'};
+    const TITLES = {overview: 'League overview', referees: 'Referees', evaluations: 'Evaluations', mentors: 'Mentors & access', cleanup: 'Manage records',
+      import: 'Legacy form import'};
+    const VIEW_DESCRIPTIONS = {overview: 'A clear view of your league’s progress and where to focus next.',
+      referees: 'Follow each referee’s development and plan their next observation.', evaluations: 'Review feedback shared by your mentors, all in one place.',
+      mentors: 'Approve mentors and manage access to the league workspace.', cleanup: 'Resolve duplicate names and handle record deletion requests.',
+      import: 'Bring earlier Google Form responses into Sideline.'};
     const viewFromHash = () => {const v = location.hash.replace(/^#\/?/, ''); return TITLES[v] ? v : 'overview';};
     ST.view = viewFromHash();
 
@@ -2229,13 +905,14 @@
       if (!$('#shell')) {
         app.innerHTML = `<div class="shell" id="shell">
         <aside class="side">
-          <a class="brand" href="#overview" aria-label="Sideline admin, overview">SIDE<span>LINE</span> <small>ADMIN</small></a>
+          <a class="brand" href="#overview" aria-label="Sideline admin, overview"><span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4v16M19 4v16M5 12h14"/><circle cx="12" cy="12" r="4"/></svg></span>Sideline <span class="beta-badge">Beta</span></a>
+          <div class="workspace-label"><span class="workspace-icon" aria-hidden="true">L</span><span><b>League workspace</b><small>Administration</small></span></div>
           <nav class="nav" id="nav" aria-label="Sections"></nav>
           <div class="acct" id="acct"></div>
         </aside>
-        <main class="main">
+        <main class="main" id="main" tabindex="-1">
           <div class="top">
-            <h1 id="viewTitle"></h1>
+            <div><p class="eyebrow">LSSA · Referee development</p><h1 id="viewTitle"></h1><p class="view-description" id="viewDescription"></p></div>
             <div class="spacer"></div>
             <span class="fresh" id="fresh" aria-live="polite"></span>
             <button class="btn" id="refreshBtn">Refresh</button>
@@ -2260,11 +937,12 @@
 
     function paintNav() {
       const pend = pendingMentors().length;
-      $('#nav').innerHTML = VIEWS.map(([k, label, icon]) => `<a href="#${k}" ${ST.view === k ? 'aria-current="page"' : ''}>
+      $('#nav').innerHTML = VIEWS.map(([k, label, icon], i) => `${i === 0 ? '<div class="nav-label">Workspace</div>' : i === 4 ? '<div class="nav-label">Administration</div>' : ''}<a href="#${k}" ${ST.view === k ? 'aria-current="page"' : ''}>
         <svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>${label}${k === 'mentors' && pend
           ? `<span class="badge" aria-label="${people(pend)} waiting">${pend}</span>` : ''}</a>`).join('');
       $('#viewTitle').textContent = TITLES[ST.view];
-      document.title = `${TITLES[ST.view]} · Sideline Admin`;
+      $('#viewDescription').textContent = VIEW_DESCRIPTIONS[ST.view];
+      document.title = `${TITLES[ST.view]} · Sideline Beta`;
     }
 
     function paintAcct() {
@@ -2275,7 +953,7 @@
           <button class="btn sm ghost" id="themeBtn" aria-label="Switch to ${isDark() ? 'light' : 'dark'} theme">${isDark() ? 'Light' : 'Dark'} theme</button>
           <button class="btn sm ghost" id="signOutBtn">Sign out</button>
         </div>
-        <a class="note" href="../">Open the mentor app</a>`;
+        <a class="note" href="../">Open mentor app &rarr;</a><span class="data-environment">Shared league database</span>`;
     }
 
     function paintFresh() {
@@ -2291,6 +969,7 @@
 
     function paintFilters() {
       const box = $('#filters'); if (!box) return;
+      box.hidden = ['cleanup', 'import'].includes(ST.view);
       const divs = [...DIVISIONS];
       if (DATA) DATA.evals.forEach(e => {if (e.division && !divs.includes(e.division)) divs.push(e.division);});
       if (F.division && !divs.includes(F.division)) divs.push(F.division);
@@ -2306,7 +985,8 @@
           <option value="">CR and AR</option>
           <option value="CR"${F.position === 'CR' ? ' selected' : ''}>Center (CR)</option>
           <option value="AR"${F.position === 'AR' ? ' selected' : ''}>Assistant (AR)</option></select></label>
-        <span class="scope" id="scope">${esc(scopeText())}</span>`;
+        <span class="scope" id="scope">${esc(scopeText())}</span>
+        ${F.range !== '90' || F.division || F.position ? '<button class="btn sm ghost" id="resetFilters">Reset filters</button>' : ''}`;
     }
     function filtersChanged(repaintFilters) {
       saveFilters();
@@ -2319,7 +999,7 @@
     function paintView() {
       const v = $('#view'); if (!v) return;
       CHARTS.clear();
-      paintNav();
+      paintNav(); paintFilters();
       if (!DATA) {
         v.innerHTML = ST.error ? `<div class="warn">Could not load the league's data: ${esc(ST.error)}</div>
           <button class="btn" id="retryBtn">Try again</button>` : '<div class="empty">Loading the league’s evaluations…</div>';
@@ -2336,7 +1016,7 @@
        OVERVIEW
        ============================================================ */
     const UI = {refSort: {key: 'recent', dir: 1}, refQ: '', refLow: false, evalQ: '', evalLimit: 100, openEval: '',
-      notSame: new Set(store.get('sideline:adminNotSame') || [])};
+      notSame: new Set(store.get('sideline-beta:adminNotSame') || [])};
 
     function refRow(g, right, detail) {
       return `<li><button class="rrow" data-ref="${esc(g.id)}">
@@ -2368,14 +1048,13 @@
       // Evaluations from since-removed accounts still count everywhere else.
       const withAccess = new Set(DATA.mentors.filter(m => m.role !== 'pending').map(m => m.id));
       const mentorsActive = new Set(evals.map(e => e.mentorId).filter(id => withAccess.has(id))).size;
-      const latestSaysYes = refs.filter(g => {const e = g.profile.evals.find(r => r.moveUp); return e && e.moveUp === 'Yes';});
+      // Promotion recommendations are shown with their context below the summary.
       const tile = (l, v, sub) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
       const kpis = `<div class="kpis">
         ${tile('Evaluations', evals.length.toLocaleString(), prevN != null ? delta(evals.length - prevN, 0) : esc(scopeText().split(' · ')[0]))}
-        ${tile('League average', fmtAvg(avg), prevAvg != null && avg != null ? delta(avg - prevAvg, 1) : '1 to 4 scale, all six skills')}
+        ${tile('League average', fmtAvg(avg), prevAvg != null && avg != null ? delta(avg - prevAvg, 1) : '1–4 scale · applicable skills')}
         ${tile('Referees evaluated', refs.length.toLocaleString(), newRefs != null ? `${newRefs.toLocaleString()} evaluated for the first time` : 'at least once')}
         ${tile('Mentors evaluating', mentorsActive.toLocaleString(), `of ${people(withAccess.size)} with access`)}
-        ${tile('Recommended to move up', latestSaysYes.length.toLocaleString(), 'latest evaluation says yes')}
       </div>`;
 
       if (!evals.length) {
@@ -2437,7 +1116,7 @@
       </div>
       <div class="grid2">
         <div class="card">
-          <h2>Needs the most support</h2>
+          <h2>Focus for the next matchday</h2>
           <p class="sub">Lowest average over each referee’s last three evaluations.</p>
           ${support.length ? `<ul class="rlist">${support.map(g => refRow(g, avgPill(g.profile.recentAvg),
             `${plural(g.profile.count, 'evaluation')}${topConcern(g.profile) ? ' · ' + esc(topConcern(g.profile)) : ''}`)).join('')}</ul>
@@ -2445,7 +1124,7 @@
           : '<div class="empty">No ratings in these filters.</div>'}
         </div>
         <div class="card">
-          <h2>Recommended to move up</h2>
+          <h2>Ready for the next level</h2>
           <p class="sub">Referees mentors said yes to moving up, most consistent first.</p>
           ${moveUp.length ? `<ul class="rlist">${moveUp.map(x => refRow(x.g, `yes in ${x.yes} of ${x.asked}`,
             `last three average ${fmtAvg(x.g.profile.recentAvg)} · last evaluated ${esc(prettyDate(x.g.profile.lastSeen) || '–')}`)).join('')}</ul>`
@@ -2454,7 +1133,7 @@
       </div>
       <div class="grid2">
         <div class="card">
-          <h2>Most common things to work on</h2>
+          <h2>Training opportunities</h2>
           <p class="sub">Notes mentors marked “to work on”, by how many referees got them. Useful for training topics.</p>
           ${topWork.length ? `<ul class="rlist">${topWork.map(w => `<li><div class="rrow"><span class="t"><span class="nm">${esc(w.text)}</span><br>
             <span class="d">${esc(own(CAT_SHORT, w.cat) || 'General')}</span></span>
@@ -2462,7 +1141,7 @@
           : '<div class="empty">No “to work on” notes in these filters.</div>'}
         </div>
         <div class="card">
-          <h2>Longest since last evaluated</h2>
+          <h2>Due for another observation</h2>
           <p class="sub">Across all dates, so the date filter does not hide anyone. Referees appear once someone has evaluated them.</p>
           ${overdue.length ? `<ul class="rlist">${overdue.map(g => refRow(g, esc(sinceText(g.profile.lastSeen)),
             `last evaluated ${esc(prettyDate(g.profile.lastSeen))} · ${plural(g.profile.count, 'evaluation')} in all`)).join('')}</ul>`
@@ -2507,7 +1186,7 @@
         <button class="btn" id="exportRefs">Export CSV</button>
       </div>
       <div id="refTable">${refTableHTML()}</div>
-      <p class="hint">Averages are on the form’s 1 to 4 scale and mix mentors and divisions, so read them next to the counts.
+      <p class="hint">Averages are on a 1 to 4 scale and mix mentors and divisions, so read them next to the counts.
         Select a referee to see their full profile.</p>`;
     }
     function refTableHTML() {
@@ -2860,8 +1539,8 @@
        as a preview that saves nothing, then for real. The rules live in
        supabase/migrations/20260918140000_form_import.sql.
        ============================================================ */
-    const IMPF = {link: store.get('sideline:adminFormSheet') || '', busy: '', error: '', items: null, status: null,
-      result: null, showAll: false, schedLink: store.get('sideline:adminScheduleSheet') || '', sched: null, schedError: '',
+    const IMPF = {link: store.get('sideline-beta:adminFormSheet') || '', busy: '', error: '', items: null, status: null,
+      result: null, showAll: false, schedLink: store.get('sideline-beta:adminScheduleSheet') || '', sched: null, schedError: '',
       suggest: new Map()};   // sheet row -> the full name the schedule gave it, kept while it is switched off
 
     // How the form's questions head the responses sheet, typos and all
@@ -3147,10 +1826,10 @@
       if (!current()) return;
       const link = String(IMPF.link || '').trim();
       if (!link) {flash('Paste the responses sheet link first'); return;}
-      store.set('sideline:adminFormSheet', link);
+      store.set('sideline-beta:adminFormSheet', link);
       try {formSheetKey(link);} catch (e) {flash(e.message); return;}
       const schedLink = String(IMPF.schedLink || '').trim();
-      store.set('sideline:adminScheduleSheet', schedLink);
+      store.set('sideline-beta:adminScheduleSheet', schedLink);
       Object.assign(IMPF, {busy: 'Fetching the sheet…', error: '', items: null, status: null, result: null,
         sched: null, schedError: '', suggest: new Map()});
       paintView();
@@ -3227,7 +1906,7 @@
 
     function viewImport() {
       const top = `<div class="card">
-        <h2>The form’s responses sheet</h2>
+        <h2>Import existing form responses</h2><p class="sub">New evaluations can be saved directly in the mentor app. Use this tool for historical responses or mentors still using the old form. Schedule import in the mentor app remains unchanged.</p>
         <p class="sub">Evaluations sent with the Google Form but never saved in the app come in here, so they count in the
           referee profiles. Nothing changes until you press Import, and importing again later only adds what is new or edited.</p>
         <div class="formrow">
@@ -3405,7 +2084,7 @@
        SIGN-IN SCREENS
        ============================================================ */
     function gateHTML() {
-      const brand = '<div class="brand">SIDE<span>LINE</span> <small>ADMIN</small></div>';
+      const brand = '<div class="brand">Sideline <span class="beta-badge">Beta</span></div><p class="eyebrow gate-label">League workspace</p>';
       const box = (inner) => `<div class="gate"><div class="card">${brand}${inner}</div></div>`;
       const err = LOGIN.error ? `<div class="warn" style="margin-top:12px">${esc(LOGIN.error)}</div>` : '';
       switch (ST.auth) {
@@ -3431,13 +2110,12 @@
               <div class="stack"><button class="btn ghost" id="resendBtn" ${LOGIN.busy || resendWait() ? 'disabled' : ''}>${resendLabel()}</button>
               <button class="btn ghost" id="backBtn">Different email</button></div>${err}`);
           }
-          return box(`<h1>Admin console</h1>
-            <p>For the assignor and league leadership: approve mentors, review referees and export reports.
-              Sign in with the email you use in the mentor app.</p>
+          return box(`<h1>Welcome back.</h1>
+            <p>Support your referees, review mentor feedback and plan what comes next. Sign in with your Sideline account.</p>
             <label class="fld"><span>Email</span><input type="email" id="loginEmail" autocomplete="email" autocapitalize="off"
               spellcheck="false" value="${esc(LOGIN.email)}" placeholder="you@example.com" /></label>
             <button class="btn primary" id="sendBtn" ${LOGIN.busy ? 'disabled' : ''}>${LOGIN.busy ? 'Sending…' : 'Email me a sign-in code'}</button>
-            <p class="hint">Signing in here also signs this browser in to the mentor app.</p>${err}`);
+            <p class="hint">For league administrators. <a href="../">Open the mentor app &rarr;</a></p>${err}`);
       }
     }
 
@@ -3457,6 +2135,7 @@
       const hit = (attr) => {const el = e.target.closest(`[${attr}]`); return el ? el.getAttribute(attr) : null;};
       if (e.target.closest('#scrim') || e.target.closest('#drClose')) {closeDrawer(); return;}
 
+      if (e.target.closest('#resetFilters')) {Object.assign(F, {range:'90',from:'',to:'',division:'',position:''}); filtersChanged(true); return;}
       const sortTo = hit('data-sort'); if (sortTo) {UI.refSort = {key: sortTo, dir: 1};}
       if (hit('data-alldates') !== null) {F.range = 'all'; filtersChanged(true); return;}
       const ref = hit('data-ref'); if (ref) {e.preventDefault(); openDrawer(ref); return;}
@@ -3504,7 +2183,7 @@
       const merge = hit('data-merge'); if (merge) {const [a, b] = merge.split('|'); doMerge(a, b); return;}
       const notSame = hit('data-notsame');
       if (notSame) {
-        UI.notSame.add(notSame); store.set('sideline:adminNotSame', [...UI.notSame]);
+        UI.notSame.add(notSame); store.set('sideline-beta:adminNotSame', [...UI.notSame]);
         paintView(); return;
       }
 
@@ -3519,13 +2198,13 @@
         case 'refreshBtn': refresh(); return;
         case 'retryBtn': loadAll(); return;
         case 'themeBtn':
-          themeMode = isDark() ? 'light' : 'dark'; store.set('sideline:adminTheme', themeMode);
+          themeMode = isDark() ? 'light' : 'dark'; store.set('sideline-beta:adminTheme', themeMode);
           applyTheme(); paintAcct(); return;
         case 'exportRefs': exportRefs(); return;
         case 'exportEvals': exportEvals(); return;
         case 'exportRecovery': exportRecovery(); return;
         case 'evalMore': UI.evalLimit += 100; $('#evalTable').innerHTML = evalTableHTML(); return;
-        case 'resetNotSame': UI.notSame.clear(); store.set('sideline:adminNotSame', []); paintView(); return;
+        case 'resetNotSame': UI.notSame.clear(); store.set('sideline-beta:adminNotSame', []); paintView(); return;
         case 'mGo': doMerge($('#mFrom').value, $('#mInto').value); return;
         case 'delOpen': {const v = $('#delPick').value; if (v) openDrawer(v); else flash('Choose a referee'); return;}
         case 'fsFetch': formFetch(); return;

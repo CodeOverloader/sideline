@@ -8,8 +8,8 @@
 //
 // Why this matters for Sideline specifically: you use it standing at
 // a youth soccer field, which is exactly where cell service dies.
-// Sideline's own files are these four plus whatever is in
-// localStorage, so they must work with zero bars.
+// The HTML, shared styles, icons and local records must all work
+// with zero bars.
 //
 // Three rules, one per kind of request:
 //
@@ -28,8 +28,13 @@
 //     morning silently never arrived.
 // ============================================================
 
-const CACHE_NAME = 'sideline-shell-v4';
-const SHELL_ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
+// GitHub Pages can host production and beta under the same origin. A worker
+// owns only the caches and requests under its own registration scope.
+const CACHE_PREFIX = 'sideline:' + new URL(self.registration.scope).pathname + ':';
+const CACHE_NAME = CACHE_PREFIX + 'beta-2';
+const SHELL_ASSETS = ['./', './index.html', './manifest.json', './icon.svg',
+  './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png',
+  './assets/mentor.css?v=beta2', './assets/admin.css?v=beta2', './assets/design-system.css?v=beta2'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 // The sign-in library, only when accounts are configured. The URL names an
 // exact version, so a cached copy can never be stale. Supabase's own API
@@ -48,7 +53,7 @@ self.addEventListener('activate', (event) => {
   // Delete caches from older versions so storage doesn't grow forever.
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -59,7 +64,7 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  if (url.origin === self.location.origin) {
+  if (url.origin === self.location.origin && url.pathname.startsWith(new URL(self.registration.scope).pathname)) {
     event.respondWith(req.mode === 'navigate' ? networkFirst(req) : cacheFirst(req));
     return;
   }

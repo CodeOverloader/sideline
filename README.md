@@ -1,37 +1,45 @@
-# Sideline
+# Sideline Beta
 
-A referee feedback assistant for LSSA mentors: take notes on several referees at once from the sideline, rate them against the Referee Evaluation form, and copy a ready-to-paste block into the Google Form.
+A referee mentoring workspace for LSSA: import the matchday schedule, capture observations on a phone, review each referee's daily evaluation, and save it directly in Sideline. The desktop admin console brings together league reports, referee profiles and account management.
 
 Everything needed to take notes works offline and without an account. Mentor accounts add shared referee profiles: every approved mentor's saved evaluations, pooled per referee.
+
+This branch uses the existing league database. Beta's local drafts, sign-in and offline cache are separate from the production app. See [BETA_REDESIGN.md](BETA_REDESIGN.md) for the design decisions, review results and separate GitHub Pages publishing instructions.
 
 ## Files
 
 | File | What it is |
 | --- | --- |
-| `index.html` | The whole app: markup, styles and script in one file. |
-| `admin/index.html` | The admin console for the assignor and league leadership, also one file. |
+| `index.html` | Mentor app markup and script. |
+| `admin/index.html` | Desktop admin console markup and script. |
+| `assets/design-system.css` | Shared colors, typography, controls and accessibility rules. |
+| `assets/mentor.css`, `assets/admin.css` | Layouts and components for each workspace. |
 | `sw.js` | Service worker that keeps the app working with no signal. |
-| `manifest.json`, `icon.svg` | Install-to-home-screen metadata. |
+| `manifest.json`, `icon.svg`, `assets/*.png` | Install-to-home-screen metadata and icons. |
+| `scripts/build-pages.cjs` | Packages the public files into `dist/`. |
+| `tests/` | Regression checks and a local preview using synthetic records. |
 | `supabase/migrations/` | Database tables, access rules and functions for accounts. |
 | `supabase/tests.sql` | Checks that the access rules refuse what they should. |
 
 ## Running it locally
 
-Any static file server works. Open the app over `http://localhost`, not `file://`, or the service worker and clipboard will not work. For example:
+Use Node.js to preview without accessing the shared league database:
 
 ```bash
-python -m http.server 8765
+npm run preview
 ```
 
-With `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` left empty in `index.html`, the app runs exactly as it always has, with no account features.
+Open `http://127.0.0.1:8765/beta/?scenario=mentor` or `http://127.0.0.1:8765/beta/admin/?scenario=admin`. `?scenario=guest&reset=1` gives a fresh onboarding preview. These pages use sample names and simulated accounts; external connections are blocked by the preview server. The `reset=1` option clears beta preview data on this local origin.
+
+`npm test` runs the JavaScript checks. `npm run build` creates the deployable `dist/` directory. There are no application packages to install. Any static server can serve that output over localhost, but the built app connects to the shared database, so use the sample preview for routine tests.
 
 ## Hosting
 
-The app is served from `https://sideline.codeoverload.dev/` (see `CNAME`), and the old `codeoverloader.github.io/sideline/` address redirects there. It must be opened over **https**: over plain http a browser gives it no service worker (so nothing works without signal) and no clipboard, and its saved data lives in a separate store from the https site's. If the domain is proxied through Cloudflare, switch on **SSL/TLS → Edge Certificates → Always Use HTTPS**. Until then, the app moves itself from http to https when that http copy holds no Sideline data.
+Publish `dist/` to the separate beta GitHub Pages destination. This branch has no `CNAME`, and its links, manifest and offline assets work from a project subdirectory. The admin console is at `admin/` beneath that same destination. Serve the app over HTTPS; note-taking, installation and clipboard features depend on the browser's secure-origin rules. Publishing is intentionally not automated on this branch. See the [publishing checklist](BETA_REDESIGN.md#publishing-the-beta).
 
 ## Setting up mentor accounts (Supabase)
 
-You only do this once. Claude cannot create accounts for you, so the Supabase steps are yours.
+The committed beta already points at the existing league project; do not create a second database for this beta. The steps below describe the existing account setup and are useful when setting up another league. Apply the existing migration set before using the updated pages; this redesign adds no database migration.
 
 1. **Create the project.** Sign up at [supabase.com](https://supabase.com) and create a project. Pick a region near the league.
 
@@ -97,9 +105,9 @@ An uploaded evaluation is credited to its account's name, which follows the name
 
 ## The admin console
 
-`https://sideline.codeoverload.dev/admin/` is a separate page for admins, laid out for a computer and usable on a phone. It shares the app's sign-in, so an admin signed in to either one in a browser is signed in to both there. Anyone who is not an admin sees a note pointing them back to the app. The page hides nothing that matters: the database's access rules decide what every account can read and change, whichever page asks.
+`admin/` beneath the beta address is a separate page for admins, laid out for a computer and usable on a phone. It shares beta's sign-in, so an admin signed in to either beta workspace in a browser is signed in to both there. Production's sign-in remains separate. Anyone who is not an admin sees a note pointing them back to the app. The database's access rules decide what every account can read and change, whichever page asks.
 
-One filter row (dates, division, position) applies to every page:
+One filter row (dates, division, position) applies to the reporting views. It is hidden on the import and record-management pages, where those filters do not apply:
 
 | Page | What it is for |
 | --- | --- |
@@ -107,14 +115,14 @@ One filter row (dates, division, position) applies to every page:
 | Referees | Every referee with their averages per skill, sortable and searchable, with a CSV export. Selecting one opens their full profile, trend, notes and evaluations. |
 | Evaluations | Every evaluation, newest first, with ratings, notes and comments, and a CSV export in the same columns as the app's own. |
 | Mentors | Approving or rejecting sign-ups, each mentor's activity and the average rating they give, and changing who is an admin. |
-| Clean-up | Names that may be one referee typed two ways, to merge, and where to handle a deletion request. |
-| Import | Brings in evaluations sent with the Google Form but never saved in the app. See below. |
+| Manage records | Names that may be one referee typed two ways, to merge, and where to handle a deletion request. |
+| Legacy form import | Brings in historical Google Form responses and supports the transition to direct submissions. See below. |
 
 The console keeps no copy of the league's data in the browser; it reads it fresh each time.
 
 ### Importing the form's responses
 
-Some mentors only fill in the Referee Evaluation form. **Import** in the admin console brings those responses into the database, so they count in referee profiles like any other evaluation.
+Beta mentors save evaluations in **Review** and no longer need to submit a Google Form. **Legacy form import** remains available for historical responses and mentors still using the original process. References to **Import** below mean this legacy admin tool, not the mentor's unchanged schedule import.
 
 1. In the form, open **Responses** and the linked spreadsheet. Share that sheet as **Anyone with the link: Viewer**, because the console reads it the way the app reads the schedule. Anyone who gets hold of the link can then read every response, so keep it among league leadership. Always copy the link while the responses tab is open, including its explicit `#gid=…` tab number. Spreadsheet-only links are refused because they do not reliably identify a tab.
 2. Paste the link into **Import**, and paste the league's schedule sheet into **Link to the schedule sheet** below it (optional, but it is what completes the first names mentors type — see below). Choose **Fetch responses**. Nothing is saved yet. Each response is shown as new, edited on the form since the last import, already imported, already uploaded from the app, or cannot be imported (with the reason).
@@ -130,7 +138,7 @@ Imported evaluations are credited to the name typed on the form, not to an accou
 
 ### Merging two spellings of one referee
 
-**Clean-up** lists names that may be one referee typed two ways. Merging moves
+**Manage records** lists names that may be one referee typed two ways. Merging moves
 every evaluation from the losing spelling to the surviving one.
 
 What happens to *later* saves depends on the losing name:
@@ -252,7 +260,7 @@ the extra from the admin console.
 
 ### Handling a deletion request
 
-In the admin console, open the referee (from **Referees**, or **Clean-up → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. New deletions also retain opaque record identities so the same phone record or spreadsheet response cannot recreate the deleted evaluation. This does not erase local phone copies or the Google Sheet, identify records deleted before this protection existed, or prohibit genuinely new evaluations with new identities. You can also run it from the SQL Editor:
+In the admin console, open the referee (from **Referees**, or **Manage records → Deletion requests**) and choose **Delete all records** at the bottom of their profile. This removes every evaluation of that referee, including under merged spellings of the name. New deletions also retain opaque record identities so the same phone record or spreadsheet response cannot recreate the deleted evaluation. This does not erase local phone copies or the Google Sheet, identify records deleted before this protection existed, or prohibit genuinely new evaluations with new identities. You can also run it from the SQL Editor:
 
 ```sql
 select public.delete_referee_records('<referee id>');
@@ -282,6 +290,7 @@ Offline JavaScript checks (Node.js, no application dependencies):
 ```sh
 node tests/mentor-regressions.cjs
 node tests/admin-regressions.cjs
+node tests/beta-regressions.cjs
 ```
 
 Database checks use an isolated PostgreSQL engine through PGlite 0.5.8. Extract that package outside the repository, set `PGLITE_MODULE` to its `dist/index.js`, then run:
